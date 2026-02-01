@@ -1,0 +1,97 @@
+# /home/alex/.config/tmuxinator/jarvis.yml
+
+name: jarvis
+root: ~/jarvis
+
+# If you use a python venv, you can set this.
+# pre: source ~/.bashrc
+
+windows:
+  - claude:
+      root: ~/jarvis
+      layout: even-horizontal
+      panes:
+        - claude
+        - bash
+  - overview:
+      layout: even-horizontal
+      panes:
+        - ls -a
+        - htop
+
+  - auth:
+      root: ~/jarvis/jarvis-auth
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - command-center:
+      root: ~/jarvis/jarvis-command-center
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - node-setup:
+      root: ~/jarvis/jarvis-node-setup
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - ocr-service:
+      root: ~/jarvis/jarvis-ocr-service
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - whisper-api:
+      root: ~/jarvis/jarvis-whisper-api
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - recipes-server:
+      root: ~/jarvis/jarvis-recipes-server
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - llm-proxy:
+      root: ~/jarvis/jarvis-llm-proxy-api
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - jarvis-mcp:
+      root: ~/jarvis/jarvis-mcp
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - jarvis-logs:
+      root: ~/jarvis/jarvis-logs
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - jarvis-logs-client:
+      root: ~/jarvis/jarvis-logs-client
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
+
+  - jarvis-tts:
+      root: ~/jarvis/jarvis-tts
+      layout: main-vertical
+      panes:
+        - nvim .
+        - clear
