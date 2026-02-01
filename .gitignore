@@ -1,0 +1,14 @@
+# Ignore all service repositories (they have their own git repos)
+jarvis-*/
+
+# Ignore archives
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
