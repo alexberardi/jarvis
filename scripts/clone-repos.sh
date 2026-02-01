@@ -22,9 +22,8 @@ declare -A REPOS=(
     ["jarvis-recipes-server"]="git@github.com:alexberardi/jarvis-recipes-server.git"
     ["jarvis-tts"]="git@github.com:alexberardi/jarvis-tts.git"
     ["jarvis-whisper-api"]="git@github.com:alexberardi/jarvis-whisper-api.git"
-    # These need GitHub repos created first:
-    # ["jarvis-config-client"]="git@github.com:alexberardi/jarvis-config-client.git"
-    # ["jarvis-config-service"]="git@github.com:alexberardi/jarvis-config-service.git"
+    ["jarvis-config-client"]="git@github.com:alexberardi/jarvis-config-client.git"
+    ["jarvis-config-service"]="git@github.com:alexberardi/jarvis-config-service.git"
 )
 
 for repo in "${!REPOS[@]}"; do
@@ -38,6 +37,3 @@ done
 
 echo ""
 echo "Done! Cloned ${#REPOS[@]} repositories."
-echo ""
-echo "NOTE: jarvis-config-client and jarvis-config-service don't have GitHub repos yet."
-echo "Create them and uncomment the lines in this script to include them."
