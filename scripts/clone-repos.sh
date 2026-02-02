@@ -24,6 +24,7 @@ declare -A REPOS=(
     ["jarvis-whisper-api"]="git@github.com:alexberardi/jarvis-whisper-api.git"
     ["jarvis-config-client"]="git@github.com:alexberardi/jarvis-config-client.git"
     ["jarvis-config-service"]="git@github.com:alexberardi/jarvis-config-service.git"
+    ["jarvis-node-mobile"]="git@github.com:alexberardi/jarvis-node-mobile.git"
 )
 
 for repo in "${!REPOS[@]}"; do
