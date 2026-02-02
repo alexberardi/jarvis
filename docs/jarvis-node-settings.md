@@ -216,7 +216,9 @@ Command Center acts as a **temporary relay and authorization gate** for encrypte
 
 ### Data model (Command Center)
 
-#### `node_settings_requests`
+> **Note:** The MVP implementation uses a simplified schema without `household_id` or `requested_by_user_id`. These fields will be added when jarvis-auth household integration is complete. See "Command Center implementation details" below for the current schema.
+
+#### `node_settings_requests` (full spec)
 
 Tracks an explicit request from a mobile user for a node to publish its current settings.
 
@@ -238,7 +240,7 @@ Notes:
 
 ---
 
-#### `node_settings_snapshots`
+#### `node_settings_snapshots` (full spec)
 
 Stores a single encrypted snapshot uploaded by the node in response to a request.
 
@@ -533,31 +535,179 @@ Implementation should proceed in checkpoints with tests at each stage:
 - Router: `jarvis_auth/app/api/households.py`
 - Schemas: `jarvis_auth/app/schemas/household.py`
 
-### Checkpoint 2: Request lifecycle (command-center, no MQTT)
+### Checkpoint 2: Request lifecycle (command-center) ✅
 
-- [ ] `node_settings_requests` model + migrations
-- [ ] `POST /settings/requests` — create request (validate via jarvis-auth)
-- [ ] `GET /settings/requests/{id}` — poll status
-- [ ] Expiration logic (30 min TTL)
-- [ ] Background cleanup job
+- [x] `settings_requests` model + migrations
+- [x] `POST /nodes/{node_id}/settings/requests` — create request
+- [x] `GET /nodes/{node_id}/settings/requests/{id}` — poll status
+- [x] Expiration logic (5 min TTL default)
+- [ ] Background cleanup job (deferred)
+- [ ] Validate via jarvis-auth household (deferred — using admin key for MVP)
 
-### Checkpoint 3: Node upload path (command-center)
+**Implementation notes:**
+- Migration: `alembic/versions/0f1097258abc_add_settings_requests_and_settings_.py`
+- Tests: `tests/test_node_settings.py` (24 tests)
+- Router: `app/node_settings.py`
+- Models: `app/models.py` (`SettingsRequest`, `SettingsSnapshot`)
 
-- [ ] `node_settings_snapshots` model + migrations
-- [ ] `GET /settings/requests/{id}` (node auth) — validate request
-- [ ] `PUT /settings/requests/{id}` (node auth) — upload snapshot
-- [ ] Status transition to `fulfilled`
-- [ ] Validate node ownership via jarvis-auth
+### Checkpoint 3: Node upload path (command-center) ✅
 
-### Checkpoint 4: Mobile retrieval (command-center)
+- [x] `settings_snapshots` model + migrations
+- [x] `GET /nodes/{node_id}/settings/requests/{id}` (node auth) — validate request
+- [x] `PUT /nodes/{node_id}/settings/requests/{id}/snapshot` (node auth) — upload snapshot
+- [x] Status transition to `fulfilled`
+- [ ] Validate node ownership via jarvis-auth (deferred — using node API key for MVP)
 
-- [ ] `GET /settings/requests/{id}/result` — return ciphertext + metadata
-- [ ] Verify AAD consistency
-- [ ] Role enforcement (power_user/admin only)
+### Checkpoint 4: Mobile retrieval (command-center) ✅
 
-### Checkpoint 5: MQTT signal wiring (command-center)
+- [x] `GET /nodes/{node_id}/settings/requests/{id}/result` — return ciphertext + metadata
+- [x] AAD fields returned separately for client reconstruction
+- [ ] Role enforcement via jarvis-auth (deferred — using admin key for MVP)
 
-- [ ] Publish `settings_request` message on request creation
-- [ ] Node confirmation round-trip integration test
+### Checkpoint 5: MQTT signal wiring (command-center) ✅
+
+- [x] Publish `settings_request` message on request creation
+- [x] MQTT client module (`app/core/mqtt_client.py`)
+- [x] Service discovery fallback for broker URL
+- [ ] Node confirmation round-trip integration test (manual testing complete)
+
+**MQTT Configuration:**
+- Broker URL: `JARVIS_MQTT_BROKER_URL` env var (e.g., `mqtt://localhost:1884`)
+- Topic: `jarvis/nodes/{node_id}/settings/request`
+- Payload: `{"request_id": "<uuid>", "node_id": "<node_id>"}`
 
 All stages should be driven by unit tests and integration tests before moving to the next checkpoint.
+
+---
+
+## Command Center implementation details
+
+### API endpoints (implemented)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/api/v0/nodes/{node_id}/settings/requests` | Admin key | Create settings request, publish MQTT |
+| `GET` | `/api/v0/nodes/{node_id}/settings/requests/{request_id}` | Node API key | Node confirms request exists |
+| `PUT` | `/api/v0/nodes/{node_id}/settings/requests/{request_id}/snapshot` | Node API key | Node uploads encrypted snapshot |
+| `GET` | `/api/v0/nodes/{node_id}/settings/requests/{request_id}/result` | Admin key | Mobile polls for result |
+
+### Database schema (implemented)
+
+#### `settings_requests`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `request_id` | String (PK) | UUIDv4 |
+| `node_id` | String (FK) | References `nodes.node_id` |
+| `status` | String | `pending`, `fulfilled`, `expired` |
+| `created_at` | DateTime | Auto-set |
+| `expires_at` | DateTime | Default: `created_at + 5 minutes` |
+
+#### `settings_snapshots`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `snapshot_id` | String (PK) | UUIDv4 |
+| `node_id` | String (FK) | References `nodes.node_id` |
+| `request_id` | String (FK) | References `settings_requests.request_id` |
+| `ciphertext` | String | base64url encoded |
+| `nonce` | String | base64url encoded (IV) |
+| `tag` | String | base64url encoded (auth tag) |
+| `aad_node_id` | String | For AAD reconstruction |
+| `aad_schema_version` | Integer | For AAD reconstruction |
+| `aad_commands_schema_version` | Integer | For AAD reconstruction |
+| `aad_revision` | Integer | For AAD reconstruction |
+| `aad_request_id` | String | For AAD reconstruction |
+| `created_at` | DateTime | Auto-set |
+
+### AAD format (settings snapshots)
+
+Clients construct AAD from the stored fields. Canonical JSON format:
+
+```json
+{"node_id":"<node_id>","schema_version":<n>,"commands_schema_version":<n>,"revision":<n>,"request_id":"<uuid>"}
+```
+
+### Response formats
+
+#### Create request (201 Created)
+
+```json
+{
+  "request_id": "67148276-...",
+  "node_id": "node-123",
+  "status": "pending",
+  "created_at": "2026-02-01T20:58:36.123456",
+  "expires_at": "2026-02-01T21:03:36.123456"
+}
+```
+
+#### Poll result — pending (202 Accepted)
+
+```json
+{
+  "status": "pending",
+  "request_id": "67148276-...",
+  "message": "Waiting for node response"
+}
+```
+
+#### Poll result — fulfilled (200 OK)
+
+```json
+{
+  "status": "fulfilled",
+  "request_id": "67148276-...",
+  "snapshot": {
+    "snapshot_id": "abc123-...",
+    "ciphertext": "<base64url>",
+    "nonce": "<base64url>",
+    "tag": "<base64url>",
+    "aad": {
+      "node_id": "node-123",
+      "schema_version": 1,
+      "commands_schema_version": 1,
+      "revision": 1,
+      "request_id": "67148276-..."
+    },
+    "created_at": "2026-02-01T20:59:00.000000"
+  }
+}
+```
+
+### Usage example
+
+```bash
+# 1. Create a settings request (mobile → CC)
+curl -X POST http://localhost:8002/api/v0/nodes/my-node/settings/requests \
+  -H "x-api-key: $ADMIN_API_KEY"
+
+# 2. Node receives MQTT message on: jarvis/nodes/my-node/settings/request
+# 3. Node confirms request exists
+curl http://localhost:8002/api/v0/nodes/my-node/settings/requests/{request_id} \
+  -H "x-api-key: $NODE_API_KEY"
+
+# 4. Node uploads encrypted snapshot
+curl -X PUT http://localhost:8002/api/v0/nodes/my-node/settings/requests/{request_id}/snapshot \
+  -H "x-api-key: $NODE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ciphertext": "<base64url>",
+    "nonce": "<base64url>",
+    "tag": "<base64url>",
+    "aad_schema_version": 1,
+    "aad_commands_schema_version": 1,
+    "aad_revision": 1
+  }'
+
+# 5. Mobile polls for result
+curl http://localhost:8002/api/v0/nodes/my-node/settings/requests/{request_id}/result \
+  -H "x-api-key: $ADMIN_API_KEY"
+```
+
+### Deferred items (post-MVP)
+
+- [ ] Household-based authorization via jarvis-auth
+- [ ] Background cleanup job for expired requests/snapshots
+- [ ] Rate limiting on request creation
+- [ ] 30-minute TTL (currently 5 minutes for faster testing)
