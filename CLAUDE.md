@@ -28,6 +28,27 @@ The jarvis-mcp server provides these tools:
 2. **Self-hostable with optional cloud** - Same open-source codebase for both; no data selling, full transparency
 3. **Fully extensible** - Add capabilities by implementing `IJarvisCommand` interface (see `jarvis-node-setup/core/ijarvis_command.py`)
 
+## Codebase Health (Last Updated: 2026-02-05)
+
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| **Architecture** | 8/10 | Monolithic files split (llm-proxy, command-center), clean module boundaries |
+| **Design** | 7/10 | Good separation of concerns, improved exception handling |
+| **Security** | 7/10 | JWT auth, encrypted secrets, app-to-app auth. Needs: rate limiting, CORS |
+| **Testing** | 6/10 | Core services tested. Missing: ocr-service |
+| **Documentation** | 8/10 | Per-service CLAUDE.md, comprehensive main docs |
+| **Maintainability** | 7/10 | Smaller files, specific exceptions, good comments |
+| **Code Quality** | 6/10 | Bare excepts fixed. Remaining: 22 print() files, ~91 broad exceptions |
+| **Observability** | 6/10 | Centralized logging exists but 22 files still use print() |
+
+**Average: 6.88/10** → Target: 8/10
+
+### Quick Wins to Improve
+- [x] ~~Add tests to config-service~~ ✅ 44 tests, 93% coverage
+- [ ] Add tests to ocr-service (Testing: 6→7)
+- [ ] Migrate 22 print() files to JarvisLogger (Observability: 6→8)
+- [ ] Refactor url_recipe_parser.py (Architecture: 8→9)
+
 ## Development Rules
 
 **Logging:**
@@ -283,32 +304,33 @@ The output includes:
 
 | File | Lines | Issue |
 |------|-------|-------|
-| `jarvis-llm-proxy-api/main.py` | 1701 | API + model service + queue worker mixed |
-| `jarvis-command-center/app/core/model_service.py` | 1628 | LLM integration + tool parsing + execution |
+| ~~`jarvis-llm-proxy-api/main.py`~~ | ~~1701~~ → 87 | ✅ **DONE** - Split into modules |
+| ~~`jarvis-command-center/app/core/model_service.py`~~ | ~~1628~~ → 309 | ✅ **DONE** - Split into prompt_engine, tool_parser, tool_executor |
 | `jarvis-recipes-server/*/url_recipe_parser.py` | 1498 | All recipe sites in one parser |
 
 ~~`jarvis-node-setup/services/network_discovery_service.py`~~ - DELETED (1740 lines, unused)
 
 ### 🔴 Critical - Logging Violations
 
-**jarvis-node-setup has 35+ files using `print()` instead of `jarvis-log-client`:**
-- scripts/main.py, scripts/run_provisioning.py
-- commands/open_weather_command.py, read_calendar_command.py
-- clients/rest_client.py, jarvis_command_center_client.py
-- utils/command_execution_service.py, audio_pipeline_client.py, command_discovery_service.py
-- All test files (test_command_parsing.py, test_multi_turn_conversation.py, etc.)
+**jarvis-node-setup has 22 files using `print()` instead of `jarvis-log-client`** (down from 35+):
+- scripts/main.py, run_provisioning.py, train_node_adapter.py, speech_to_text.py, text_to_speech.py
+- core/helpers.py, platform_abstraction.py, platform_abstraction_enhanced.py
+- utils/date_util.py, music_assistant_service.py, set_secret.py, timezone_util.py
+- providers: jarvis_whisper_client.py, espeak.py, jarvis_tts_api.py, jarvis_tts_wake_response.py
+- provisioning/wifi_manager.py, jarvis_services/icloud_calendar_service.py, dev_macos.py
 
 ### 🟡 High Priority - Missing Test Suites
 
 | Service | Port | Status |
 |---------|------|--------|
 | jarvis-ocr-service | 5009 | ❌ No tests |
-| jarvis-tts | 8009 | ❌ No tests |
-| jarvis-config-service | 8013 | ❌ No tests |
+| jarvis-tts | 8009 | ⚠️ Minimal (test_deps.py only) |
+| ~~jarvis-config-service~~ | ~~8013~~ | ✅ **DONE** - 44 tests, 93% coverage |
 
 ### 🟡 High Priority - Code Quality
 
-- [ ] Replace bare `except Exception` with specific exceptions (~406 instances)
+- [x] ~~Replace bare `except:` with specific exceptions~~ - ✅ **DONE** (10 → 0 in project code, remaining are in vendored deps)
+- [ ] Replace `except Exception:` without `as e` (~91 instances) - Partially done, priority files fixed
 - [ ] Add CORS headers configuration
 - [ ] Add rate limiting to API endpoints
 
@@ -320,9 +342,9 @@ The output includes:
 
 ### 🟢 Medium Priority - Architectural
 
-- [ ] jarvis-llm-proxy-api: Split main.py into api_server.py, model_service.py, queue_worker.py
+- [x] ~~jarvis-llm-proxy-api: Split main.py into api_server.py, model_service.py, queue_worker.py~~ - ✅ **DONE** (1701 → 87 lines)
 - [ ] jarvis-recipes-server: Modular parser strategy (one parser per recipe site)
-- [ ] jarvis-command-center: Split model_service.py into prompt_engine.py, tool_parser.py, tool_executor.py
+- [x] ~~jarvis-command-center: Split model_service.py into prompt_engine.py, tool_parser.py, tool_executor.py~~ - ✅ **DONE** (1628 → 309 lines)
 
 ### 🔵 Low Priority
 
@@ -340,6 +362,11 @@ The output includes:
 - [x] Centralized logging (jarvis-logs + jarvis-log-client)
 - [x] Centralized node authentication (jarvis-auth + jarvis-log-client v0.2.0)
 - [x] WiFi provisioning for headless Pi Zero nodes (jarvis-node-setup/provisioning/)
+- [x] Refactor jarvis-llm-proxy-api/main.py (1701 → 87 lines)
+- [x] Refactor jarvis-command-center/model_service.py (1628 → 309 lines)
+- [x] Fix bare `except:` clauses (10 instances in project code)
+- [x] Delete network_discovery_service.py (1740 lines, unused)
+- [x] Add test suite to jarvis-config-service (44 tests, 93% coverage, CI workflow)
 
 ## Service Inventory
 
@@ -348,15 +375,15 @@ The output includes:
 | Service | Port | Size | Tests | Health |
 |---------|------|------|-------|--------|
 | jarvis-auth | 8007 | Small | ✅ Good | Clean |
-| jarvis-command-center | 8002 | Large | ✅ Good | model_service.py needs split |
+| jarvis-command-center | 8002 | Large | ✅ Good | ✅ model_service.py refactored (309 lines) |
 | jarvis-recipes-server | 8001 | Medium | ✅ Good | url_recipe_parser.py needs split |
 | jarvis-whisper-api | 8012 | Small | ⚠️ Minimal | Clean |
 | jarvis-ocr-service | 5009 | Medium | ❌ None | Needs tests |
-| jarvis-llm-proxy-api | 8000/8010 | Very Large | ⚠️ Partial | main.py is 1701 lines |
-| jarvis-tts | 8009 | Small | ❌ None | Needs tests |
+| jarvis-llm-proxy-api | 8000/8010 | Medium | ⚠️ Partial | ✅ main.py refactored (87 lines) |
+| jarvis-tts | 8009 | Small | ⚠️ Minimal | Needs more tests |
 | jarvis-logs | 8006 | Small | ✅ Good | Clean |
 | jarvis-mcp | 8011 | Small | ✅ Good | Clean |
-| jarvis-config-service | 8013 | Small | ❌ None | Needs tests |
+| jarvis-config-service | 8013 | Small | ✅ Good (93%) | Clean |
 
 ### Libraries
 
@@ -369,7 +396,7 @@ The output includes:
 
 | Client | Tests | Health |
 |--------|-------|--------|
-| jarvis-node-setup | ✅ Fair | 35+ print() violations, network_discovery.py monolith |
+| jarvis-node-setup | ✅ Fair | 22 print() violations (down from 35+), network_discovery.py deleted |
 
 ### Good Patterns Observed ✅
 - Services use jarvis-log-client for logging (except node-setup)
