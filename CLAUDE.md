@@ -367,6 +367,45 @@ The output includes:
 - [x] Fix bare `except:` clauses (10 instances in project code)
 - [x] Delete network_discovery_service.py (1740 lines, unused)
 - [x] Add test suite to jarvis-config-service (44 tests, 93% coverage, CI workflow)
+- [x] Speaker/voice identification (Whisper-based)
+
+### 🚀 Future Enhancements (Feature Parity Roadmap)
+
+**Smart Home Integration:**
+- [ ] Home Assistant integration (device control layer)
+- [ ] Device discovery (Matter, Zigbee, Z-Wave via HA)
+- [ ] Direct device control ("turn off the lights", "set thermostat to 72")
+- [ ] Routines/automations ("Good morning" → lights + weather + calendar)
+- [ ] Broadcast commands to device groups
+
+**Multi-Room & Communication:**
+- [ ] Multi-room audio sync
+- [ ] Intercom/announcements between nodes
+- [ ] "Play everywhere" / room targeting
+- [ ] Drop-in between rooms
+
+**Proactive Intelligence:**
+- [ ] Background event watchers (calendar, packages, etc.)
+- [ ] "Leave now to make your meeting" notifications
+- [ ] Package tracking alerts
+- [ ] Habit-based suggestions
+
+**Command Store (HACS-style):**
+- [ ] Community command repository
+- [ ] User-installable commands (no coding required)
+- [ ] Command discovery/search
+- [ ] Ratings and reviews
+- [ ] Auto-update mechanism
+
+**Visual/Multi-Modal:**
+- [ ] Screen-based responses (for tablet/display nodes)
+- [ ] Recipe step-by-step with images
+- [ ] Visual timers and status displays
+
+**Quality of Life:**
+- [ ] "Just works" setup wizard
+- [ ] Mobile app for management
+- [ ] Web dashboard for configuration
 
 ## Service Inventory
 
