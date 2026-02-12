@@ -28,7 +28,7 @@ The jarvis-mcp server provides these tools:
 2. **Self-hostable with optional cloud** - Same open-source codebase for both; no data selling, full transparency
 3. **Fully extensible** - Add capabilities by implementing `IJarvisCommand` interface (see `jarvis-node-setup/core/ijarvis_command.py`)
 
-## Codebase Health (Last Updated: 2026-02-05)
+## Codebase Health (Last Updated: 2026-02-11)
 
 | Dimension | Score | Notes |
 |-----------|-------|-------|
@@ -37,17 +37,18 @@ The jarvis-mcp server provides these tools:
 | **Security** | 7/10 | JWT auth, encrypted secrets, app-to-app auth. Needs: rate limiting, CORS |
 | **Testing** | 7/10 | Core services tested, ocr-service tests added |
 | **Documentation** | 8/10 | Per-service CLAUDE.md, comprehensive main docs |
-| **Maintainability** | 7/10 | Smaller files, specific exceptions, good comments |
-| **Code Quality** | 7/10 | Bare excepts fixed, broad exceptions fixed. Remaining: 22 print() files |
-| **Observability** | 6/10 | Centralized logging exists but 22 files still use print() |
+| **Maintainability** | 8/10 | Smaller files, specific exceptions, all logging via JarvisLogger |
+| **Code Quality** | 8/10 | Bare excepts fixed, broad exceptions fixed, print() migrated |
+| **Observability** | 8/10 | All production code uses JarvisLogger (worker `_safe_print` is acceptable) |
 
-**Average: 7.13/10** → Target: 8/10
+**Average: 7.63/10** → Target: 8/10
 
 ### Quick Wins to Improve
 - [x] ~~Add tests to config-service~~ ✅ 44 tests, 93% coverage
 - [x] ~~Add tests to ocr-service~~ ✅ 5 test files (validation, llm queue, callback, continue processing, async flow)
-- [ ] Migrate 22 print() files to JarvisLogger (Observability: 6→8)
+- [x] ~~Migrate print() files to JarvisLogger~~ ✅ All production code migrated (remaining prints are CLI scripts, tests, worker `_safe_print`)
 - [ ] Refactor url_recipe_parser.py (Architecture: 8→9)
+- [ ] Fix mid-file imports in espn_sports_service.py
 
 ## Development Rules
 
@@ -310,14 +311,9 @@ The output includes:
 
 ~~`jarvis-node-setup/services/network_discovery_service.py`~~ - DELETED (1740 lines, unused)
 
-### 🔴 Critical - Logging Violations
+### ~~🔴 Critical - Logging Violations~~ ✅ DONE
 
-**jarvis-node-setup has 22 files using `print()` instead of `jarvis-log-client`** (down from 35+):
-- scripts/main.py, run_provisioning.py, train_node_adapter.py, speech_to_text.py, text_to_speech.py
-- core/helpers.py, platform_abstraction.py, platform_abstraction_enhanced.py
-- utils/date_util.py, music_assistant_service.py, set_secret.py, timezone_util.py
-- providers: jarvis_whisper_client.py, espeak.py, jarvis_tts_api.py, jarvis_tts_wake_response.py
-- provisioning/wifi_manager.py, jarvis_services/icloud_calendar_service.py, dev_macos.py
+~~**jarvis-node-setup has 22 files using `print()` instead of `jarvis-log-client`**~~ All production files migrated to JarvisLogger. Remaining `print()` usage is acceptable: CLI scripts (set_secret.py, authorize_node.py), test/E2E scripts, and worker `_safe_print()` pattern.
 
 ### 🟡 High Priority - Missing Test Suites
 
@@ -330,7 +326,7 @@ The output includes:
 ### 🟡 High Priority - Code Quality
 
 - [x] ~~Replace bare `except:` with specific exceptions~~ - ✅ **DONE** (10 → 0 in project code, remaining are in vendored deps)
-- [x] ~~Replace `except Exception:` without `as e`~~ ✅ All 63 production instances fixed (specific types or `as e` added)
+- [x] ~~Replace `except Exception:` without `as e`~~ ✅ All production instances fixed (specific types or `as e` added), including E2E test scripts
 - [ ] Add CORS headers configuration
 - [ ] Add rate limiting to API endpoints
 
@@ -368,6 +364,8 @@ The output includes:
 - [x] Delete network_discovery_service.py (1740 lines, unused)
 - [x] Add test suite to jarvis-config-service (44 tests, 93% coverage, CI workflow)
 - [x] Speaker/voice identification (Whisper-based)
+- [x] Migrate all production print() to JarvisLogger
+- [x] Fix all broad `except Exception:` without `as e` (63 production + 13 E2E test instances)
 
 ### 🚀 Future Enhancements (Feature Parity Roadmap)
 
@@ -435,10 +433,10 @@ The output includes:
 
 | Client | Tests | Health |
 |--------|-------|--------|
-| jarvis-node-setup | ✅ Fair | 22 print() violations (down from 35+), network_discovery.py deleted |
+| jarvis-node-setup | ✅ Fair | All production code uses JarvisLogger, network_discovery.py deleted |
 
 ### Good Patterns Observed ✅
-- Services use jarvis-log-client for logging (except node-setup)
+- All services and client code use jarvis-log-client for logging
 - App-to-app auth via X-Jarvis-App-Id + X-Jarvis-App-Key headers
 - Alembic migrations for all database services
 - Service discovery via jarvis-config-service
