@@ -32,23 +32,24 @@ The jarvis-mcp server provides these tools:
 
 | Dimension | Score | Notes |
 |-----------|-------|-------|
-| **Architecture** | 8/10 | Monolithic files split (llm-proxy, command-center), clean module boundaries |
+| **Architecture** | 9/10 | All monolithic files split (llm-proxy, command-center, url_recipe_parser), clean module boundaries |
 | **Design** | 7/10 | Good separation of concerns, improved exception handling |
 | **Security** | 7/10 | JWT auth, encrypted secrets, app-to-app auth. Needs: rate limiting, CORS |
 | **Testing** | 7/10 | Core services tested, ocr-service tests added |
 | **Documentation** | 8/10 | Per-service CLAUDE.md, comprehensive main docs |
 | **Maintainability** | 8/10 | Smaller files, specific exceptions, all logging via JarvisLogger |
-| **Code Quality** | 8/10 | Bare excepts fixed, broad exceptions fixed, print() migrated |
+| **Code Quality** | 9/10 | Bare excepts fixed, broad exceptions fixed, print() migrated, 132 unused imports removed |
 | **Observability** | 8/10 | All production code uses JarvisLogger (worker `_safe_print` is acceptable) |
 
-**Average: 7.63/10** → Target: 8/10
+**Average: 7.88/10** → Target: 9/10
 
 ### Quick Wins to Improve
 - [x] ~~Add tests to config-service~~ ✅ 44 tests, 93% coverage
 - [x] ~~Add tests to ocr-service~~ ✅ 5 test files (validation, llm queue, callback, continue processing, async flow)
 - [x] ~~Migrate print() files to JarvisLogger~~ ✅ All production code migrated (remaining prints are CLI scripts, tests, worker `_safe_print`)
-- [ ] Refactor url_recipe_parser.py (Architecture: 8→9)
-- [ ] Fix mid-file imports in espn_sports_service.py
+- [x] ~~Refactor url_recipe_parser.py~~ ✅ Split into url_parsing/ package (1498 → 285 lines)
+- [x] ~~Fix mid-file imports in espn_sports_service.py~~ ✅ Moved to top of file
+- [x] ~~Remove unused imports across codebase~~ ✅ 132 unused imports removed via ruff
 
 ## Development Rules
 
@@ -307,7 +308,7 @@ The output includes:
 |------|-------|-------|
 | ~~`jarvis-llm-proxy-api/main.py`~~ | ~~1701~~ → 87 | ✅ **DONE** - Split into modules |
 | ~~`jarvis-command-center/app/core/model_service.py`~~ | ~~1628~~ → 309 | ✅ **DONE** - Split into prompt_engine, tool_parser, tool_executor |
-| `jarvis-recipes-server/*/url_recipe_parser.py` | 1498 | All recipe sites in one parser |
+| ~~`jarvis-recipes-server/*/url_recipe_parser.py`~~ | ~~1498~~ → 285 | ✅ **DONE** - Split into `url_parsing/` package |
 
 ~~`jarvis-node-setup/services/network_discovery_service.py`~~ - DELETED (1740 lines, unused)
 
@@ -339,7 +340,7 @@ The output includes:
 ### 🟢 Medium Priority - Architectural
 
 - [x] ~~jarvis-llm-proxy-api: Split main.py into api_server.py, model_service.py, queue_worker.py~~ - ✅ **DONE** (1701 → 87 lines)
-- [ ] jarvis-recipes-server: Modular parser strategy (one parser per recipe site)
+- [x] ~~jarvis-recipes-server: Modular parser strategy~~ - ✅ **DONE** (1498 → 285 lines, split into url_parsing/ package)
 - [x] ~~jarvis-command-center: Split model_service.py into prompt_engine.py, tool_parser.py, tool_executor.py~~ - ✅ **DONE** (1628 → 309 lines)
 
 ### 🔵 Low Priority
@@ -413,7 +414,7 @@ The output includes:
 |---------|------|------|-------|--------|
 | jarvis-auth | 8007 | Small | ✅ Good | Clean |
 | jarvis-command-center | 8002 | Large | ✅ Good | ✅ model_service.py refactored (309 lines) |
-| jarvis-recipes-server | 8001 | Medium | ✅ Good | url_recipe_parser.py needs split |
+| jarvis-recipes-server | 8001 | Medium | ✅ Good | ✅ url_recipe_parser.py refactored (285 lines) |
 | jarvis-whisper-api | 8012 | Small | ⚠️ Minimal | Clean |
 | jarvis-ocr-service | 5009 | Medium | ✅ Good | Clean |
 | jarvis-llm-proxy-api | 8000/8010 | Medium | ⚠️ Partial | ✅ main.py refactored (87 lines) |
