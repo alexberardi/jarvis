@@ -35,17 +35,17 @@ The jarvis-mcp server provides these tools:
 | **Architecture** | 8/10 | Monolithic files split (llm-proxy, command-center), clean module boundaries |
 | **Design** | 7/10 | Good separation of concerns, improved exception handling |
 | **Security** | 7/10 | JWT auth, encrypted secrets, app-to-app auth. Needs: rate limiting, CORS |
-| **Testing** | 6/10 | Core services tested. Missing: ocr-service |
+| **Testing** | 7/10 | Core services tested, ocr-service tests added |
 | **Documentation** | 8/10 | Per-service CLAUDE.md, comprehensive main docs |
 | **Maintainability** | 7/10 | Smaller files, specific exceptions, good comments |
-| **Code Quality** | 6/10 | Bare excepts fixed. Remaining: 22 print() files, ~91 broad exceptions |
+| **Code Quality** | 7/10 | Bare excepts fixed, broad exceptions fixed. Remaining: 22 print() files |
 | **Observability** | 6/10 | Centralized logging exists but 22 files still use print() |
 
-**Average: 6.88/10** → Target: 8/10
+**Average: 7.13/10** → Target: 8/10
 
 ### Quick Wins to Improve
 - [x] ~~Add tests to config-service~~ ✅ 44 tests, 93% coverage
-- [ ] Add tests to ocr-service (Testing: 6→7)
+- [x] ~~Add tests to ocr-service~~ ✅ 5 test files (validation, llm queue, callback, continue processing, async flow)
 - [ ] Migrate 22 print() files to JarvisLogger (Observability: 6→8)
 - [ ] Refactor url_recipe_parser.py (Architecture: 8→9)
 
@@ -323,14 +323,14 @@ The output includes:
 
 | Service | Port | Status |
 |---------|------|--------|
-| jarvis-ocr-service | 5009 | ❌ No tests |
+| ~~jarvis-ocr-service~~ | ~~5009~~ | ✅ **DONE** - 5 test files (validation, llm queue, callback, async flow) |
 | jarvis-tts | 8009 | ⚠️ Minimal (test_deps.py only) |
 | ~~jarvis-config-service~~ | ~~8013~~ | ✅ **DONE** - 44 tests, 93% coverage |
 
 ### 🟡 High Priority - Code Quality
 
 - [x] ~~Replace bare `except:` with specific exceptions~~ - ✅ **DONE** (10 → 0 in project code, remaining are in vendored deps)
-- [ ] Replace `except Exception:` without `as e` (~91 instances) - Partially done, priority files fixed
+- [x] ~~Replace `except Exception:` without `as e`~~ ✅ All 63 production instances fixed (specific types or `as e` added)
 - [ ] Add CORS headers configuration
 - [ ] Add rate limiting to API endpoints
 
@@ -417,7 +417,7 @@ The output includes:
 | jarvis-command-center | 8002 | Large | ✅ Good | ✅ model_service.py refactored (309 lines) |
 | jarvis-recipes-server | 8001 | Medium | ✅ Good | url_recipe_parser.py needs split |
 | jarvis-whisper-api | 8012 | Small | ⚠️ Minimal | Clean |
-| jarvis-ocr-service | 5009 | Medium | ❌ None | Needs tests |
+| jarvis-ocr-service | 5009 | Medium | ✅ Good | Clean |
 | jarvis-llm-proxy-api | 8000/8010 | Medium | ⚠️ Partial | ✅ main.py refactored (87 lines) |
 | jarvis-tts | 8009 | Small | ⚠️ Minimal | Needs more tests |
 | jarvis-logs | 8006 | Small | ✅ Good | Clean |
