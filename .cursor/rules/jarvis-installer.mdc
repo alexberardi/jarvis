@@ -1,0 +1,45 @@
+---
+description: Rules for jarvis-installer - install configuration SPA
+globs: jarvis-installer/**
+---
+
+# jarvis-installer
+
+Static React SPA (GitHub Pages) that generates install configurations for the Jarvis voice assistant stack.
+
+## Running
+
+```bash
+npm install              # Install dependencies
+npm run dev              # Dev server
+npm test                 # Tests
+npm run test:watch       # Watch mode
+npm run test:coverage    # With coverage
+npm run build            # Production build
+```
+
+## Tech Stack
+
+- React 19 + TypeScript, Vite, Vitest + React Testing Library + jsdom
+- Tailwind CSS v4 (via `@tailwindcss/vite` plugin - no config file)
+- JSZip for client-side zip generation
+- React Router for landing page / configurator routing
+
+## Project Structure
+
+- `public/service-registry.json` - Source of truth for all Jarvis modules
+- `src/types/` - TypeScript type definitions
+- `src/data/` - Static data (GPU database, model recommendations)
+- `src/lib/` - Pure logic (registry, detection, generators)
+- `src/context/` - React context providers
+- `src/components/` - UI components
+- `tests/` - Test files mirroring src/ structure
+- `install.sh` - Shell script for generated curl command
+
+## Service Dependencies
+
+None - fully static SPA. May be merged into jarvis-admin in the future.
+
+## Testing
+
+TDD required: RED → GREEN → IMPROVE. Target 80%+ coverage.

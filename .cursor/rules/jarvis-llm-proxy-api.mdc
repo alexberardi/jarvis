@@ -1,0 +1,86 @@
+---
+description: Rules for jarvis-llm-proxy-api - LLM proxy with local model support
+globs: jarvis-llm-proxy-api/**
+---
+
+# jarvis-llm-proxy-api
+
+LLM proxy service with local model inference, LoRA adapter training, and queue workers.
+
+## Running (Port 8000 API, Port 8010 Queue Worker)
+
+**On macOS:** Run natively (required for Metal acceleration):
+```bash
+./run.sh                       # Starts API + queue worker natively
+./run.sh --rebuild             # Rebuild venv after dependency changes
+```
+
+**On Linux:** Docker is fine:
+```bash
+./run.sh --docker              # Start in Docker
+./run.sh --docker --rebuild    # Rebuild after dependency changes
+```
+
+**Production:**
+```bash
+./run-prod.sh                  # Uses prod.env, no hot reload
+```
+
+**Why native on macOS:** Uses llama-cpp-python with Metal acceleration and sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for macOS compatibility. Docker cannot access Metal GPU.
+
+## Two API Modes
+
+### 1. Synchronous - OpenAI-Compatible Passthrough (Port 8000)
+
+Accepts OpenAI-style requests and forwards them to the local model, returning OpenAI-style responses. Extra sugar added for enhanced capabilities, but the interface is standard OpenAI.
+
+This is what command-center and other services call for real-time inference.
+
+### 2. Async Queue - Long-Running Jobs (Port 8010)
+
+Queue worker for tasks that take minutes/hours:
+
+- **Base model training**: Takes a base model and adds date/time context awareness using a key system. Keys like `today`, `tomorrow`, `yesterday` are embedded during training - the caller resolves these to actual dates at inference time.
+- **Adapter training**: Trains LoRA adapters for specific jarvis nodes. Uses the `IJarvisCommand` examples from a node's command set to teach the model that node's available commands.
+
+Jobs are queued via Redis and processed by the background worker.
+
+## Architecture
+
+```
+jarvis-llm-proxy-api/
+├── main.py                    # Entry point (87 lines, imports from modules)
+├── app/
+│   ├── api_server.py          # FastAPI routes (OpenAI-compatible)
+│   ├── model_service.py       # Model loading, inference
+│   └── queue_worker.py        # Background job processing (port 8010)
+├── scripts/
+│   └── common.sh              # Shared bash functions
+├── .models/                   # Local model storage
+└── run.sh                     # Dev startup (handles venv, CUDA/Metal detection)
+```
+
+## Environment Variables
+
+Env vars should only hold sensitive values. All non-sensitive config (model name, context window, etc.) should be in the database via jarvis-settings-client.
+
+| Variable | Description |
+|----------|-------------|
+| `JARVIS_CONFIG_URL` | Config service URL for bootstrap discovery |
+| `JARVIS_AUTH_APP_ID` | App ID for inter-service auth |
+| `JARVIS_AUTH_APP_KEY` | App key (sensitive) |
+
+## Service Dependencies
+
+**Must be running:**
+- `jarvis-auth` (8007) - App-to-app auth
+- `jarvis-config-service` (8013) - Service discovery
+- `jarvis-logs` (8006) - Centralized logging
+- `jarvis-settings-client` - Runtime configuration (model name, context window, etc.)
+
+**Data services (from jarvis-data-stores/):**
+- Redis - Job queue for async training tasks
+
+## Dependencies
+
+FastAPI, uvicorn, llama-cpp-python, vllm (optional), jarvis-log-client, jarvis-settings-client, jarvis-config-client, jarvis-auth-client

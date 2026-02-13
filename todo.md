@@ -8,13 +8,16 @@
   - [x] jarvis-mcp: health_check tool (aggregate all service health endpoints)
   - [x] jarvis-logs: log_tail endpoint (SSE at /api/v0/logs/stream)
   - [x] jarvis-mcp: logs_tail tool (one-shot query for recent logs)
-  - [ ] jarvis-auth: admin-only auth style for protected endpoints
-  - [ ] jarvis-mcp: run_tests tool (admin-protected test endpoints or scripts)
-  - [ ] Set up jarvis voice on Ubuntu dev machine
+  - [x] jarvis-auth: admin-only auth style for protected endpoints
+  - [x] jarvis-mcp: run_tests tool (admin-protected test endpoints or scripts)
+  - [ ] Set up jarvis voice on Ubuntu dev machine (deferred)
   - [ ] Build out CLAUDE.md context (dependency graph, error catalog, fixtures)
-  - [ ] Per-service CLAUDE.md files with service-specific context
+    - [x] Service dependency graph in top-level CLAUDE.md
+    - [ ] Error catalog (common failures + fixes)
+    - [ ] Test fixtures / seed data examples
+  - [x] Per-service CLAUDE.md files with service-specific context
   - [ ] llm-proxy: move config from env vars → database settings table with hot-reload
-  - [ ] Database MCP server - read-only access for debugging
+- [x] Database MCP server - read-only access for debugging
   - [ ] Docker MCP server - container status, logs, restart
   - [ ] Automated integration tests - CI for service communication
 - [ ] **Node authentication paradigm** - nodes should NOT have app-to-app auth (can't let them hit llm-proxy directly). Need separate auth flow for nodes.

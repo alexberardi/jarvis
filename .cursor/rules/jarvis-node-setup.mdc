@@ -1,0 +1,98 @@
+---
+description: Rules for jarvis-node-setup - Pi Zero voice node client software
+globs: jarvis-node-setup/**
+---
+
+# jarvis-node-setup
+
+Client software for Pi Zero voice nodes. Captures audio, detects wake word, sends commands to command-center.
+
+## Setup & Run
+
+```bash
+python scripts/main.py    # Run on Pi Zero
+pytest                     # Tests
+```
+
+## Architecture
+
+```
+jarvis-node-setup/
+├── scripts/main.py                    # Entry point
+├── core/
+│   ├── ijarvis_command.py             # Command interface (extend this)
+│   ├── ijarvis_parameter.py           # Parameter definition
+│   ├── command_response.py            # Response structure
+│   └── platform_abstraction.py        # Hardware abstraction
+├── services/
+│   ├── secret_service.py              # Secret management
+│   └── mqtt_tts_listener.py           # MQTT TTS listener
+├── commands/                          # Built-in commands (20+)
+│   ├── weather_command.py
+│   ├── calculator_command.py
+│   └── ...
+├── provisioning/                      # Headless Pi Zero provisioning
+│   ├── api.py                         # FastAPI provisioning server
+│   ├── state_machine.py               # State management
+│   ├── wifi_manager.py                # WiFi operations
+│   └── registration.py               # Command center registration
+└── utils/config_service.py            # Configuration
+```
+
+## Extending Commands
+
+Implement `IJarvisCommand`:
+
+```python
+from core.ijarvis_command import IJarvisCommand
+from core.command_response import CommandResponse
+
+class MyCommand(IJarvisCommand):
+    @property
+    def name(self) -> str:
+        return "my_command"
+
+    @property
+    def description(self) -> str:
+        return "Does something useful"
+
+    def execute(self, params: dict) -> CommandResponse:
+        return CommandResponse(success=True, message="Done!", data={"result": "value"})
+```
+
+## Threading Model
+
+- **Main thread**: Voice listener (MQTT voice capture)
+- **Background thread**: MQTT listener (TTS commands)
+
+## Provisioning
+
+Auto-enters provisioning mode when node is not provisioned:
+1. Starts AP mode (`jarvis-XXXX` WiFi)
+2. Runs provisioning API on port 8080
+3. Waits for mobile app
+4. Auto-restarts in normal mode after provisioning
+
+States: `AP_MODE` → `CONNECTING` → `REGISTERING` → `PROVISIONED` (or `ERROR`)
+
+## E2E Testing
+
+```bash
+python test_command_parsing.py              # Command parsing tests
+python test_command_parsing.py -l           # List tests
+python test_command_parsing.py -t 5 7 11    # Specific tests
+python test_multi_turn_conversation.py      # Multi-turn tests (fast mode)
+python test_multi_turn_conversation.py --full  # Full mode (TTS + Whisper)
+```
+
+**Required services:** jarvis-command-center (8002), jarvis-llm-proxy-api (8000). Full mode also needs jarvis-tts (8009) + jarvis-whisper-api (8012).
+
+## Service Dependencies
+
+- `jarvis-command-center` (8002) - Primary server (single external dependency for voice commands)
+
+**Design goal:** Node talks only to command-center, which handles all routing to other services.
+
+## Dependencies
+
+PyAudio, SoundDevice, paho-mqtt, pvporcupine, httpx, SQLAlchemy, pysqlcipher3, jarvis-log-client

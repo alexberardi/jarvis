@@ -1,0 +1,69 @@
+---
+description: Rules for jarvis-recipes-server - recipe CRUD and meal planning
+globs: jarvis-recipes-server/**
+---
+
+# jarvis-recipes-server
+
+Recipe CRUD and meal planning service.
+
+## Running (Port 8001)
+
+```bash
+./run.sh --docker              # Start in Docker (includes PostgreSQL)
+./run.sh --docker --rebuild    # Rebuild after dependency changes
+./run-prod.sh                  # Production (pulls from GHCR, requires shared network)
+```
+
+**Production requires:**
+- Shared Docker network: `docker network create microservices`
+- Shared PostgreSQL instance (see POSTGRES_SETUP.md)
+
+## Architecture
+
+```
+app/
+├── main.py
+├── models/                    # SQLAlchemy models
+├── routes/                    # FastAPI routes
+├── url_parsing/               # URL recipe parser (refactored from monolith)
+│   ├── __init__.py            # Main entry point (285 lines)
+│   ├── extractors/            # Site-specific extractors
+│   └── utils/                 # Parsing utilities
+└── services/                  # Business logic
+```
+
+## Key Features
+
+- Recipe CRUD (create, read, update, delete)
+- URL recipe import (paste a URL, extracts recipe automatically)
+- Meal planning
+- `url_parsing/` package handles recipe extraction from websites
+
+## API Endpoints
+
+- `GET /recipes` - List recipes
+- `POST /recipes` - Create recipe
+- `POST /recipes/import-url` - Import recipe from URL
+- `GET /recipes/{id}` - Get recipe
+- `PUT /recipes/{id}` - Update recipe
+- `DELETE /recipes/{id}` - Delete recipe
+
+## Service Dependencies
+
+**Must be running:**
+- `jarvis-auth` (8007) - App-to-app auth
+- `jarvis-logs` (8006) - Centralized logging
+- `jarvis-ocr-service` (5009) - Image-based recipe OCR (photo/screenshot → text)
+- `jarvis-llm-proxy-api` (8000) - Validates OCR output and parses URL-based recipes
+
+**Should use but not yet confirmed/implemented:**
+- `jarvis-config-service` (8013) - Service discovery (may still use hardcoded URLs)
+- `jarvis-settings-client` - Runtime configuration (future)
+
+**Data services (from ~/jarvis-data-services):**
+- PostgreSQL - Recipe storage, meal plans
+
+## Dependencies
+
+FastAPI, SQLAlchemy, Alembic, psycopg2, httpx, beautifulsoup4, jarvis-log-client

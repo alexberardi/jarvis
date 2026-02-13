@@ -1,0 +1,66 @@
+---
+description: Rules for jarvis-settings-client - multi-tenant settings library
+globs: jarvis-settings-client/**
+---
+
+# jarvis-settings-client
+
+Shared settings library with multi-tenant support, caching, and environment variable fallback.
+
+## Setup & Run
+
+```bash
+pip install -e .
+pytest
+pytest --cov=jarvis_settings_client --cov-report=term-missing
+```
+
+## Usage
+
+```python
+from jarvis_settings_client import SettingDefinition, SettingsService
+
+# Define settings
+SETTINGS = [
+    SettingDefinition(key="model.name", category="model", value_type="string", default="default-model"),
+]
+
+# Create service
+service = SettingsService(definitions=SETTINGS, get_db_session=get_db, setting_model=Setting)
+
+# Use
+model = service.get("model.name")
+context_window = service.get_int("model.context_window")
+service.set("model.name", "new-model", household_id="h123")
+```
+
+## Multi-Tenant Cascade Lookup
+
+Settings resolved in order (first match wins):
+1. User-specific: household_id + node_id + user_id
+2. Node-level: household_id + node_id
+3. Household-level: household_id
+4. System default: all scope fields NULL
+
+## API Routes
+
+Include via `create_settings_router(service, auth_dependency)`:
+- `GET /settings` - List all
+- `GET /settings/categories` - List categories
+- `GET /settings/{key}` - Get single
+- `PUT /settings/{key}` - Update
+- `POST /settings/sync-from-env` - Migrate env vars to DB
+- `POST /settings/invalidate-cache` - Clear cache
+
+## Service Dependencies
+
+- `jarvis-auth` (8007) - JWT validation and app credential validation (GET /auth/me, GET /internal/app-ping)
+- Optionally uses `jarvis-config-client` to discover auth URL
+
+## Features
+
+- Thread-safe caching (60s TTL)
+- Environment fallback
+- Type coercion (string/int/float/bool/json)
+- Secret masking in API
+- Multi-tenant cascade

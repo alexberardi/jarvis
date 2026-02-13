@@ -1,0 +1,77 @@
+---
+description: Rules for jarvis-auth-client - shared authentication library
+globs: jarvis-auth-client/**
+---
+
+# jarvis-auth-client
+
+Shared Python library for authentication across Jarvis microservices. Two auth mechanisms: Superuser JWT and App-to-App.
+
+## Setup & Run
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+## Superuser JWT
+
+```python
+from jarvis_auth_client import init, require_superuser, SuperuserUser
+
+init(secret_key=os.getenv("JARVIS_AUTH_SECRET_KEY"))
+
+@app.get("/admin/something")
+def admin_endpoint(user: SuperuserUser = Depends(require_superuser)):
+    print(user.user_id, user.email)
+```
+
+## App-to-App Authentication
+
+```python
+from jarvis_auth_client import init, require_app_auth, AppAuthResult
+from jarvis_auth_client.headers import get_app_headers, build_context_headers
+
+init(auth_base_url=os.getenv("JARVIS_AUTH_BASE_URL"))
+_app_auth = require_app_auth()
+
+@app.post("/transcribe")
+async def transcribe(auth: AppAuthResult = Depends(_app_auth)):
+    print(auth.app.app_id, auth.context.household_id)
+```
+
+## Header Utilities
+
+```python
+from jarvis_auth_client.headers import get_app_headers, build_context_headers
+
+headers = {
+    **get_app_headers(),  # X-Jarvis-App-Id, X-Jarvis-App-Key from env
+    **build_context_headers(household_id="hh123", node_id="node456", user_id=789),
+}
+```
+
+## Environment Variables
+
+| Variable | Used By | Description |
+|----------|---------|-------------|
+| `JARVIS_AUTH_SECRET_KEY` | require_superuser | JWT signing key |
+| `JARVIS_AUTH_BASE_URL` | require_app_auth | jarvis-auth service URL |
+| `JARVIS_AUTH_APP_ID` | get_app_headers | App ID for outgoing requests |
+| `JARVIS_AUTH_APP_KEY` | get_app_headers | App key for outgoing requests |
+
+## Error Responses
+
+- **401**: Missing/invalid token or credentials
+- **403**: Valid token but not superuser
+- **503**: jarvis-auth service unavailable
+
+## Service Dependencies
+
+Talks to its respective service only:
+- `jarvis-auth` (8007) - Validates app credentials (GET /internal/app-ping)
+- Optionally uses `jarvis-config-client` to discover auth URL
+
+## Used By
+
+jarvis-settings-server, jarvis-command-center, jarvis-whisper-api, jarvis-tts

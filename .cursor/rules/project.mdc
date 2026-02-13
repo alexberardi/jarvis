@@ -1,0 +1,192 @@
+---
+description: Core Jarvis project rules, architecture, and coding standards. Always active.
+alwaysApply: true
+---
+
+# Jarvis - Personal Voice Assistant
+
+Private, self-hosted voice assistant with Pi Zero nodes and microservices.
+
+**See also:** `CLAUDE.md` and `RULES.md` for full details.
+
+## Core Principles
+
+1. **Fully private and open source** - No cloud dependencies by default, all data stays local
+2. **Self-hostable with optional cloud** - Same open-source codebase for both
+3. **Fully extensible** - Add capabilities via `IJarvisCommand` interface
+
+## Architecture
+
+```
+Pi Zero Nodes → Command Center (8002) → Speech-to-Text (Whisper)
+                                      → LLM Processing
+                                      → Tool Execution → Service Response
+```
+
+## Service Inventory
+
+| Service | Port | Description |
+|---------|------|-------------|
+| jarvis-auth | 8007 | JWT authentication, user management, app-to-app credentials |
+| jarvis-command-center | 8002 | Central voice/command API, node management, tool routing |
+| jarvis-whisper-api | 8012 | Speech-to-text via whisper.cpp |
+| jarvis-ocr-service | 5009 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) |
+| jarvis-recipes-server | 8001 | Recipe CRUD and meal planning |
+| jarvis-tts | 8009 | Text-to-speech via Piper TTS |
+| jarvis-logs | 8006 | Centralized logging (Loki + Grafana) |
+| jarvis-mcp | 8011 | MCP server for Claude Code integration |
+| jarvis-config-service | 8013 | Service discovery and configuration |
+| jarvis-llm-proxy-api | 8000/8010 | LLM proxy (API + queue worker) |
+
+### Libraries
+
+| Library | Purpose |
+|---------|---------|
+| jarvis-log-client | Structured logging with async batching |
+| jarvis-config-client | Service discovery client |
+| jarvis-auth-client | Shared auth (superuser JWT + app-to-app) |
+| jarvis-settings-client | Multi-tenant settings with caching |
+
+### Client Software & Apps
+
+| Client | Type | Purpose |
+|--------|------|---------|
+| jarvis-node-setup | Python (Pi Zero) | Voice node client software |
+| jarvis-admin | React 19 + Vite | Web admin dashboard |
+| jarvis-installer | React 19 + Vite | Static SPA for install configuration |
+| jarvis-node-mobile | React Native + Expo | Mobile companion app for node provisioning |
+| jarvis-recipes-mobile | React Native + Expo | Mobile recipes app |
+
+## Data Services (Shared Infrastructure)
+
+Shared infrastructure containers live in `jarvis-data-stores/` (this repo):
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| PostgreSQL | 5432 | Shared database server (each service has its own DB) |
+| Redis | 6379 | Queue for async jobs (OCR, LLM training) |
+| MinIO | 9000 | Object storage |
+| Mosquitto | 1883 | MQTT broker (node ↔ TTS communication) |
+
+Each backend service connects to the **shared PostgreSQL** but uses its **own database** (e.g., `jarvis_auth`, `jarvis_command_center`, `jarvis_recipes`).
+
+## Common Patterns
+
+- **Framework**: FastAPI + Uvicorn (all Python services)
+- **Database**: Shared PostgreSQL server, per-service databases. SQLite acceptable for local dev/testing.
+- **Migrations**: Alembic
+- **Auth**: JWT access tokens + hashed refresh tokens
+- **App-to-App Auth**: `X-Jarvis-App-Id` + `X-Jarvis-App-Key` headers
+- **Node Auth**: `X-API-Key` header (node_id:node_key format)
+- **Containerization**: Docker + docker-compose
+- **Service Discovery**: jarvis-config-service with jarvis-config-client
+- **Settings**: Non-sensitive config belongs in database via jarvis-settings-client. Env vars should ONLY hold sensitive values (auth keys, app IDs) and the `JARVIS_CONFIG_URL` for bootstrap discovery.
+
+## Service Dependencies (Common Base)
+
+Almost all backend services depend on these four:
+- **jarvis-auth** - Authentication (app-to-app credentials)
+- **jarvis-config-service** - Service discovery (find other service URLs)
+- **jarvis-logs** - Centralized logging
+- **jarvis-settings-client** - Runtime configuration
+
+Beyond that, dependencies are service-specific (see each service's .mdc file).
+
+## Coding Style
+
+### Python
+
+- **Imports**: ALL imports MUST be at the top of the file. Group: stdlib → third-party → local
+- **Type hints**: ALWAYS use type hints for parameters, return types, and variable declarations
+- **Prefer** `X | None` over `Optional[X]` (Python 3.10+)
+- **Logging**: ALL logging MUST go through `jarvis-log-client` / `JarvisLogger`. No `print()` for logging
+- **Exceptions**: Use specific exception types. Never bare `except:`. Always `except SomeException as e:`
+
+### TypeScript/React (jarvis-admin, jarvis-installer)
+
+- React 19, TypeScript, Tailwind CSS v4
+- TanStack Query for data fetching
+
+## Development Rules
+
+### TDD is Mandatory
+
+1. **RED** - Write a failing test that defines expected behavior
+2. **GREEN** - Write minimum code to make it pass
+3. **REFACTOR** - Clean up while keeping tests green
+
+### Running Services
+
+**Standard for backend services:**
+```bash
+./run.sh --docker              # Start in Docker
+./run.sh --docker --rebuild    # Rebuild after dependency/Dockerfile changes
+```
+
+**Exceptions (macOS only - need native access to Metal GPU / Apple Vision):**
+- `jarvis-llm-proxy-api` → `./run.sh` (native, Metal acceleration)
+- `jarvis-ocr-service` → `./run.sh` (native, Apple Vision backend)
+- On Linux, these two also use `./run.sh --docker` like everything else
+
+**Mobile apps (React Native / Expo):**
+- `jarvis-node-mobile` → `npx expo start`
+- `jarvis-recipes-mobile` → `npx expo start`
+
+**Web apps (React / Vite):**
+- `jarvis-admin` → `npm run dev`
+- `jarvis-installer` → `npm run dev`
+
+**Libraries** (no run script, just install + test):
+- `pip install -e .` then `pytest`
+
+### New Services
+
+- Prefer Docker containers
+- Include `Dockerfile` and `docker-compose.yaml`
+- Include `run.sh` supporting `--docker` and `--rebuild` flags
+- Follow existing FastAPI + Uvicorn patterns
+
+## Working Style
+
+- **Be precise** - Ask questions early when uncertain rather than repeatedly trying
+- **Don't brute force** - If something fails 2-3 times, step back and reconsider
+- **User prefers questions** - A clarifying question beats five failed attempts
+
+## Performance Targets
+
+- Total voice interaction latency: <5 seconds end-to-end
+- Date key extraction accuracy: 100% on validation suite
+
+## Environment Variables
+
+Env vars should be **minimal** - only sensitive values and bootstrap discovery. All non-sensitive configuration should live in the database via jarvis-settings-client.
+
+**Every service needs:**
+| Variable | Description |
+|----------|-------------|
+| `JARVIS_CONFIG_URL` | Config service URL for bootstrap discovery |
+| `JARVIS_AUTH_APP_ID` | This service's app ID for inter-service auth |
+| `JARVIS_AUTH_APP_KEY` | This service's app key (sensitive) |
+
+**Database services also need:**
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string (points to shared server, service-specific DB) |
+
+**Auth service additionally needs:**
+| Variable | Description |
+|----------|-------------|
+| `SECRET_KEY` | JWT signing key |
+
+## Developing Libraries
+
+Client libraries (`jarvis-log-client`, `jarvis-config-client`, `jarvis-auth-client`, `jarvis-settings-client`) are auto-mounted into service Docker containers via volume mounts in dev mode. Changes to library code are reflected without rebuilding.
+
+For the service's own code, Docker dev builds should also use volume mounts for hot reload. If you need to add this to a service, add a volume mount in `docker-compose.dev.yaml` mapping the local source into the container.
+
+## Service Communication
+
+- Nodes → Command Center: `X-API-Key` header
+- Services → Auth: `X-Jarvis-App-Id` + `X-Jarvis-App-Key`
+- Command Center dispatches to whisper/ocr/tts as needed
+- All services discover each other via jarvis-config-service

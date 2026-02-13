@@ -1,0 +1,49 @@
+---
+description: Rules for jarvis-config-service - service discovery and configuration
+globs: jarvis-config-service/**
+---
+
+# jarvis-config-service
+
+Service discovery and configuration management. The bootstrap service - all other services find each other through this one.
+
+## Running (Port 8013)
+
+```bash
+./run.sh --docker              # Start in Docker (standard)
+./run.sh --docker --rebuild    # Rebuild after dependency changes
+```
+
+## How It Works
+
+Simple FastAPI service that stores and exposes URLs for all jarvis services. Acts as the central registry for service discovery.
+
+- Services use `jarvis-config-client` library to query this service for other service URLs
+- `jarvis-admin` dashboard provides UI to register/update service URLs
+- Every other service only needs `JARVIS_CONFIG_URL` env var to bootstrap - it discovers everything else from here
+
+## Key Endpoints
+
+- `GET /services` - List all registered services and their URLs
+- `GET /services/{name}` - Get specific service URL
+- `GET /info` - Service identity info (returns `{"service": "jarvis-config-service"}`, used by network auto-discovery)
+- `GET /health` - Health check
+
+## Settings API
+
+Also serves settings CRUD at `/v1/settings` (used by jarvis-admin dashboard for managing runtime settings across services).
+
+## Service Dependencies
+
+**Must be running:**
+- `jarvis-auth` (8007) - Auth for admin endpoints
+- `jarvis-logs` (8006) - Centralized logging
+
+**Data services (from jarvis-data-stores/):**
+- PostgreSQL - Service registry storage
+
+**Note:** This is the bootstrap service - it cannot depend on config-service or settings-client since it IS the config/settings provider.
+
+## Dependencies
+
+FastAPI, uvicorn, SQLAlchemy, jarvis-log-client

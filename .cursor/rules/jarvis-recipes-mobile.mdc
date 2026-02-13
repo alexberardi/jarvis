@@ -1,0 +1,42 @@
+---
+description: Rules for jarvis-recipes-mobile - recipes mobile app
+globs: jarvis-recipes-mobile/**
+---
+
+# jarvis-recipes-mobile
+
+Mobile recipes app. React Native + TypeScript + Expo. More mature than jarvis-node-mobile.
+
+## Running
+
+```bash
+npm install                    # Install dependencies
+npx expo start                 # Start Expo dev client
+npm run ios                    # iOS
+npm run android                # Android
+npm run web                    # Web version
+npm run dev:ios                # Open simulator + iOS (iPhone 15)
+npm run dev-full:ios           # Full prebuild + iOS
+```
+
+## Testing
+
+```bash
+npm test                       # Jest
+```
+
+## Purpose
+
+Browse recipes, meal planning, and interact with the recipe system. Can send images (recipe photos, screenshots) for OCR-based recipe import.
+
+## Tech Stack
+
+- React Native + Expo + TypeScript
+- Jest for testing
+
+## Service Dependencies
+
+- `jarvis-auth` (8007) - User authentication
+- `jarvis-recipes-server` (8001) - Recipe CRUD, URL import, meal planning (primary server)
+
+**Design goal:** Clients should talk only to their respective server, which acts as passthrough to auth and other services.

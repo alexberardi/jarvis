@@ -1,0 +1,92 @@
+---
+description: Rules for jarvis-ocr-service - OCR with pluggable backends
+globs: jarvis-ocr-service/**
+---
+
+# jarvis-ocr-service
+
+OCR service with opt-in pluggable backends. You enable the OCR technologies you want, and the service runs the image through each enabled backend and returns all results.
+
+## Running (Port 5009)
+
+**On macOS:** Run natively (required for Apple Vision backend):
+```bash
+./run.sh                       # Start natively with poetry + uvicorn
+./run.sh --enable-redis-queue  # With Redis queue for async jobs
+```
+
+**On Linux:** Docker is fine:
+```bash
+./run.sh --docker              # Start in Docker
+./run.sh --docker --rebuild    # Rebuild after dependency changes
+```
+
+**Worker (async OCR jobs, requires Redis):**
+```bash
+./run-worker.sh
+```
+
+**Production:**
+```bash
+./run-prod.sh                  # Docker with docker-compose.prod.yaml
+```
+
+**Why native on macOS:** Apple Vision is the best OCR backend on macOS and requires native PyObjC access. Docker cannot access Apple Vision APIs.
+
+## How It Works
+
+1. OCR backends are **opt-in** via env vars or settings table (should be migrated to settings if not already)
+2. When an OCR request comes in, it's **queued in Redis** for the worker to pick up
+3. Worker runs the image through **each enabled backend** and collects results from all of them
+4. Worker hits the **callback URL** provided in the original message with the combined results
+
+This is fully async - the API just queues the job and returns immediately.
+
+## Architecture
+
+```
+app/
+├── main.py                    # FastAPI app
+├── ocr/
+│   ├── tesseract_backend.py   # Tesseract OCR
+│   ├── easyocr_backend.py     # EasyOCR
+│   └── apple_vision_backend.py # Apple Vision (macOS only)
+├── queue/                     # Redis-based async processing
+└── auth.py                    # App-to-app auth
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OCR_PORT` | 5009 | API port |
+| `JARVIS_AUTH_BASE_URL` | http://localhost:8007 | Auth service URL |
+| `REDIS_URL` | - | Redis URL (from shared jarvis-data-services) |
+
+OCR backend opt-in configuration should live in settings table (via jarvis-settings-client), not env vars.
+
+## API Endpoints
+
+- `POST /ocr` - Queue an OCR job (accepts image + callback URL, returns immediately)
+- `GET /health` - Health check
+
+## Service Dependencies
+
+**Must be running:**
+- `jarvis-auth` (8007) - App-to-app auth
+- `jarvis-logs` (8006) - Centralized logging
+
+**Should use but not yet confirmed/implemented:**
+- `jarvis-config-service` (8013) - Service discovery (should use if not already)
+- `jarvis-settings-client` - Runtime configuration, including OCR backend opt-in (should replace env vars)
+
+**Data services (from jarvis-data-stores/):**
+- Redis - Async job queue
+
+## Used By
+
+- `jarvis-recipes-server` - Sends recipe images/screenshots for OCR extraction
+
+## Dependencies
+
+FastAPI, uvicorn, pytesseract, easyocr, pyobjc (macOS), httpx, jarvis-log-client, redis

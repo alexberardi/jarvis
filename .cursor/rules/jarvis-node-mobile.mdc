@@ -1,0 +1,55 @@
+---
+description: Rules for jarvis-node-mobile - mobile companion app for node provisioning
+globs: jarvis-node-mobile/**
+---
+
+# jarvis-node-mobile
+
+Mobile companion app for provisioning and managing Jarvis Pi Zero nodes. React Native + TypeScript + Expo.
+
+**Status: Immature** - Still working on WiFi provisioning flow for nodes.
+
+## Running
+
+```bash
+npm install                    # Install dependencies
+npx expo start                 # Start Expo dev client
+npm run ios                    # iOS device (iPhone 17 Pro Max)
+npm run ios:pick               # iOS device picker
+npm run android                # Android
+npm run web                    # Web version
+```
+
+## Building
+
+```bash
+npm run build:dev:ios          # EAS build for iOS (development)
+npm run build:dev:android      # EAS build for Android (development)
+npm run build:dev:local        # Local iOS build
+```
+
+## Testing
+
+```bash
+npm test                       # Jest
+npm run test:watch             # Watch mode
+npm run test:coverage          # Coverage report
+```
+
+## Purpose
+
+Primary function is **provisioning Pi Zero nodes**:
+1. Connect to node's AP mode WiFi (`jarvis-XXXX`)
+2. Send home WiFi credentials to the node
+3. Register node with command-center
+4. Manage node settings
+
+## Tech Stack
+
+- React Native + Expo + TypeScript
+- Jest for testing
+
+## Service Dependencies
+
+- `jarvis-command-center` (8002) - Primary server (goal: single external dependency)
+- `jarvis-node-setup` provisioning API (port 8080 on the node, direct connection during provisioning)

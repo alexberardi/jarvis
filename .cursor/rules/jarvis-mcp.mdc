@@ -1,0 +1,78 @@
+---
+description: Rules for jarvis-mcp - MCP server for Claude Code integration
+globs: jarvis-mcp/**
+---
+
+# jarvis-mcp
+
+MCP (Model Context Protocol) server exposing jarvis services as tools for Claude Code.
+
+## Running (Port 8011)
+
+```bash
+./run.sh --docker              # Start in Docker (standard)
+./run.sh --docker --rebuild    # Rebuild after dependency changes
+poetry run pytest              # Tests
+```
+
+## Architecture
+
+```
+jarvis_mcp/
+├── __main__.py    # Entry point
+├── server.py      # SSE server, MCP protocol
+├── config.py      # Environment configuration
+└── tools/
+    ├── logs.py    # logs_query, logs_tail, logs_errors, logs_services
+    └── debug.py   # debug_health, debug_service_info
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JARVIS_MCP_HOST` | localhost | Server host |
+| `JARVIS_MCP_PORT` | 8011 | Server port |
+| `JARVIS_MCP_TOOLS` | logs,debug | Enabled tool groups (add `tests`/`db`) |
+| `JARVIS_CONFIG_URL` | - | Config service URL (preferred) |
+| `JARVIS_CONFIG_URL_STYLE` | - | Set to `dockerized` in Docker |
+| `JARVIS_LOGS_URL` | http://localhost:8006 | Fallback logs URL |
+| `JARVIS_AUTH_URL` | http://localhost:8007 | Fallback auth URL |
+| `POSTGRES_HOST` | localhost | Postgres host for db tools |
+| `POSTGRES_PORT` | 5432 | Postgres port for db tools |
+| `POSTGRES_USER` | devuser | Postgres user for db tools |
+| `POSTGRES_PASSWORD` | devpassword | Postgres password for db tools |
+| `POSTGRES_DB` | postgres | Default database for db tools |
+
+## Service Discovery
+
+URLs fetched from `jarvis-config-service` at startup with background refresh every 5 minutes. Falls back to `JARVIS_*_URL` env vars.
+
+## Available Tools
+
+**Logs:** logs_query, logs_tail, logs_errors, logs_services
+**Debug:** debug_health, debug_service_info
+**Tests:** run_tests
+**DB (read-only):** db_list_databases, db_list_schemas, db_list_tables, db_describe_table, db_query
+
+## API Endpoints
+
+- `GET /health` - Health check
+- `GET /sse` - SSE connection for MCP clients
+- `POST /messages` - MCP message endpoint
+
+## Service Dependencies
+
+**Must be running:**
+- `jarvis-config-service` (8013) - Service discovery (optional, falls back to env vars)
+- `jarvis-logs` (8006) - Queried by log tools (logs_query, logs_tail, logs_errors)
+- `jarvis-settings-client` - Runtime configuration
+
+**Queried for health/debug tools (all optional):**
+- `jarvis-auth` (8007), `jarvis-command-center` (8002), `jarvis-recipes-server` (8001), `jarvis-whisper-api` (8012), `jarvis-ocr-service` (5009), `jarvis-llm-proxy-api` (8000), `jarvis-tts` (8009)
+
+**Note:** Does NOT use jarvis-log-client for its own logging. Uses app-to-app auth headers directly for logs access.
+
+## Dependencies
+
+mcp, starlette, sse-starlette, httpx, jarvis-settings-client

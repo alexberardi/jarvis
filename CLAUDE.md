@@ -112,6 +112,49 @@ Voice-controlled assistant system. Pi Zero nodes (with mic + speaker) capture vo
 └────────────────┘
 ```
 
+## Service Dependency Graph (Runtime)
+
+```
+Nodes/Clients
+  └─▶ jarvis-command-center
+        ├─▶ jarvis-auth (app-to-app + node auth)
+        ├─▶ jarvis-config-service (service discovery)
+        ├─▶ jarvis-logs (structured logging)
+        ├─▶ jarvis-settings-client (runtime settings)
+        ├─▶ jarvis-llm-proxy-api (LLM inference)
+        ├─▶ jarvis-whisper-api (speech-to-text)
+        └─▶ jarvis-tts (text-to-speech)
+
+jarvis-ocr-service
+  ├─▶ jarvis-auth (app-to-app auth)
+  ├─▶ jarvis-logs (structured logging)
+  └─▶ jarvis-settings-client (backend opt-in settings)
+
+jarvis-recipes-server
+  ├─▶ jarvis-auth (app-to-app auth)
+  ├─▶ jarvis-logs (structured logging)
+  ├─▶ jarvis-settings-client (runtime settings)
+  └─▶ jarvis-ocr-service (optional OCR pipeline)
+
+jarvis-logs
+  └─▶ jarvis-auth (app-to-app auth validation)
+
+jarvis-config-service
+  ├─▶ jarvis-auth (admin/app auth)
+  └─▶ jarvis-logs (structured logging)
+
+jarvis-mcp
+  ├─▶ jarvis-config-service (service discovery)
+  ├─▶ jarvis-logs (log queries)
+  └─▶ jarvis-auth (auth headers for protected calls)
+
+Data stores (shared infra)
+  ├─ PostgreSQL (auth, command-center, recipes, config-service)
+  ├─ Redis (ocr queue, async jobs)
+  ├─ MinIO (object storage)
+  └─ Mosquitto (node ↔ tts MQTT)
+```
+
 ## Services
 
 | Service | Port | Description |
@@ -623,7 +666,7 @@ Current: query_logs, get_log_stats, debug tools, health_check, logs_tail
 To add:
 - [x] **health_check tool** - Hit all service health endpoints, aggregate results, return status
 - [x] **logs_tail tool** - One-shot query for recent logs from a service
-- [ ] **run_tests tool** - Call test scripts or hit admin-protected test endpoints
+- [x] **run_tests tool** - Call test scripts or hit admin-protected test endpoints
 
 ### jarvis-auth: Admin-Only Auth
 - [ ] Add "admin-only" auth style (separate from app-to-app) for protecting sensitive endpoints
@@ -652,7 +695,7 @@ To add:
 - [ ] **Recipe tools** - `recipe_search`, `recipe_get`, `meal_plan` via jarvis-recipes-server
 - [ ] **Node status** - `node_list`, `node_status` to see Pi Zero online state, last activity
 - [ ] **Training dashboard** - `training_status`, `adapter_list` to check training jobs and deployed adapters
-- [ ] **Database MCP** - Read-only access for debugging
+- [x] **Database MCP** - Read-only access for debugging
 - [ ] **Docker MCP** - Container status, logs, restart services
 
 **System tools (called by services at runtime):**

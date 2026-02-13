@@ -1,0 +1,60 @@
+---
+description: Rules for jarvis-log-client - structured logging library
+globs: jarvis-log-client/**
+---
+
+# jarvis-log-client
+
+Python library for sending structured logs to jarvis-logs server. Async batching with automatic console fallback.
+
+## Setup & Run
+
+```bash
+pip install -e .
+poetry run pytest
+```
+
+## Usage
+
+```python
+from jarvis_log_client import init, JarvisLogger
+
+# Initialize once at startup
+init(app_id="my-service", app_key=os.getenv("JARVIS_APP_KEY"), logs_url="http://localhost:8006")
+
+# Create logger and use
+logger = JarvisLogger(service="my-service", console_level="WARNING", remote_level="DEBUG")
+logger.info("User logged in", user_id="123", request_id="abc")
+
+# Shutdown (flushes remaining logs)
+from jarvis_log_client import shutdown
+shutdown()
+```
+
+## Architecture
+
+```
+jarvis_log_client/
+├── __init__.py    # Public API: init, JarvisLogger, JarvisLogHandler
+├── client.py      # Core batching and HTTP sending
+└── auth.py        # App-to-app authentication
+```
+
+## Service Discovery
+
+If `jarvis-config-client` is installed and initialized, logs URL auto-fetched from config-service. Otherwise falls back to `JARVIS_LOGS_URL` env var (default: `http://localhost:8006`).
+
+## Service Dependencies
+
+Talks to its respective service only:
+- `jarvis-logs` (8006) - Log ingestion (POST /api/v0/logs/batch)
+- Optionally uses `jarvis-config-client` to discover logs URL (if initialized by host service)
+
+## Features
+
+- Async batching of logs
+- Console fallback if server unavailable
+- Structured context (arbitrary key-value pairs)
+- Thread-safe
+- Graceful shutdown (flushes remaining)
+- stdlib logging integration via `JarvisLogHandler`

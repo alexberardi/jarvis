@@ -1,0 +1,57 @@
+---
+description: Rules for jarvis-tts - text-to-speech service
+globs: jarvis-tts/**
+---
+
+# jarvis-tts
+
+Text-to-speech service using Piper TTS with ONNX runtime.
+
+## Running (Port 8009)
+
+```bash
+./run.sh --docker              # Start in Docker (standard)
+./run.sh --docker --rebuild    # Rebuild after dependency changes
+```
+
+## Architecture
+
+```
+app/
+├── main.py      # FastAPI routes: /ping, /speak, /generate-wake-response
+├── deps.py      # Node authentication via jarvis-auth
+└── models/      # Piper ONNX voice models
+```
+
+- **TTS Engine**: Piper TTS with ONNX runtime
+- **Voice**: en_GB-alan-low (British English)
+- **Output**: 16-bit PCM WAV
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TTS_PORT` | 8009 | API port |
+| `JARVIS_LLM_PROXY_API_URL` | - | LLM proxy for wake responses |
+| `JARVIS_AUTH_BASE_URL` | http://localhost:8007 | Auth service URL |
+| `JARVIS_APP_ID` | jarvis-tts | App ID for auth |
+| `JARVIS_APP_KEY` | - | App key (required for auth) |
+
+## API Endpoints
+
+- `GET /ping` - Health check (no auth)
+- `POST /speak` - Generate WAV audio (auth required, returns `audio/wav`)
+- `POST /generate-wake-response` - Random wake greeting via LLM (auth required)
+
+## Service Dependencies
+
+**Must be running:**
+- `jarvis-auth` (8007) - App-to-app auth validation
+- `jarvis-config-service` (8013) - Service discovery (finds auth + llm-proxy URLs)
+- `jarvis-logs` (8006) - Centralized logging
+- `jarvis-llm-proxy-api` (8000) - LLM calls for `/generate-wake-response` endpoint
+- `jarvis-settings-client` - Runtime configuration
+
+## Dependencies
+
+Python 3.12, FastAPI, uvicorn, piper-tts, onnxruntime, httpx, jarvis-log-client, jarvis-config-client, jarvis-auth-client, jarvis-settings-client

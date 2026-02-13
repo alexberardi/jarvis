@@ -1,0 +1,61 @@
+---
+description: Rules for jarvis-data-stores - shared infrastructure (PostgreSQL, Redis, MinIO, Mosquitto)
+globs: jarvis-data-stores/**
+---
+
+# jarvis-data-stores
+
+Shared infrastructure containers for all Jarvis services. Single docker-compose for PostgreSQL, Redis, MinIO, and Mosquitto.
+
+## Running
+
+```bash
+cd jarvis-data-stores
+docker compose up -d               # Start all infrastructure
+docker compose down                # Stop all
+docker compose ps                  # Check status
+```
+
+## Services
+
+| Service | Container | Port | Purpose |
+|---------|-----------|------|---------|
+| PostgreSQL 16 | dev-postgres | 5432 | Shared DB server (each service has own database) |
+| Redis 7 | dev-redis | 6379 | Job queues (OCR, LLM training) |
+| MinIO | jarvis-data-stores-minio-1 | 9000/9001 | S3-compatible object storage (recipe images, adapters) |
+| Mosquitto | dev-mosquitto | 1884 | MQTT broker (node ↔ command-center TTS) |
+| PgAdmin | dev-pgadmin | 5050 | PostgreSQL web UI |
+| RedisInsight | dev-redisinsight | 5052 | Redis web UI |
+
+## Database Management
+
+```bash
+./create-db.sh <database_name>     # Create a new database
+./drop-db.sh <database_name>       # Drop a database (terminates active connections first)
+```
+
+Known databases:
+- `jarvis_auth` - User accounts, tokens, app clients
+- `jarvis_command_center_db` - Nodes, conversations
+- `jarvis_config` - Service registry, settings
+- `jarvis_recipes` - Recipes, meal plans
+- `jarvis_llm_proxy` - LLM settings, job tracking
+
+## Used By
+
+| Infrastructure | Services |
+|----------------|----------|
+| PostgreSQL | jarvis-auth, jarvis-command-center, jarvis-config-service, jarvis-recipes-server, jarvis-llm-proxy-api |
+| Redis | jarvis-ocr-service (job queue), jarvis-recipes-server (RQ worker), jarvis-llm-proxy-api (training queue) |
+| MinIO | jarvis-recipes-server (recipe images), jarvis-llm-proxy-api (adapter storage) |
+| Mosquitto | jarvis-command-center (publishes TTS to nodes) |
+
+## Configuration
+
+All config in `.env` (not committed - contains credentials). Ports are configurable via env vars.
+
+## Important
+
+- **Start this BEFORE any backend services** - they depend on PostgreSQL/Redis being available
+- Data directories (`data/`, `redis-data/`, `minio_data/`, etc.) are gitignored - they contain persistent data
+- `.env` is gitignored - contains credentials
