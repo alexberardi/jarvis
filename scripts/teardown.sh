@@ -160,8 +160,20 @@ for name in "${ALL_SERVICES[@]}"; do
 done
 echo ""
 
-# ── Step 5: Remove ~/.jarvis/ (tokens, DB names, PIDs) ───────────────────
-echo -e "${DIM}Step 5: Remove ~/.jarvis/ config${NC}"
+# ── Step 5: Remove Python virtual environments ──────────────────────────
+echo -e "${DIM}Step 5: Remove Python venvs${NC}"
+
+for name in "${ALL_SERVICES[@]}"; do
+    for vdir in .venv venv; do
+        if [[ -d "${JARVIS_ROOT}/${name}/${vdir}" ]]; then
+            _action "rm -rf ${name}/${vdir}/" rm -rf "${JARVIS_ROOT}/${name}/${vdir}"
+        fi
+    done
+done
+echo ""
+
+# ── Step 6: Remove ~/.jarvis/ (tokens, DB names, PIDs) ───────────────────
+echo -e "${DIM}Step 6: Remove ~/.jarvis/ config${NC}"
 
 if [[ -f "${TOKEN_DIR}/tokens.env" ]]; then
     _action "rm ~/.jarvis/tokens.env" rm "${TOKEN_DIR}/tokens.env"
@@ -176,8 +188,8 @@ if [[ -d "${TOKEN_DIR}/pids" ]]; then
 fi
 echo ""
 
-# ── Step 6: Remove generated network override ────────────────────────────
-echo -e "${DIM}Step 6: Remove generated files${NC}"
+# ── Step 7: Remove generated network override ────────────────────────────
+echo -e "${DIM}Step 7: Remove generated files${NC}"
 
 if [[ -f "${JARVIS_ROOT}/.jarvis-net-override.yaml" ]]; then
     _action "rm .jarvis-net-override.yaml" rm "${JARVIS_ROOT}/.jarvis-net-override.yaml"
