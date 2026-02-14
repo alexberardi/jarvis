@@ -677,10 +677,12 @@ _start_one() {
                 }
             fi
 
-            (cd "$dir" && docker compose $env_flag $compose_flags up -d $build_flag >/dev/null 2>&1) || {
+            local compose_output
+            if ! compose_output=$(cd "$dir" && docker compose $env_flag $compose_flags up -d $build_flag 2>&1); then
                 echo -e "\r  ${RED}FAIL${NC}  ${name} (docker compose up failed)"
+                echo -e "  ${DIM}${compose_output}${NC}"
                 return 1
-            }
+            fi
             ;;
         local)
             if [[ -f "$dir/run.sh" ]]; then
