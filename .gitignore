@@ -12,3 +12,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Jarvis CLI generated files
+.jarvis-net-override.yaml
+tokens.env

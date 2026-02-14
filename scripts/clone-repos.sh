@@ -17,6 +17,7 @@ declare -A REPOS=(
     ["jarvis-command-center"]="git@github.com:alexberardi/jarvis-command-center.git"
     ["jarvis-config-client"]="git@github.com:alexberardi/jarvis-config-client.git"
     ["jarvis-config-service"]="git@github.com:alexberardi/jarvis-config-service.git"
+    ["jarvis-data-services"]="git@github.com:alexberardi/jarvis-data-services.git"
     ["jarvis-installer"]="git@github.com:alexberardi/jarvis-installer.git"
     ["jarvis-llm-proxy-api"]="git@github.com:alexberardi/jarvis-llm-proxy-api.git"
     ["jarvis-log-client"]="git@github.com:alexberardi/jarvis-log-client.git"

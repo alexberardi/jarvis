@@ -172,6 +172,174 @@ This ensures proper environment configuration and database connections.
 - Services → Auth: `X-Jarvis-App-Id` + `X-Jarvis-App-Key`
 - Command Center dispatches to whisper/ocr as needed
 
+## Service Dependency Graph
+
+### Core Dependencies
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         JARVIS SERVICE DEPENDENCIES                      │
+└─────────────────────────────────────────────────────────────────────────┘
+
+jarvis-config-service (8013) ◄─── Service discovery hub
+    │
+    ├─── Used by: ALL services (for service URL discovery)
+    └─── Dependencies: PostgreSQL
+
+jarvis-auth (8007) ◄─── Authentication hub
+    │
+    ├─── Used by: command-center, whisper-api, ocr-service, tts, logs, settings-server, admin
+    ├─── Dependencies: PostgreSQL, jarvis-logs (optional)
+    └─── Impact if down: No new logins, no app-to-app auth validation
+
+jarvis-logs (8006) ◄─── Centralized logging
+    │
+    ├─── Used by: ALL services (via jarvis-log-client)
+    ├─── Dependencies: Loki (3100), Grafana (8015), jarvis-auth
+    └─── Impact if down: Services continue, logs go to console only
+
+jarvis-command-center (8002) ◄─── Voice command orchestrator
+    │
+    ├─── Used by: jarvis-node-setup (Pi Zero nodes)
+    ├─── Dependencies: PostgreSQL, jarvis-llm-proxy-api, jarvis-auth, jarvis-logs
+    ├─── Optional calls: jarvis-whisper-api, jarvis-ocr-service
+    └─── Impact if down: No voice commands processed
+
+jarvis-llm-proxy-api (8000/8010) ◄─── LLM inference
+    │
+    ├─── Used by: command-center, tts (wake responses)
+    ├─── Dependencies: None (standalone)
+    └─── Impact if down: No LLM-based command parsing, no wake responses
+
+jarvis-whisper-api (8012) ◄─── Speech-to-text
+    │
+    ├─── Used by: command-center (optional)
+    ├─── Dependencies: whisper.cpp, jarvis-auth, jarvis-logs
+    └─── Impact if down: No speech transcription (if command-center uses it)
+
+jarvis-ocr-service (5009) ◄─── Image-to-text
+    │
+    ├─── Used by: command-center (optional)
+    ├─── Dependencies: Tesseract/EasyOCR/PaddleOCR, jarvis-auth
+    └─── Impact if down: No OCR functionality
+
+jarvis-tts (8009) ◄─── Text-to-speech
+    │
+    ├─── Used by: jarvis-node-setup (via MQTT or direct)
+    ├─── Dependencies: Piper TTS, jarvis-auth, jarvis-logs, jarvis-llm-proxy-api (wake responses)
+    └─── Impact if down: No voice responses
+
+jarvis-recipes-server (8001) ◄─── Recipe CRUD
+    │
+    ├─── Used by: command-center (recipe commands)
+    ├─── Dependencies: PostgreSQL
+    └─── Impact if down: No recipe functionality
+
+jarvis-settings-server (8014) ◄─── Settings aggregator
+    │
+    ├─── Used by: jarvis-admin (web UI)
+    ├─── Dependencies: jarvis-config-service, jarvis-auth (JWT validation)
+    └─── Impact if down: No settings management UI
+
+jarvis-mcp (8011) ◄─── Claude Code integration
+    │
+    ├─── Used by: Claude Code (development)
+    ├─── Dependencies: jarvis-config-service, jarvis-logs, jarvis-auth
+    └─── Impact if down: No Claude Code tools
+
+jarvis-admin (5173) ◄─── Web admin UI
+    │
+    ├─── Used by: Administrators (browser)
+    ├─── Dependencies: jarvis-config-service, jarvis-auth, jarvis-settings-server
+    └─── Impact if down: No web UI (services continue)
+
+jarvis-node-setup ◄─── Pi Zero client
+    │
+    ├─── Used by: End users (voice nodes)
+    ├─── Dependencies: jarvis-command-center, jarvis-tts (optional)
+    └─── Impact if down: No voice input from that node
+```
+
+### Dependency Tiers
+
+**Tier 0 (Foundation):**
+- `jarvis-config-service` - Service discovery (all services depend on this)
+- `PostgreSQL` - Database for auth, command-center, recipes, config-service
+
+**Tier 1 (Core Infrastructure):**
+- `jarvis-auth` - Authentication (most services depend on this)
+- `jarvis-logs` - Logging (optional, services degrade gracefully)
+
+**Tier 2 (Command Processing):**
+- `jarvis-command-center` - Voice orchestration
+- `jarvis-llm-proxy-api` - LLM inference
+
+**Tier 3 (Specialized Services):**
+- `jarvis-whisper-api` - Speech-to-text
+- `jarvis-ocr-service` - OCR
+- `jarvis-tts` - Text-to-speech
+- `jarvis-recipes-server` - Recipe data
+
+**Tier 4 (Management & Tooling):**
+- `jarvis-settings-server` - Settings proxy
+- `jarvis-mcp` - Claude Code tools
+- `jarvis-admin` - Web UI
+
+**Tier 5 (Clients):**
+- `jarvis-node-setup` - Voice nodes
+
+### Critical Path Analysis
+
+**For voice commands to work:**
+1. ✅ `jarvis-config-service` must be running
+2. ✅ `jarvis-auth` must be running
+3. ✅ `jarvis-command-center` must be running
+4. ✅ `jarvis-llm-proxy-api` must be running
+5. ⚠️ `jarvis-logs` should be running (optional)
+6. ⚠️ `jarvis-whisper-api` may be needed (if command-center uses it)
+7. ⚠️ `jarvis-tts` may be needed (for voice responses)
+
+**For web admin to work:**
+1. ✅ `jarvis-config-service` must be running
+2. ✅ `jarvis-auth` must be running
+3. ✅ `jarvis-settings-server` must be running
+4. ✅ `jarvis-admin` must be running
+
+### Service-to-Service Communication Patterns
+
+**App-to-App Auth (most services):**
+```
+Service → jarvis-auth (/internal/validate-app)
+Headers: X-Jarvis-App-Id, X-Jarvis-App-Key
+```
+
+**Node Auth (whisper, tts):**
+```
+Node → Service
+Header: X-API-Key (node_id:node_key)
+Service → jarvis-auth (validate node)
+```
+
+**User Auth (admin, settings-server):**
+```
+Client → Service
+Header: Authorization: Bearer <jwt>
+Service validates JWT locally (shared secret)
+```
+
+**Logging (all services):**
+```
+Service → jarvis-logs (/api/v0/logs or /api/v0/logs/batch)
+Headers: X-Jarvis-App-Id, X-Jarvis-App-Key
+```
+
+**Service Discovery (all services):**
+```
+Service → jarvis-config-service (/services)
+Response: List of all service URLs
+Cached locally, refreshed periodically
+```
+
 ## Testing
 
 ```bash
@@ -462,7 +630,7 @@ To add:
 - [ ] Use for: test endpoints, settings management, service introspection
 
 ### Context & Knowledge (build in CLAUDE.md files)
-- [ ] **Service dependency graph** - Which services talk to which, what breaks if X is down
+- [x] **Service dependency graph** - Which services talk to which, what breaks if X is down
 - [ ] **Test data fixtures** - Sample voice commands, expected outputs, edge cases
 - [ ] **Error catalog** - Common errors and their fixes
 - [x] **Per-service CLAUDE.md** - Service-specific context in each repo
@@ -477,8 +645,23 @@ To add:
 - [ ] Set up on Ubuntu dev machine (should be minimal work)
 
 ### More MCP Tools
+
+**Developer tools (Claude Code / admin):**
+- [ ] **Settings tools** - `settings_get`, `settings_set` via jarvis-settings-server. Read/update service config live without psql
+- [ ] **Voice command simulator** - `command_test` tool that sends text through command-center pipeline (parse → intent → tool routing) and returns result
+- [ ] **Recipe tools** - `recipe_search`, `recipe_get`, `meal_plan` via jarvis-recipes-server
+- [ ] **Node status** - `node_list`, `node_status` to see Pi Zero online state, last activity
+- [ ] **Training dashboard** - `training_status`, `adapter_list` to check training jobs and deployed adapters
 - [ ] **Database MCP** - Read-only access for debugging
 - [ ] **Docker MCP** - Container status, logs, restart services
+
+**System tools (called by services at runtime):**
+- [x] **Date resolution** - `datetime_resolve`, `datetime_context` - resolve "tomorrow morning" → ISO datetime (feat/datetime-tools)
+- [ ] **Location resolution** - Resolve "downtown", "near me", "home" → coordinates. Centralizes geocoding for weather, local search, navigation commands
+- [ ] **Calendar context** - Query user's calendar (iCloud) for availability, upcoming events. "Am I free tomorrow?" from any service
+- [ ] **Timer/alarm management** - Cross-node timer state. Set from kitchen, query from living room. Centralized so any node can interact
+- [ ] **Unit conversion** - "350F to Celsius", "cups to liters". Pure logic, useful for recipes and general commands
+- [ ] **User preferences** - Home location, preferred units, dietary restrictions, "the usual". Shared context across all services
 
 ### Testing
 - [ ] **Automated integration tests** - CI for service communication

@@ -20,24 +20,24 @@ for dir in jarvis-*/; do
     # Skip if not a git repo
     if [ ! -d "$dir/.git" ]; then
         echo "⊘ $repo — not a git repo, skipping"
-        ((SKIPPED++))
+        SKIPPED=$((SKIPPED + 1))
         continue
     fi
 
     # Check for uncommitted changes
     if ! git -C "$dir" diff --quiet 2>/dev/null || ! git -C "$dir" diff --cached --quiet 2>/dev/null; then
         echo "⚠ $repo — has uncommitted changes, skipping"
-        ((SKIPPED++))
+        SKIPPED=$((SKIPPED + 1))
         continue
     fi
 
     # Pull
     if git -C "$dir" pull --ff-only 2>/dev/null; then
         echo "✓ $repo"
-        ((SUCCEEDED++))
+        SUCCEEDED=$((SUCCEEDED + 1))
     else
         echo "✗ $repo — pull failed (diverged branch?)"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
     fi
 done
 
