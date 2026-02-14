@@ -29,6 +29,7 @@ REPOS=(
     "jarvis-recipes-mobile|git@github.com:alexberardi/jarvis-recipes-mobile.git"
     "jarvis-recipes-server|git@github.com:alexberardi/jarvis-recipes-server.git"
     "jarvis-settings-client|git@github.com:alexberardi/jarvis-settings-client.git"
+    "jarvis-settings-server|git@github.com:alexberardi/jarvis-settings-server.git"
     "jarvis-tts|git@github.com:alexberardi/jarvis-tts.git"
     "jarvis-whisper-api|git@github.com:alexberardi/jarvis-whisper-api.git"
 )
