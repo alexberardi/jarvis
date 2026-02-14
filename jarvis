@@ -614,6 +614,58 @@ _run_migrations() {
     echo -e "\n  Migrations: ${GREEN}${success} OK${NC}, ${RED}${failed} failed${NC}"
 }
 
+_setup_local_services() {
+    # Set up local-mode services (hardware detection + dependency install)
+    local has_local=false
+    for entry in "${SERVICES[@]}"; do
+        local mode
+        mode=$(_get_mode "$entry")
+        [[ "$mode" == "local" ]] && has_local=true
+    done
+    [[ "$has_local" != "true" ]] && { echo -e "  ${DIM}No local-mode services to set up${NC}"; return 0; }
+
+    for entry in "${SERVICES[@]}"; do
+        local name mode dir
+        name=$(_get_name "$entry")
+        mode=$(_get_mode "$entry")
+        dir="${JARVIS_ROOT}/${name}"
+
+        [[ "$mode" != "local" ]] && continue
+        [[ ! -d "$dir" ]] && continue
+
+        # Services with setup.sh have sophisticated setup (hardware detection + run.sh --setup)
+        if [[ -f "$dir/setup.sh" ]]; then
+            # Run hardware setup wizard if needed (auto-detect, non-interactive)
+            if [[ ! -f "$dir/.setup_config" ]]; then
+                echo -ne "  ${BLUE}...${NC}   ${name} (detecting hardware)"
+                if (cd "$dir" && bash setup.sh --auto >/dev/null 2>&1); then
+                    echo -e "\r  ${GREEN}OK${NC}    ${name} hardware configured"
+                else
+                    echo -e "\r  ${YELLOW}WARN${NC}  ${name} hardware setup failed (run manually: cd ${name} && bash setup.sh)"
+                fi
+            fi
+
+            # Install dependencies via run.sh --setup (venv + deps + acceleration libs)
+            if [[ -f "$dir/run.sh" ]]; then
+                echo -ne "  ${BLUE}...${NC}   ${name} (installing dependencies — may take a few minutes)"
+                local setup_output
+                if setup_output=$(cd "$dir" && AUTO_SETUP=true bash run.sh --setup 2>&1); then
+                    echo -e "\r  ${GREEN}OK${NC}    ${name} dependencies installed"
+                else
+                    echo -e "\r  ${YELLOW}WARN${NC}  ${name} dependency install had issues"
+                    echo "$setup_output" | tail -5 | while IFS= read -r line; do
+                        echo -e "        ${DIM}${line}${NC}"
+                    done
+                    echo -e "        ${DIM}Run manually: cd ${name} && bash run.sh --rebuild${NC}"
+                fi
+            fi
+        else
+            # Basic venv setup for simpler local services
+            _ensure_venv "$dir" "$name" || echo -e "  ${YELLOW}WARN${NC}  ${name} venv setup failed"
+        fi
+    done
+}
+
 cmd_init() {
     echo -e "${BOLD}JARVIS INIT${NC}"
     echo ""
@@ -630,6 +682,9 @@ cmd_init() {
 
     echo -e "\n${DIM}Step 3: Stamp .env files${NC}"
     _stamp_env_files
+
+    echo -e "\n${DIM}Step 4: Set up local services${NC}"
+    _setup_local_services
 
     echo ""
     _start_infra
@@ -746,12 +801,9 @@ _start_one() {
             fi
             ;;
         local)
-            if ! _ensure_venv "$dir" "$name"; then
-                echo -e "\r  ${RED}FAIL${NC}  ${name} (venv setup failed)"
-                return 1
-            fi
             if [[ -f "$dir/run.sh" ]]; then
-                (cd "$dir" && exec bash run.sh >/dev/null 2>&1) &
+                # run.sh handles its own venv creation + deps (set up during init)
+                (cd "$dir" && AUTO_SETUP=true exec bash run.sh >/dev/null 2>&1) &
                 echo $! > "${PID_DIR}/${name}.pid"
             else
                 echo -e "\r  ${RED}FAIL${NC}  ${name} (no run.sh found)"
