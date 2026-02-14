@@ -108,6 +108,7 @@ SERVICES_WITH_MIGRATIONS=(
 
 # Services that use Redis
 REDIS_SERVICES=(
+    "jarvis-llm-proxy-api"
     "jarvis-ocr-service"
     "jarvis-recipes-server"
 )
