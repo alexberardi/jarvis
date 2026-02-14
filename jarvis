@@ -500,10 +500,12 @@ _start_infra() {
         exit 1
     fi
 
-    (cd "$DATA_SERVICES_DIR" && docker compose --env-file data-services.env up -d >/dev/null 2>&1) || {
+    local compose_output
+    if ! compose_output=$(cd "$DATA_SERVICES_DIR" && docker compose --env-file data-services.env up -d 2>&1); then
         echo -e "  ${RED}FAIL${NC}  docker compose up failed for jarvis-data-services"
+        echo -e "  ${DIM}${compose_output}${NC}"
         exit 1
-    }
+    fi
 
     # Wait for postgres health
     local elapsed=0
@@ -810,7 +812,7 @@ cmd_start() {
             if ! docker exec jarvis-postgres pg_isready -U postgres >/dev/null 2>&1; then
                 echo -e "${DIM}Starting infrastructure...${NC}"
                 if [[ -d "$DATA_SERVICES_DIR" ]]; then
-                    (cd "$DATA_SERVICES_DIR" && docker compose --env-file data-services.env up -d >/dev/null 2>&1) || true
+                    (cd "$DATA_SERVICES_DIR" && docker compose --env-file data-services.env up -d 2>&1) | sed 's/^/  /' || true
                 fi
 
                 local elapsed=0
