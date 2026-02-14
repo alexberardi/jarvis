@@ -646,6 +646,51 @@ cmd_init() {
 
 # ── Start ────────────────────────────────────────────────────────────────────
 
+_ensure_venv() {
+    # Ensure .venv exists and deps are installed for a local-mode service
+    local dir="$1" name="$2"
+    local venv_dir="${dir}/.venv"
+
+    if [[ -x "${venv_dir}/bin/python" ]]; then
+        return 0
+    fi
+
+    # Also accept legacy venv/ directory
+    if [[ -x "${dir}/venv/bin/python" ]]; then
+        return 0
+    fi
+
+    echo ""
+    echo -ne "        ${DIM}creating .venv for ${name}...${NC}"
+    if ! python3 -m venv "$venv_dir" 2>/dev/null; then
+        echo -e "\r        ${RED}failed to create .venv${NC}     "
+        return 1
+    fi
+
+    echo -e "\r        ${DIM}installing deps for ${name}...${NC}  "
+    local pip_output
+    if [[ -f "${dir}/pyproject.toml" ]]; then
+        if ! pip_output=$("${venv_dir}/bin/pip" install -q -e "$dir" 2>&1); then
+            echo -e "        ${RED}pip install failed:${NC}"
+            echo "$pip_output" | tail -5 | while IFS= read -r line; do
+                echo -e "        ${DIM}${line}${NC}"
+            done
+            return 1
+        fi
+    elif [[ -f "${dir}/requirements.txt" ]]; then
+        if ! pip_output=$("${venv_dir}/bin/pip" install -q -r "${dir}/requirements.txt" 2>&1); then
+            echo -e "        ${RED}pip install failed:${NC}"
+            echo "$pip_output" | tail -5 | while IFS= read -r line; do
+                echo -e "        ${DIM}${line}${NC}"
+            done
+            return 1
+        fi
+    fi
+
+    echo -e "        ${GREEN}OK${NC}    .venv ready"
+    return 0
+}
+
 _start_one() {
     local entry="$1" build_flag="${2:-}" standalone="${3:-false}"
     local name port tier mode
@@ -700,6 +745,10 @@ _start_one() {
             fi
             ;;
         local)
+            if ! _ensure_venv "$dir" "$name"; then
+                echo -e "\r  ${RED}FAIL${NC}  ${name} (venv setup failed)"
+                return 1
+            fi
             if [[ -f "$dir/run.sh" ]]; then
                 (cd "$dir" && exec bash run.sh >/dev/null 2>&1) &
                 echo $! > "${PID_DIR}/${name}.pid"
