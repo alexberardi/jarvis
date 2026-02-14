@@ -180,10 +180,11 @@ Data stores (shared infra)
 ```bash
 # Each service follows this pattern:
 cd jarvis-<service>
-poetry install        # or pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
 cp .env.example .env  # configure
-alembic upgrade head  # if has migrations
-uvicorn app.main:app --reload --port <PORT>
+.venv/bin/python -m alembic upgrade head  # if has migrations
+.venv/bin/uvicorn app.main:app --reload --port <PORT>
 ```
 
 ### Starting Services (for Claude)

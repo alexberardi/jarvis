@@ -582,11 +582,7 @@ _run_migrations() {
         fi
 
         if [[ ! -x "${service_dir}/.venv/bin/python" ]] && [[ ! -x "${service_dir}/venv/bin/python" ]]; then
-            local install_cmd=".venv/bin/pip install -r requirements.txt"
-            if [[ -f "${service_dir}/pyproject.toml" ]]; then
-                install_cmd=".venv/bin/pip install -e ."
-            fi
-            echo -e "  ${YELLOW}SKIP${NC}  ${service} (no venv — run: cd ${service} && python3 -m venv .venv && ${install_cmd})"
+            echo -e "  ${YELLOW}SKIP${NC}  ${service} (no .venv — run: cd ${service} && python3 -m venv .venv && .venv/bin/pip install -e .)"
             continue
         fi
 
