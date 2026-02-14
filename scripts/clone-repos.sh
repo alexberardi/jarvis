@@ -23,6 +23,7 @@ REPOS=(
     "jarvis-log-client|git@github.com:alexberardi/jarvis-log-client.git"
     "jarvis-logs|git@github.com:alexberardi/jarvis-logs.git"
     "jarvis-mcp|git@github.com:alexberardi/jarvis-mcp.git"
+    "jarvis-mcp-client|git@github.com:alexberardi/jarvis-mcp-client.git"
     "jarvis-node-mobile|git@github.com:alexberardi/jarvis-node-mobile.git"
     "jarvis-node-setup|git@github.com:alexberardi/jarvis-node-setup.git"
     "jarvis-ocr-service|git@github.com:alexberardi/jarvis-ocr-service.git"
