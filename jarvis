@@ -833,6 +833,52 @@ cmd_start() {
             fi
         fi
 
+        # Build images first when --build is set (separate from start)
+        if [[ -n "$build_flag" ]]; then
+            echo -e "${DIM}Building images...${NC}"
+            local build_failed=false
+            for entry in "${SERVICES[@]}"; do
+                local bmode bname bdir
+                bmode=$(_get_mode "$entry")
+                [[ "$bmode" != "docker" ]] && continue
+                bname=$(_get_name "$entry")
+                bdir="${JARVIS_ROOT}/${bname}"
+                [[ ! -d "$bdir" ]] && continue
+
+                local bcompose_file benv_flag bcompose_flags
+                bcompose_file=$(_find_compose_file "$bdir")
+                [[ -z "$bcompose_file" ]] && continue
+                benv_flag=""
+                [[ -f "$bdir/.env" ]] && benv_flag="--env-file .env"
+                if [[ "$standalone" == true ]]; then
+                    bcompose_flags="--profile standalone -f $bcompose_file"
+                else
+                    bcompose_flags=$(_get_compose_flags "$bdir") || continue
+                fi
+
+                echo -ne "  ${BLUE}...${NC}   ${bname}"
+                local build_output
+                if ! build_output=$(cd "$bdir" && docker compose $benv_flag $bcompose_flags build 2>&1); then
+                    echo -e "\r  ${RED}FAIL${NC}  ${bname}"
+                    echo "$build_output" | tail -5 | while IFS= read -r line; do
+                        echo -e "        ${DIM}${line}${NC}"
+                    done
+                    build_failed=true
+                else
+                    echo -e "\r  ${GREEN}OK${NC}    ${bname}"
+                fi
+            done
+            echo ""
+
+            if [[ "$build_failed" == true ]]; then
+                echo -e "${YELLOW}Some images failed to build. Starting available services...${NC}"
+                echo ""
+            fi
+
+            # Clear build_flag so _start_one uses plain 'up -d'
+            build_flag=""
+        fi
+
         # Get unique tiers in order
         local tiers
         tiers=$(for entry in "${SERVICES[@]}"; do _get_tier "$entry"; done | sort -un)
