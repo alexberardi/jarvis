@@ -414,8 +414,9 @@ _stamp_env_files() {
     _load_db_names
 
     for entry in "${SERVICES[@]}"; do
-        local name
+        local name mode
         name=$(_get_name "$entry")
+        mode=$(_get_mode "$entry")
         local dir="${JARVIS_ROOT}/${name}"
 
         [[ ! -d "$dir" ]] && continue
@@ -432,9 +433,15 @@ _stamp_env_files() {
             fi
         fi
 
+        # Docker services need host.docker.internal; local/npm use localhost
+        local svc_host="host.docker.internal"
+        if [[ "$mode" == "local" ]] || [[ "$mode" == "npm" ]]; then
+            svc_host="localhost"
+        fi
+
         # --- Shared tokens (all services) ---
         _inject_env_var "$env_file" "JARVIS_AUTH_ADMIN_TOKEN" "$JARVIS_AUTH_ADMIN_TOKEN"
-        _inject_env_var "$env_file" "JARVIS_CONFIG_URL" "http://localhost:8013"
+        _inject_env_var "$env_file" "JARVIS_CONFIG_URL" "http://${svc_host}:8013"
 
         # --- Service-specific tokens ---
         case "$name" in
@@ -482,11 +489,16 @@ _stamp_env_files() {
                 pg_pass=$(grep "^POSTGRES_PASSWORD=" "$DATA_SERVICES_ENV" 2>/dev/null | cut -d= -f2-) || pg_pass="postgres"
             fi
 
-            local db_url="postgresql+psycopg2://${pg_user}:${pg_pass}@localhost:5432/${db_name}"
+            local db_url="postgresql+psycopg2://${pg_user}:${pg_pass}@${svc_host}:5432/${db_name}"
+            local migrations_url="postgresql+psycopg2://${pg_user}:${pg_pass}@localhost:5432/${db_name}"
 
             IFS=',' read -ra var_names <<< "$env_vars"
             for var_name in "${var_names[@]}"; do
-                _inject_env_var "$env_file" "$var_name" "$db_url"
+                if [[ "$var_name" == "MIGRATIONS_DATABASE_URL" ]]; then
+                    _inject_env_var "$env_file" "$var_name" "$migrations_url"
+                else
+                    _inject_env_var "$env_file" "$var_name" "$db_url"
+                fi
             done
         fi
 
