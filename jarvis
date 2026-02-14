@@ -581,8 +581,8 @@ _run_migrations() {
             continue
         fi
 
-        if [[ ! -x "${service_dir}/.venv/bin/python" ]]; then
-            echo -e "  ${YELLOW}SKIP${NC}  ${service} (no .venv — run: cd ${service} && python3 -m venv .venv && pip install -r requirements.txt)"
+        if [[ ! -x "${service_dir}/.venv/bin/python" ]] && [[ ! -x "${service_dir}/venv/bin/python" ]]; then
+            echo -e "  ${YELLOW}SKIP${NC}  ${service} (no venv — run: cd ${service} && python3 -m venv .venv && pip install -e .)"
             continue
         fi
 
