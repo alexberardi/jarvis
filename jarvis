@@ -639,9 +639,9 @@ _setup_local_services() {
             if [[ ! -f "$dir/.setup_config" ]]; then
                 echo -ne "  ${BLUE}...${NC}   ${name} (detecting hardware)"
                 if (cd "$dir" && bash setup.sh --auto >/dev/null 2>&1); then
-                    echo -e "\r  ${GREEN}OK${NC}    ${name} hardware configured"
+                    echo -e "\r  ${GREEN}OK${NC}    ${name} hardware configured\033[K"
                 else
-                    echo -e "\r  ${YELLOW}WARN${NC}  ${name} hardware setup failed (run manually: cd ${name} && bash setup.sh)"
+                    echo -e "\r  ${YELLOW}WARN${NC}  ${name} hardware setup failed (run manually: cd ${name} && bash setup.sh)\033[K"
                 fi
             fi
 
@@ -650,9 +650,9 @@ _setup_local_services() {
                 echo -ne "  ${BLUE}...${NC}   ${name} (installing dependencies — may take a few minutes)"
                 local setup_output
                 if setup_output=$(cd "$dir" && AUTO_SETUP=true bash run.sh --setup 2>&1); then
-                    echo -e "\r  ${GREEN}OK${NC}    ${name} dependencies installed"
+                    echo -e "\r  ${GREEN}OK${NC}    ${name} dependencies installed\033[K"
                 else
-                    echo -e "\r  ${YELLOW}WARN${NC}  ${name} dependency install had issues"
+                    echo -e "\r  ${YELLOW}WARN${NC}  ${name} dependency install had issues\033[K"
                     echo "$setup_output" | tail -5 | while IFS= read -r line; do
                         echo -e "        ${DIM}${line}${NC}"
                     done
@@ -725,16 +725,18 @@ _ensure_venv() {
 
     echo -e "\r        ${DIM}installing deps for ${name}...${NC}  "
     local pip_output
-    if [[ -f "${dir}/pyproject.toml" ]]; then
-        if ! pip_output=$("${venv_dir}/bin/pip" install -q -e "$dir" 2>&1); then
+
+    # Prefer requirements.txt (works with pip directly); fall back to pyproject.toml
+    if [[ -f "${dir}/requirements.txt" ]]; then
+        if ! pip_output=$("${venv_dir}/bin/pip" install -q -r "${dir}/requirements.txt" 2>&1); then
             echo -e "        ${RED}pip install failed:${NC}"
             echo "$pip_output" | tail -5 | while IFS= read -r line; do
                 echo -e "        ${DIM}${line}${NC}"
             done
             return 1
         fi
-    elif [[ -f "${dir}/requirements.txt" ]]; then
-        if ! pip_output=$("${venv_dir}/bin/pip" install -q -r "${dir}/requirements.txt" 2>&1); then
+    elif [[ -f "${dir}/pyproject.toml" ]]; then
+        if ! pip_output=$("${venv_dir}/bin/pip" install -q -e "$dir" 2>&1); then
             echo -e "        ${RED}pip install failed:${NC}"
             echo "$pip_output" | tail -5 | while IFS= read -r line; do
                 echo -e "        ${DIM}${line}${NC}"
