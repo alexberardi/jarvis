@@ -478,6 +478,9 @@ _stamp_env_files() {
                 _inject_env_var "$env_file" "MODEL_SERVICE_TOKEN" "$MODEL_SERVICE_TOKEN"
                 _inject_env_var "$env_file" "LLM_PROXY_INTERNAL_TOKEN" "$LLM_PROXY_INTERNAL_TOKEN"
                 ;;
+            jarvis-admin)
+                _inject_env_var "$env_file" "PORT" "8016"
+                ;;
         esac
 
         # --- Redis password (for services that use Redis) ---
