@@ -23,12 +23,13 @@ set -e
 
 JARVIS_ROOT="$(cd "$(dirname "$0")" && pwd)"
 PID_DIR="${HOME}/.jarvis/pids"
+LOG_DIR="${HOME}/.jarvis/logs"
 TOKEN_DIR="${HOME}/.jarvis"
 TOKEN_FILE="${TOKEN_DIR}/tokens.env"
 DB_FILE="${TOKEN_DIR}/databases.env"
 DATA_SERVICES_DIR="${JARVIS_ROOT}/jarvis-data-services"
 DATA_SERVICES_ENV="${DATA_SERVICES_DIR}/data-services.env"
-mkdir -p "$PID_DIR"
+mkdir -p "$PID_DIR" "$LOG_DIR"
 
 # ── Network mode ───────────────────────────────────────────────────────────
 NETWORK_MODE="${JARVIS_NETWORK_MODE:-bridge}"
@@ -840,7 +841,7 @@ _start_one() {
         local)
             if [[ -f "$dir/run.sh" ]]; then
                 # run.sh handles its own venv creation + deps (set up during init)
-                (cd "$dir" && AUTO_SETUP=true exec bash run.sh >/dev/null 2>&1) &
+                (cd "$dir" && AUTO_SETUP=true exec bash run.sh >> "${LOG_DIR}/${name}.log" 2>&1) &
                 echo $! > "${PID_DIR}/${name}.pid"
             else
                 echo -e "\r  ${RED}FAIL${NC}  ${name} (no run.sh found)"
@@ -864,12 +865,12 @@ _start_one() {
 
                 # Start backend server if it exists (e.g. jarvis-admin/server)
                 if [[ -f "$dir/server/package.json" ]]; then
-                    (cd "$dir/server" && eval "$env_export $nvm_cmd exec npm run dev" >/dev/null 2>&1) &
+                    (cd "$dir/server" && eval "$env_export $nvm_cmd exec npm run dev" >> "${LOG_DIR}/${name}-server.log" 2>&1) &
                     echo $! > "${PID_DIR}/${name}-server.pid"
                 fi
 
                 # Start frontend dev server
-                (cd "$dir" && eval "$nvm_cmd exec npm run dev" >/dev/null 2>&1) &
+                (cd "$dir" && eval "$nvm_cmd exec npm run dev" >> "${LOG_DIR}/${name}.log" 2>&1) &
                 echo $! > "${PID_DIR}/${name}.pid"
             else
                 echo -e "\r  ${RED}FAIL${NC}  ${name} (no package.json found)"
@@ -1257,7 +1258,15 @@ cmd_logs() {
             exit 1
         fi
     else
-        echo -e "${YELLOW}${name} runs locally - check its terminal output${NC}"
+        local log_file="${LOG_DIR}/${name}.log"
+        local server_log="${LOG_DIR}/${name}-server.log"
+        if [[ -f "$server_log" ]]; then
+            tail -f "$server_log"
+        elif [[ -f "$log_file" ]]; then
+            tail -f "$log_file"
+        else
+            echo -e "${YELLOW}${name} has no log file yet — start it first with: ./jarvis start ${name}${NC}"
+        fi
     fi
 }
 
