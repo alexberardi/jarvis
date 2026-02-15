@@ -897,17 +897,57 @@ _start_tier() {
     done
 }
 
+_restart_one() {
+    local entry="$1" standalone="${2:-false}"
+    local name mode dir
+    name=$(_get_name "$entry")
+    mode=$(_get_mode "$entry")
+    dir="${JARVIS_ROOT}/${name}"
+
+    case "$mode" in
+        docker)
+            local env_flag=""
+            [[ -f "$dir/.env" ]] && env_flag="--env-file .env"
+
+            local compose_flags=""
+            if [[ "$standalone" == true ]]; then
+                local compose_file
+                compose_file=$(_find_compose_file "$dir")
+                compose_flags="--profile standalone -f $compose_file"
+            else
+                compose_flags=$(_get_compose_flags "$dir") || return 1
+            fi
+            local restart_output
+            if ! restart_output=$(cd "$dir" && docker compose $env_flag $compose_flags restart 2>&1); then
+                echo -e "\r  ${YELLOW}WARN${NC}  restart failed for ${name}: $(echo "$restart_output" | tail -1)"
+            fi
+            ;;
+        local|npm)
+            _stop_one "$entry" "$standalone"
+            sleep 1
+            _start_one "$entry" "" "$standalone"
+            ;;
+    esac
+}
+
 _auto_register() {
-    # Auto-register all services with config-service using admin token
+    # Auto-register healthy services with config-service + jarvis-auth.
+    # Args: list of healthy service names to register.
+    # Sets global RESTART_SERVICES=() with names that got new .env credentials.
+    local -a healthy=("$@")
+
+    if [[ ${#healthy[@]} -eq 0 ]]; then
+        echo -e "  ${YELLOW}SKIP${NC}  Auto-registration (no healthy services)"
+        return 0
+    fi
+
     local token_file="${JARVIS_ROOT}/jarvis-config-service/.env"
     local token=""
-
     if [[ -f "$token_file" ]]; then
         token=$(grep "^JARVIS_AUTH_ADMIN_TOKEN=" "$token_file" 2>/dev/null | cut -d= -f2-)
     fi
-
     if [[ -z "$token" ]]; then
-        echo -e "  ${YELLOW}SKIP${NC}  Auto-registration (no JARVIS_AUTH_ADMIN_TOKEN found)"
+        echo -e "  ${YELLOW}SKIP${NC}  Auto-registration (no JARVIS_AUTH_ADMIN_TOKEN)"
         return 0
     fi
 
@@ -921,40 +961,81 @@ _auto_register() {
         return 0
     fi
 
-    # Build services JSON array
+    # Build JSON from healthy services only
     local services_json="["
     local first=true
-    for entry in "${SERVICES[@]}"; do
-        local name port
-        name=$(_get_name "$entry")
-        port=$(_get_port "$entry")
-
+    for name in "${healthy[@]}"; do
         # Skip config-service (it IS the registry) and admin (no backend registration needed)
         [[ "$name" == "jarvis-config-service" ]] && continue
         [[ "$name" == "jarvis-admin" ]] && continue
 
-        if [[ "$first" == true ]]; then
-            first=false
-        else
-            services_json+=","
-        fi
+        local port=""
+        for entry in "${SERVICES[@]}"; do
+            if [[ "$(_get_name "$entry")" == "$name" ]]; then
+                port=$(_get_port "$entry")
+                break
+            fi
+        done
+        [[ -z "$port" ]] && continue
+
+        [[ "$first" == true ]] && first=false || services_json+=","
         services_json+="{\"name\":\"${name}\",\"host\":\"localhost\",\"port\":${port}}"
     done
     services_json+="]"
 
-    local response
-    response=$(curl -s -w "\n%{http_code}" -X POST "http://localhost:8013/v1/services/register" \
+    # No base_path — config-service uses JARVIS_ROOT volume mount
+    local response body http_code
+    response=$(curl -s -w "\n%{http_code}" -X POST \
+        "http://localhost:8013/v1/services/register" \
         -H "X-Jarvis-Admin-Token: ${token}" \
         -H "Content-Type: application/json" \
-        -d "{\"services\":${services_json},\"base_path\":\"${JARVIS_ROOT}\"}" 2>/dev/null)
+        -d "{\"services\":${services_json}}" 2>/dev/null)
 
-    local http_code
     http_code=$(echo "$response" | tail -1)
+    body=$(echo "$response" | sed '$d')
 
-    if [[ "$http_code" == "200" ]]; then
-        echo -e "  ${GREEN}OK${NC}    Services registered with config-service"
+    if [[ "$http_code" != "200" ]]; then
+        echo -e "  ${YELLOW}WARN${NC}  Auto-registration returned HTTP ${http_code}"
+        return 0
+    fi
+
+    # Parse results: count successes and find services needing restart
+    local total=0 new_auth=0 env_written=0
+    RESTART_SERVICES=()
+
+    local parse_output
+    parse_output=$(echo "$body" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for r in data.get('results', []):
+    name = r['name']
+    created = r.get('auth_created')
+    written = r.get('env_written')
+    print(f'{name}|{created}|{written}')
+" 2>&1) || {
+        echo -e "  ${YELLOW}WARN${NC}  Failed to parse registration response"
+        return 0
+    }
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local svc_name="${line%%|*}"
+        local rest="${line#*|}"
+        local created="${rest%%|*}"
+        local written="${rest#*|}"
+
+        total=$((total + 1))
+        [[ "$created" == "True" ]] && new_auth=$((new_auth + 1))
+        if [[ "$written" == "True" ]]; then
+            env_written=$((env_written + 1))
+            RESTART_SERVICES+=("$svc_name")
+        fi
+    done <<< "$parse_output"
+
+    if [[ $env_written -gt 0 ]]; then
+        echo -e "  ${GREEN}OK${NC}    Registered ${total} services (${new_auth} new auth clients, ${env_written} .env files written)"
     else
-        echo -e "  ${YELLOW}WARN${NC}  Auto-registration returned HTTP ${http_code} (services may need manual registration)"
+        echo -e "  ${GREEN}OK${NC}    Registered ${total} services (all credentials up to date)"
     fi
 }
 
@@ -1039,12 +1120,13 @@ cmd_start() {
         local tiers
         tiers=$(for entry in "${SERVICES[@]}"; do _get_tier "$entry"; done | sort -un)
 
+        local -a HEALTHY_SERVICES=()
+
         for tier in $tiers; do
             echo -e "${DIM}Tier ${tier}${NC}"
             _start_tier "$tier" "$build_flag"
 
             # Wait for health of tier before moving to next
-            local all_healthy=true
             for entry in "${SERVICES[@]}"; do
                 local t
                 t=$(_get_tier "$entry")
@@ -1055,20 +1137,41 @@ cmd_start() {
                     health_path=$(_get_health "$entry")
                     dir="${JARVIS_ROOT}/${name}"
                     [[ ! -d "$dir" ]] && continue
-                    if ! _wait_for_health "$name" "$port" "$health_path" 60; then
+                    if _wait_for_health "$name" "$port" "$health_path" 60; then
+                        HEALTHY_SERVICES+=("$name")
+                    else
                         echo -e "  ${YELLOW}WAIT${NC}  ${name} (health check timeout)"
-                        all_healthy=false
                     fi
                 fi
             done
 
-            # Auto-register after tier 1 (config-service + auth are up)
-            if [[ "$tier" == "1" ]]; then
-                _auto_register
-            fi
-
             echo ""
         done
+
+        # Auto-register healthy services (config DB + auth app-clients + .env)
+        echo -e "${DIM}Registration${NC}"
+        RESTART_SERVICES=()
+        _auto_register "${HEALTHY_SERVICES[@]}"
+
+        # Restart services that got new .env credentials
+        if [[ ${#RESTART_SERVICES[@]} -gt 0 ]]; then
+            echo ""
+            echo -e "${DIM}Restarting services with new credentials${NC}"
+            for svc_name in "${RESTART_SERVICES[@]}"; do
+                local entry
+                entry=$(_find_service "$svc_name") || continue
+                echo -ne "  ${BLUE}...${NC}   ${svc_name}"
+                _restart_one "$entry" "$STANDALONE"
+                local port health_path
+                port=$(_get_port "$entry")
+                health_path=$(_get_health "$entry")
+                if _wait_for_health "$svc_name" "$port" "$health_path" 30; then
+                    echo -e "\r  ${GREEN}OK${NC}    ${svc_name}"
+                else
+                    echo -e "\r  ${YELLOW}WARN${NC}  ${svc_name} (health check timeout after restart)"
+                fi
+            done
+        fi
     else
         local entry
         entry=$(_find_service "$target") || {
