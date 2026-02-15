@@ -660,8 +660,24 @@ _setup_local_services() {
                 fi
             fi
         else
-            # Basic venv setup for simpler local services
-            _ensure_venv "$dir" "$name" || echo -e "  ${YELLOW}WARN${NC}  ${name} venv setup failed"
+            # Check if it's a Poetry project (pre-install so start is fast)
+            if grep -q 'poetry' "$dir/pyproject.toml" 2>/dev/null && command -v poetry >/dev/null 2>&1; then
+                echo -ne "  ${BLUE}...${NC}   ${name} (installing dependencies via Poetry)"
+                local poetry_output
+                if poetry_output=$(cd "$dir" && poetry install 2>&1); then
+                    echo -e "\r  ${GREEN}OK${NC}    ${name} dependencies installed\033[K"
+                else
+                    echo -e "\r  ${YELLOW}WARN${NC}  ${name} poetry install had issues\033[K"
+                    echo "$poetry_output" | tail -3 | while IFS= read -r line; do
+                        echo -e "        ${DIM}${line}${NC}"
+                    done
+                fi
+                # Also create .venv for migration scripts (apply_migrations.sh uses .venv/bin/python)
+                _ensure_venv "$dir" "$name" 2>/dev/null || true
+            else
+                # Basic venv setup for simpler local services
+                _ensure_venv "$dir" "$name" || echo -e "  ${YELLOW}WARN${NC}  ${name} venv setup failed"
+            fi
         fi
     done
 }
