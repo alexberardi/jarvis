@@ -470,6 +470,8 @@ _stamp_env_files() {
                 _inject_env_var "$env_file" "JARVIS_CONFIG_ADMIN_TOKEN" "$JARVIS_CONFIG_ADMIN_TOKEN"
                 _inject_env_var "$env_file" "JARVIS_AUTH_URL" "http://${svc_host}:8007"
                 _inject_env_var "$env_file" "DOCKER_HOST_GATEWAY" "host.docker.internal"
+                _inject_env_var "$env_file" "JARVIS_HOST_ROOT" "$JARVIS_ROOT"
+                _inject_env_var "$env_file" "JARVIS_ROOT" "/jarvis"
                 ;;
             jarvis-settings-server)
                 _inject_env_var "$env_file" "JARVIS_AUTH_SECRET_KEY" "$AUTH_SECRET_KEY"
