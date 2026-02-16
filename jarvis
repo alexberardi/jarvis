@@ -622,8 +622,19 @@ _run_migrations() {
         fi
 
         if [[ ! -x "${service_dir}/.venv/bin/python" ]] && [[ ! -x "${service_dir}/venv/bin/python" ]]; then
-            echo -e "  ${YELLOW}SKIP${NC}  ${service} (no .venv — run: cd ${service} && python3 -m venv .venv && .venv/bin/pip install -e .)"
-            continue
+            # Bootstrap a venv so migrations can run
+            echo -ne "  ${BLUE}...${NC}   ${service} (creating .venv for migrations)"
+            local venv_output
+            if venv_output=$(cd "$service_dir" && python3 -m venv .venv && .venv/bin/pip install -e . 2>&1); then
+                echo -e "\r  ${GREEN}OK${NC}    ${service} (.venv created)\033[K"
+            else
+                echo -e "\r  ${YELLOW}SKIP${NC}  ${service} (venv setup failed)\033[K"
+                echo "$venv_output" | tail -3 | while IFS= read -r line; do
+                    echo -e "        ${DIM}${line}${NC}"
+                done
+                failed=$((failed + 1))
+                continue
+            fi
         fi
 
         local migration_output
