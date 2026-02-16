@@ -28,7 +28,7 @@ TOKEN_DIR="${HOME}/.jarvis"
 TOKEN_FILE="${TOKEN_DIR}/tokens.env"
 DB_FILE="${TOKEN_DIR}/databases.env"
 DATA_SERVICES_DIR="${JARVIS_ROOT}/jarvis-data-services"
-DATA_SERVICES_ENV="${DATA_SERVICES_DIR}/data-services.env"
+DATA_SERVICES_ENV="${DATA_SERVICES_DIR}/.env"
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
 # ── Network mode ───────────────────────────────────────────────────────────

@@ -4,6 +4,15 @@
 - [ ] Fix 4 remaining test failures - test_command_parsing needs utterances NOT from training data to verify speech flexibility/generalization
 
 ## High Priority
+- [ ] **Dev ergonomics overhaul** - Reduce friction across all 20 repos
+  - [ ] Create `GETTING_STARTED.md` - Single walkthrough from clone to working system
+  - [ ] Add missing `.env.example` files (7 services: command-center, ocr-service, llm-proxy-api, tts, config-client, settings-client, auth-client)
+  - [ ] Add missing `CLAUDE.md` files (7 services: config-service, data-stores, llm-proxy-api, node-mobile, ocr-service, recipes-mobile, recipes-server)
+  - [ ] Unified task runner (Makefile or similar) - `make test-all`, `make setup`, `make start`
+  - [ ] Add CI coverage reporting and enforce 80% target from RULES.md
+  - [ ] Create error catalog / troubleshooting guide (common failures + fixes)
+  - [ ] Document mixed local/Docker dev model (GPU services local on macOS, rest in Docker)
+  - [ ] Standardize test invocation across services (currently mix of pytest, poetry run pytest, bash scripts, custom Python scripts)
 - [ ] **Build out Claude Code environment** - Force multiplier for everything else
   - [x] jarvis-mcp: health_check tool (aggregate all service health endpoints)
   - [x] jarvis-logs: log_tail endpoint (SSE at /api/v0/logs/stream)
