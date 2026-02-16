@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JARVIS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TOKEN_DIR="${HOME}/.jarvis"
 DATA_SERVICES_DIR="${JARVIS_ROOT}/jarvis-data-services"
-DATA_SERVICES_ENV="${DATA_SERVICES_DIR}/data-services.env"
+DATA_SERVICES_ENV="${DATA_SERVICES_DIR}/.env"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -139,10 +139,10 @@ echo -e "${DIM}Step 3: Stop infrastructure (jarvis-data-services)${NC}"
 if [[ -d "$DATA_SERVICES_DIR" ]]; then
     if [[ "$KEEP_VOLUMES" == true ]]; then
         _action "docker compose down (keeping volumes)" \
-            bash -c "cd '$DATA_SERVICES_DIR' && docker compose --env-file data-services.env down"
+            bash -c "cd '$DATA_SERVICES_DIR' && docker compose --env-file .env down"
     else
         _action "docker compose down -v (removing volumes + data)" \
-            bash -c "cd '$DATA_SERVICES_DIR' && docker compose --env-file data-services.env down -v"
+            bash -c "cd '$DATA_SERVICES_DIR' && docker compose --env-file .env down -v"
     fi
 else
     echo -e "  ${DIM}skip${NC}  jarvis-data-services not found"

@@ -541,7 +541,7 @@ _start_infra() {
     fi
 
     local compose_output
-    if ! compose_output=$(cd "$DATA_SERVICES_DIR" && docker compose --env-file data-services.env up -d 2>&1); then
+    if ! compose_output=$(cd "$DATA_SERVICES_DIR" && docker compose --env-file .env up -d 2>&1); then
         echo -e "  ${RED}FAIL${NC}  docker compose up failed for jarvis-data-services"
         echo -e "  ${DIM}${compose_output}${NC}"
         exit 1
@@ -1062,7 +1062,7 @@ cmd_start() {
             if ! docker exec jarvis-postgres pg_isready -U postgres >/dev/null 2>&1; then
                 echo -e "${DIM}Starting infrastructure...${NC}"
                 if [[ -d "$DATA_SERVICES_DIR" ]]; then
-                    (cd "$DATA_SERVICES_DIR" && docker compose --env-file data-services.env up -d 2>&1) | sed 's/^/  /' || true
+                    (cd "$DATA_SERVICES_DIR" && docker compose --env-file .env up -d 2>&1) | sed 's/^/  /' || true
                 fi
 
                 local elapsed=0
@@ -1272,7 +1272,7 @@ cmd_stop() {
             echo ""
             echo -e "${DIM}Stopping infrastructure...${NC}"
             if [[ -d "$DATA_SERVICES_DIR" ]]; then
-                (cd "$DATA_SERVICES_DIR" && docker compose --env-file data-services.env down >/dev/null 2>&1) || true
+                (cd "$DATA_SERVICES_DIR" && docker compose --env-file .env down >/dev/null 2>&1) || true
             fi
             echo -e "  ${RED}STOP${NC}  PostgreSQL + Redis + pgAdmin + MinIO"
         fi
