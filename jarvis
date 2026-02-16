@@ -68,15 +68,15 @@ fi
 # No associative arrays — bash 3.2 (macOS default) doesn't support them.
 DB_ENTRIES=(
     "jarvis-config-service|DB_NAME_CONFIG|jarvis_config|DATABASE_URL,MIGRATIONS_DATABASE_URL"
-    "jarvis-auth|DB_NAME_AUTH|jarvis_auth|DATABASE_URL"
-    "jarvis-logs|DB_NAME_LOGS|jarvis_logs|DATABASE_URL"
+    "jarvis-auth|DB_NAME_AUTH|jarvis_auth|DATABASE_URL,MIGRATIONS_DATABASE_URL"
+    "jarvis-logs|DB_NAME_LOGS|jarvis_logs|DATABASE_URL,MIGRATIONS_DATABASE_URL"
     "jarvis-command-center|DB_NAME_COMMAND_CENTER|jarvis_command_center|DB_URL,MIGRATIONS_DATABASE_URL"
     "jarvis-llm-proxy-api|DB_NAME_LLM_PROXY|jarvis_llm_proxy|DATABASE_URL,MIGRATIONS_DATABASE_URL"
     "jarvis-tts|DB_NAME_TTS|jarvis_tts|DATABASE_URL,MIGRATIONS_DATABASE_URL"
     "jarvis-whisper-api|DB_NAME_WHISPER|jarvis_whisper|DATABASE_URL,MIGRATIONS_DATABASE_URL"
     "jarvis-ocr-service|DB_NAME_OCR|jarvis_ocr|DATABASE_URL,MIGRATIONS_DATABASE_URL"
     "jarvis-recipes-server|DB_NAME_RECIPES|jarvis_recipes|DATABASE_URL,MIGRATIONS_DATABASE_URL"
-    "jarvis-mcp|DB_NAME_MCP|jarvis_mcp|DATABASE_URL"
+    "jarvis-mcp|DB_NAME_MCP|jarvis_mcp|DATABASE_URL,MIGRATIONS_DATABASE_URL"
 )
 
 # Lookup helpers for DB_ENTRIES (field positions: 1=service, 2=var, 3=default, 4=env_vars)
@@ -597,11 +597,15 @@ _create_databases() {
         label=$(_db_field "$entry" 1)
         db_name="${!var}"
 
-        if (cd "$DATA_SERVICES_DIR" && bash create-db.sh "$db_name" >/dev/null 2>&1); then
+        local db_output
+        if db_output=$(cd "$DATA_SERVICES_DIR" && bash create-db.sh "$db_name" 2>&1); then
             echo -e "  ${GREEN}OK${NC}    ${db_name} (${label})"
         else
             # create-db.sh exits 0 for "already exists", so failure is real
-            echo -e "  ${YELLOW}WARN${NC}  ${db_name} (${label}) — may already exist"
+            echo -e "  ${RED}FAIL${NC}  ${db_name} (${label})"
+            echo "$db_output" | tail -3 | while IFS= read -r line; do
+                echo -e "        ${DIM}${line}${NC}"
+            done
         fi
     done
 }
