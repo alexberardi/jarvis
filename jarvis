@@ -999,9 +999,10 @@ _auto_register() {
         return 0
     fi
 
-    # Parse results: extract app_key for services with new auth clients
+    # Parse results: extract app_key for new auth clients, track existing ones
     local total=0 new_auth=0 env_written=0
     RESTART_SERVICES=()
+    local -a need_key=()  # services with existing auth but no key in .env
 
     local parse_output
     parse_output=$(echo "$body" | python3 -c "
@@ -1010,8 +1011,9 @@ data = json.load(sys.stdin)
 for r in data.get('results', []):
     name = r['name']
     created = r.get('auth_created')
+    auth_ok = r.get('auth_ok')
     key = r.get('app_key') or ''
-    print(f'{name}|{created}|{key}')
+    print(f'{name}|{created}|{auth_ok}|{key}')
 " 2>&1) || {
         echo -e "  ${YELLOW}WARN${NC}  Failed to parse registration response"
         return 0
@@ -1022,26 +1024,59 @@ for r in data.get('results', []):
         local svc_name="${line%%|*}"
         local rest="${line#*|}"
         local created="${rest%%|*}"
+        rest="${rest#*|}"
+        local auth_ok="${rest%%|*}"
         local app_key="${rest#*|}"
 
         total=$((total + 1))
 
-        if [[ "$created" == "True" && -n "$app_key" ]]; then
-            new_auth=$((new_auth + 1))
+        local svc_env="${JARVIS_ROOT}/${svc_name}/.env"
+        [[ ! -d "${JARVIS_ROOT}/${svc_name}" ]] && continue
 
-            # Write JARVIS_APP_ID and JARVIS_APP_KEY from the CLI (host-side)
-            local svc_env="${JARVIS_ROOT}/${svc_name}/.env"
-            if [[ -d "${JARVIS_ROOT}/${svc_name}" ]]; then
-                _inject_env_var "$svc_env" "JARVIS_APP_ID" "$svc_name"
-                _inject_env_var "$svc_env" "JARVIS_APP_KEY" "$app_key"
-                env_written=$((env_written + 1))
-                RESTART_SERVICES+=("$svc_name")
+        if [[ "$created" == "True" && -n "$app_key" ]]; then
+            # New auth client — write credentials
+            new_auth=$((new_auth + 1))
+            _inject_env_var "$svc_env" "JARVIS_APP_ID" "$svc_name"
+            _inject_env_var "$svc_env" "JARVIS_APP_KEY" "$app_key"
+            env_written=$((env_written + 1))
+            RESTART_SERVICES+=("$svc_name")
+        elif [[ "$auth_ok" == "True" ]]; then
+            # Existing auth client — check if .env is missing the key
+            _inject_env_var "$svc_env" "JARVIS_APP_ID" "$svc_name"
+            if ! grep -q "^JARVIS_APP_KEY=.\+" "$svc_env" 2>/dev/null; then
+                need_key+=("$svc_name")
             fi
         fi
     done <<< "$parse_output"
 
+    # Rotate keys for services that have auth clients but missing JARVIS_APP_KEY in .env
+    for svc_name in "${need_key[@]}"; do
+        local rotate_resp rotate_body rotate_code
+        rotate_resp=$(curl -s -w "\n%{http_code}" -X POST \
+            "http://localhost:8013/v1/services/rotate-key" \
+            -H "X-Jarvis-Admin-Token: ${token}" \
+            -H "Content-Type: application/json" \
+            -d "{\"service_name\":\"${svc_name}\"}" 2>/dev/null)
+
+        rotate_code=$(echo "$rotate_resp" | tail -1)
+        rotate_body=$(echo "$rotate_resp" | sed '$d')
+
+        if [[ "$rotate_code" == "200" ]]; then
+            local rotated_key
+            rotated_key=$(echo "$rotate_body" | python3 -c "import json,sys; print(json.load(sys.stdin).get('app_key',''))" 2>/dev/null)
+            if [[ -n "$rotated_key" ]]; then
+                local svc_env="${JARVIS_ROOT}/${svc_name}/.env"
+                _inject_env_var "$svc_env" "JARVIS_APP_KEY" "$rotated_key"
+                env_written=$((env_written + 1))
+                RESTART_SERVICES+=("$svc_name")
+            fi
+        else
+            echo -e "  ${YELLOW}WARN${NC}  Key rotate failed for ${svc_name} (HTTP ${rotate_code})"
+        fi
+    done
+
     if [[ $env_written -gt 0 ]]; then
-        echo -e "  ${GREEN}OK${NC}    Registered ${total} services (${new_auth} new auth clients, ${env_written} .env files updated)"
+        echo -e "  ${GREEN}OK${NC}    Registered ${total} services (${new_auth} new, ${env_written} .env files updated)"
     else
         echo -e "  ${GREEN}OK${NC}    Registered ${total} services (all credentials up to date)"
     fi
