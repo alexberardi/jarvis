@@ -949,9 +949,9 @@ _restart_one() {
             fi
             ;;
         local|npm)
-            _stop_one "$entry" "$standalone"
+            _stop_one "$entry" "$standalone" >/dev/null 2>&1
             sleep 1
-            _start_one "$entry" "" "$standalone"
+            _start_one "$entry" "" "$standalone" >/dev/null 2>&1
             ;;
     esac
 }
@@ -1234,7 +1234,7 @@ cmd_start() {
                 local port health_path
                 port=$(_get_port "$entry")
                 health_path=$(_get_health "$entry")
-                if _wait_for_health "$svc_name" "$port" "$health_path" 30; then
+                if _wait_for_health "$svc_name" "$port" "$health_path" 60; then
                     echo -e "\r  ${GREEN}OK${NC}    ${svc_name}"
                 else
                     echo -e "\r  ${YELLOW}WARN${NC}  ${svc_name} (health check timeout after restart)"
