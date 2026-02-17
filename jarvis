@@ -488,6 +488,11 @@ _stamp_env_files() {
                 ;;
         esac
 
+        # --- App identity (all services except config-service and admin) ---
+        if [[ "$name" != "jarvis-config-service" && "$name" != "jarvis-admin" ]]; then
+            _inject_env_var "$env_file" "JARVIS_APP_ID" "$name"
+        fi
+
         # --- Redis password (for services that use Redis) ---
         for redis_svc in "${REDIS_SERVICES[@]}"; do
             if [[ "$name" == "$redis_svc" ]]; then
@@ -936,8 +941,10 @@ _restart_one() {
             else
                 compose_flags=$(_get_compose_flags "$dir") || return 1
             fi
+            # Use stop+up (not restart) so Docker picks up .env file changes
+            (cd "$dir" && docker compose $env_flag $compose_flags stop 2>/dev/null) || true
             local restart_output
-            if ! restart_output=$(cd "$dir" && docker compose $env_flag $compose_flags restart 2>&1); then
+            if ! restart_output=$(cd "$dir" && docker compose $env_flag $compose_flags up -d 2>&1); then
                 echo -e "\r  ${YELLOW}WARN${NC}  restart failed for ${name}: $(echo "$restart_output" | tail -1)"
             fi
             ;;
