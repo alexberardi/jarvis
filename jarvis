@@ -43,7 +43,7 @@ SERVICES=(
     "jarvis-auth|8007|1|docker|/health"
     "jarvis-logs|8006|1|docker|/health"
     "jarvis-command-center|8002|2|docker|/health"
-    "jarvis-llm-proxy-api|8000|2|local|/health"
+    "jarvis-llm-proxy-api|8000|2|docker|/health"
     "jarvis-tts|8009|3|docker|/health"
     "jarvis-whisper-api|8012|3|docker|/health"
     "jarvis-ocr-service|5009|3|docker|/health"
@@ -493,6 +493,11 @@ _stamp_env_files() {
             _inject_env_var "$env_file" "JARVIS_APP_ID" "$name"
         fi
 
+        # --- Auth service URL (env var fallback for module-level auth init) ---
+        if [[ "$name" != "jarvis-auth" && "$name" != "jarvis-config-service" && "$name" != "jarvis-admin" ]]; then
+            _inject_env_var "$env_file" "JARVIS_AUTH_BASE_URL" "http://${svc_host}:8007"
+        fi
+
         # --- Redis password (for services that use Redis) ---
         for redis_svc in "${REDIS_SERVICES[@]}"; do
             if [[ "$name" == "$redis_svc" ]]; then
@@ -543,6 +548,30 @@ _start_infra() {
         echo -e "  ${RED}FAIL${NC}  jarvis-data-services directory not found"
         echo -e "  ${DIM}Run: git clone git@github.com:alexberardi/jarvis-data-services.git ${DATA_SERVICES_DIR}${NC}"
         exit 1
+    fi
+
+    # Create default .env if missing (gitignored, required by docker-compose)
+    if [[ ! -f "$DATA_SERVICES_ENV" ]]; then
+        cat > "$DATA_SERVICES_ENV" <<'ENVEOF'
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=app
+POSTGRES_PORT=5432
+
+PGADMIN_DEFAULT_EMAIL=admin@example.com
+PGADMIN_DEFAULT_PASSWORD=admin
+PGADMIN_PORT=5050
+
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+MINIO_PORT=9000
+MINIO_CONSOLE_PORT=9001
+
+REDIS_PASSWORD=redis
+REDIS_PORT=6379
+REDIS_COMMANDER_PORT=8081
+ENVEOF
+        echo -e "  ${GREEN}OK${NC}    Created data-services .env (defaults)"
     fi
 
     local compose_output
