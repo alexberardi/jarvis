@@ -151,15 +151,15 @@ Add-on services for additional capabilities.
 |---------|-------------|-------|
 | [jarvis-config-client](https://github.com/alexberardi/jarvis-config-client) | Service discovery via config-service | [![Tests](https://github.com/alexberardi/jarvis-config-client/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-config-client/actions/workflows/test.yml) |
 | [jarvis-log-client](https://github.com/alexberardi/jarvis-log-client) | Structured logging via jarvis-logs | [![Tests](https://github.com/alexberardi/jarvis-log-client/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-log-client/actions/workflows/test.yml) |
-| [jarvis-auth-client](https://github.com/alexberardi/jarvis-auth-client) | Auth helpers for service-to-service calls | [![Tests](https://github.com/alexberardi/jarvis-auth-client/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth-client/actions/workflows/test.yml) |
-| [jarvis-settings-client](https://github.com/alexberardi/jarvis-settings-client) | Runtime settings client | [![Tests](https://github.com/alexberardi/jarvis-settings-client/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-settings-client/actions/workflows/test.yml) |
+| [jarvis-auth-client](https://github.com/alexberardi/jarvis-auth-client) | Auth helpers for service-to-service calls | [![CI](https://github.com/alexberardi/jarvis-auth-client/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth-client/actions/workflows/ci.yml) |
+| [jarvis-settings-client](https://github.com/alexberardi/jarvis-settings-client) | Runtime settings client | [![CI](https://github.com/alexberardi/jarvis-settings-client/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-settings-client/actions/workflows/ci.yml) |
 
 ### Client Apps
 
 | App | Description | CI |
 |-----|-------------|-----|
 | [jarvis-node-setup](https://github.com/alexberardi/jarvis-node-setup) | Pi Zero voice node (Python) | [![Tests](https://github.com/alexberardi/jarvis-node-setup/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-setup/actions/workflows/test.yml) |
-| [jarvis-node-mobile](https://github.com/alexberardi/jarvis-node-mobile) | Mobile voice node (React Native) | [![Tests](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/test.yml) |
+| [jarvis-node-mobile](https://github.com/alexberardi/jarvis-node-mobile) | Mobile voice node (React Native) | [![CI](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/ci.yml) |
 | [jarvis-recipes-mobile](https://github.com/alexberardi/jarvis-recipes-mobile) | Recipe app (React Native) | [![Build](https://github.com/alexberardi/jarvis-recipes-mobile/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-mobile/actions/workflows/build-and-deploy.yml) |
 
 ### Tools
