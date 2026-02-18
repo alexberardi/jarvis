@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="jarvis_indigo500_transparent-logo.png" alt="Jarvis" width="400" />
+  <img src="jarvis_indigo500_transparent-logo.png" alt="Jarvis" width="600" />
 </p>
 
 <p align="center">
