@@ -1,6 +1,10 @@
-# Jarvis
+<p align="center">
+  <img src="logo.png" alt="Jarvis" width="300" />
+</p>
 
-Personal voice assistant with Pi Zero nodes and self-hosted microservices.
+<p align="center">
+  Personal voice assistant with Pi Zero nodes and self-hosted microservices.
+</p>
 
 Fully private, fully extensible, no cloud dependencies. Voice nodes capture audio, send it to the command center for processing via whisper.cpp, route to the appropriate service, and respond via text-to-speech.
 
