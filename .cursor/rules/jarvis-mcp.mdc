@@ -7,7 +7,7 @@ globs: jarvis-mcp/**
 
 MCP (Model Context Protocol) server exposing jarvis services as tools for Claude Code.
 
-## Running (Port 8011)
+## Running (Port 7709)
 
 ```bash
 ./run.sh --docker              # Start in Docker (standard)
@@ -32,12 +32,12 @@ jarvis_mcp/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `JARVIS_MCP_HOST` | localhost | Server host |
-| `JARVIS_MCP_PORT` | 8011 | Server port |
+| `JARVIS_MCP_PORT` | 7709 | Server port |
 | `JARVIS_MCP_TOOLS` | logs,debug | Enabled tool groups (add `tests`/`db`) |
 | `JARVIS_CONFIG_URL` | - | Config service URL (preferred) |
 | `JARVIS_CONFIG_URL_STYLE` | - | Set to `dockerized` in Docker |
-| `JARVIS_LOGS_URL` | http://localhost:8006 | Fallback logs URL |
-| `JARVIS_AUTH_URL` | http://localhost:8007 | Fallback auth URL |
+| `JARVIS_LOGS_URL` | http://localhost:7702 | Fallback logs URL |
+| `JARVIS_AUTH_URL` | http://localhost:7701 | Fallback auth URL |
 | `POSTGRES_HOST` | localhost | Postgres host for db tools |
 | `POSTGRES_PORT` | 5432 | Postgres port for db tools |
 | `POSTGRES_USER` | devuser | Postgres user for db tools |
@@ -64,12 +64,12 @@ URLs fetched from `jarvis-config-service` at startup with background refresh eve
 ## Service Dependencies
 
 **Must be running:**
-- `jarvis-config-service` (8013) - Service discovery (optional, falls back to env vars)
-- `jarvis-logs` (8006) - Queried by log tools (logs_query, logs_tail, logs_errors)
+- `jarvis-config-service` (7700) - Service discovery (optional, falls back to env vars)
+- `jarvis-logs` (7702) - Queried by log tools (logs_query, logs_tail, logs_errors)
 - `jarvis-settings-client` - Runtime configuration
 
 **Queried for health/debug tools (all optional):**
-- `jarvis-auth` (8007), `jarvis-command-center` (8002), `jarvis-recipes-server` (8001), `jarvis-whisper-api` (8012), `jarvis-ocr-service` (5009), `jarvis-llm-proxy-api` (8000), `jarvis-tts` (8009)
+- `jarvis-auth` (7701), `jarvis-command-center` (7703), `jarvis-recipes-server` (7030), `jarvis-whisper-api` (7706), `jarvis-ocr-service` (7031), `jarvis-llm-proxy-api` (7704), `jarvis-tts` (7707)
 
 **Note:** Does NOT use jarvis-log-client for its own logging. Uses app-to-app auth headers directly for logs access.
 

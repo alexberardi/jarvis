@@ -69,7 +69,7 @@ headers = {
 ## Service Dependencies
 
 Talks to its respective service only:
-- `jarvis-auth` (8007) - Validates app credentials (GET /internal/app-ping)
+- `jarvis-auth` (7701) - Validates app credentials (GET /internal/app-ping)
 - Optionally uses `jarvis-config-client` to discover auth URL
 
 ## Used By

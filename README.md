@@ -18,10 +18,10 @@ Always included in every deployment.
 
 | Service | Port | Description | Tests | Docker |
 |---------|------|-------------|-------|--------|
-| [jarvis-config-service](https://github.com/alexberardi/jarvis-config-service) | 8013 | Centralized configuration and service discovery | [![Tests](https://github.com/alexberardi/jarvis-config-service/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-config-service/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-config-service/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-config-service/actions/workflows/docker-build-push.yml) |
-| [jarvis-auth](https://github.com/alexberardi/jarvis-auth) | 8007 | JWT authentication with register, login, refresh, logout | [![Tests](https://github.com/alexberardi/jarvis-auth/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-auth/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth/actions/workflows/docker-build-push.yml) |
-| [jarvis-logs](https://github.com/alexberardi/jarvis-logs) | 8006 | Centralized logging for all services via Loki | [![Tests](https://github.com/alexberardi/jarvis-logs/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-logs/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-logs/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-logs/actions/workflows/docker-build-push.yml) |
-| [jarvis-command-center](https://github.com/alexberardi/jarvis-command-center) | 8002 | Central voice/command API, node management, tool routing | [![Tests](https://github.com/alexberardi/jarvis-command-center/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-command-center/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-command-center/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-command-center/actions/workflows/docker-build-push.yml) |
+| [jarvis-config-service](https://github.com/alexberardi/jarvis-config-service) | 7700 | Centralized configuration and service discovery | [![Tests](https://github.com/alexberardi/jarvis-config-service/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-config-service/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-config-service/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-config-service/actions/workflows/docker-build-push.yml) |
+| [jarvis-auth](https://github.com/alexberardi/jarvis-auth) | 7701 | JWT authentication with register, login, refresh, logout | [![Tests](https://github.com/alexberardi/jarvis-auth/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-auth/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth/actions/workflows/docker-build-push.yml) |
+| [jarvis-logs](https://github.com/alexberardi/jarvis-logs) | 7702 | Centralized logging for all services via Loki | [![Tests](https://github.com/alexberardi/jarvis-logs/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-logs/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-logs/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-logs/actions/workflows/docker-build-push.yml) |
+| [jarvis-command-center](https://github.com/alexberardi/jarvis-command-center) | 7703 | Central voice/command API, node management, tool routing | [![Tests](https://github.com/alexberardi/jarvis-command-center/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-command-center/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-command-center/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-command-center/actions/workflows/docker-build-push.yml) |
 
 ### Recommended
 
@@ -29,8 +29,8 @@ Speech-to-text and text-to-speech for voice interaction.
 
 | Service | Port | Description | Tests | Docker |
 |---------|------|-------------|-------|--------|
-| [jarvis-whisper-api](https://github.com/alexberardi/jarvis-whisper-api) | 8012 | Speech-to-text via whisper.cpp (base.en included) | [![Tests](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/docker-build-push.yml) |
-| [jarvis-tts](https://github.com/alexberardi/jarvis-tts) | 8009 | Text-to-speech synthesis via Piper | [![Tests](https://github.com/alexberardi/jarvis-tts/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-tts/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-tts/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-tts/actions/workflows/docker-build-push.yml) |
+| [jarvis-whisper-api](https://github.com/alexberardi/jarvis-whisper-api) | 7706 | Speech-to-text via whisper.cpp (base.en included) | [![Tests](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/docker-build-push.yml) |
+| [jarvis-tts](https://github.com/alexberardi/jarvis-tts) | 7707 | Text-to-speech synthesis via Piper | [![Tests](https://github.com/alexberardi/jarvis-tts/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-tts/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-tts/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-tts/actions/workflows/docker-build-push.yml) |
 
 ### Optional
 
@@ -38,9 +38,9 @@ Add-on services for additional capabilities.
 
 | Service | Port | Description | Tests | Docker |
 |---------|------|-------------|-------|--------|
-| [jarvis-mcp](https://github.com/alexberardi/jarvis-mcp) | 8011 | Model Context Protocol server for Claude Code | [![Tests](https://github.com/alexberardi/jarvis-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-mcp/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-mcp/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-mcp/actions/workflows/docker-build-push.yml) |
-| [jarvis-ocr-service](https://github.com/alexberardi/jarvis-ocr-service) | 5009 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) | [![Tests](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/docker-build-push.yml) |
-| [jarvis-recipes-server](https://github.com/alexberardi/jarvis-recipes-server) | 8001 | Recipe CRUD, URL parsing, and meal planning | [![Tests](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/docker-build-push.yml) |
+| [jarvis-mcp](https://github.com/alexberardi/jarvis-mcp) | 7709 | Model Context Protocol server for Claude Code | [![Tests](https://github.com/alexberardi/jarvis-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-mcp/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-mcp/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-mcp/actions/workflows/docker-build-push.yml) |
+| [jarvis-ocr-service](https://github.com/alexberardi/jarvis-ocr-service) | 7031 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) | [![Tests](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/docker-build-push.yml) |
+| [jarvis-recipes-server](https://github.com/alexberardi/jarvis-recipes-server) | 7030 | Recipe CRUD, URL parsing, and meal planning | [![Tests](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/docker-build-push.yml) |
 
 ### In Development
 
@@ -48,9 +48,9 @@ Services without Docker images yet.
 
 | Service | Port | Description | Tests |
 |---------|------|-------------|-------|
-| [jarvis-llm-proxy-api](https://github.com/alexberardi/jarvis-llm-proxy-api) | 8000 | LLM inference proxy with adapter training | [![Tests](https://github.com/alexberardi/jarvis-llm-proxy-api/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-llm-proxy-api/actions/workflows/test.yml) |
-| [jarvis-settings-server](https://github.com/alexberardi/jarvis-settings-server) | 8014 | Runtime settings aggregator | |
-| [jarvis-admin](https://github.com/alexberardi/jarvis-admin) | 5173 | Web admin UI (React + Fastify) | |
+| [jarvis-llm-proxy-api](https://github.com/alexberardi/jarvis-llm-proxy-api) | 7704 | LLM inference proxy with adapter training | [![Tests](https://github.com/alexberardi/jarvis-llm-proxy-api/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-llm-proxy-api/actions/workflows/test.yml) |
+| [jarvis-settings-server](https://github.com/alexberardi/jarvis-settings-server) | 7708 | Runtime settings aggregator | |
+| [jarvis-admin](https://github.com/alexberardi/jarvis-admin) | 7710 | Web admin UI (React + Fastify) | |
 
 ## Client Libraries
 
@@ -120,7 +120,7 @@ python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 cp .env.example .env
 .venv/bin/python -m alembic upgrade head
-.venv/bin/uvicorn app.main:app --reload --port 8007
+.venv/bin/uvicorn app.main:app --reload --port 7701
 ```
 
 See each service's own README or CLAUDE.md for specific setup instructions.

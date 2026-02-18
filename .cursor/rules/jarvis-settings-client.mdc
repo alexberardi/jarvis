@@ -54,7 +54,7 @@ Include via `create_settings_router(service, auth_dependency)`:
 
 ## Service Dependencies
 
-- `jarvis-auth` (8007) - JWT validation and app credential validation (GET /auth/me, GET /internal/app-ping)
+- `jarvis-auth` (7701) - JWT validation and app credential validation (GET /auth/me, GET /internal/app-ping)
 - Optionally uses `jarvis-config-client` to discover auth URL
 
 ## Features

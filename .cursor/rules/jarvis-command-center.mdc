@@ -7,12 +7,12 @@ globs: jarvis-command-center/**
 
 Central voice command API. Routes voice from Pi Zero nodes through speech-to-text, LLM processing, and tool execution.
 
-## Running (Port 8002)
+## Running (Port 7703)
 
 ```bash
 ./run.sh --docker              # Start in Docker (includes PostgreSQL)
 ./run.sh --docker --rebuild    # Rebuild after dependency changes
-curl http://localhost:8002/health  # Health check
+curl http://localhost:7703/health  # Health check
 python run_database_tests.py --type docker  # Tests
 ```
 
@@ -66,12 +66,12 @@ app/
 ## Service Dependencies
 
 **Must be running:**
-- `jarvis-auth` (8007) - App-to-app auth, node credential validation
-- `jarvis-config-service` (8013) - Discovers URLs for all services below
-- `jarvis-logs` (8006) - Centralized logging
-- `jarvis-llm-proxy-api` (8000) - LLM inference for command parsing and responses
-- `jarvis-whisper-api` (8012) - Speech-to-text (transcribes audio from nodes)
-- `jarvis-tts` (8009) - Text-to-speech (generates audio responses for nodes)
+- `jarvis-auth` (7701) - App-to-app auth, node credential validation
+- `jarvis-config-service` (7700) - Discovers URLs for all services below
+- `jarvis-logs` (7702) - Centralized logging
+- `jarvis-llm-proxy-api` (7704) - LLM inference for command parsing and responses
+- `jarvis-whisper-api` (7706) - Speech-to-text (transcribes audio from nodes)
+- `jarvis-tts` (7707) - Text-to-speech (generates audio responses for nodes)
 - `jarvis-settings-client` - Runtime configuration (via library, talks to config-service)
 
 **Data services (from jarvis-data-stores/):**

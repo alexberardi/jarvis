@@ -85,11 +85,11 @@ python test_multi_turn_conversation.py      # Multi-turn tests (fast mode)
 python test_multi_turn_conversation.py --full  # Full mode (TTS + Whisper)
 ```
 
-**Required services:** jarvis-command-center (8002), jarvis-llm-proxy-api (8000). Full mode also needs jarvis-tts (8009) + jarvis-whisper-api (8012).
+**Required services:** jarvis-command-center (7703), jarvis-llm-proxy-api (7704). Full mode also needs jarvis-tts (7707) + jarvis-whisper-api (7706).
 
 ## Service Dependencies
 
-- `jarvis-command-center` (8002) - Primary server (single external dependency for voice commands)
+- `jarvis-command-center` (7703) - Primary server (single external dependency for voice commands)
 
 **Design goal:** Node talks only to command-center, which handles all routing to other services.
 

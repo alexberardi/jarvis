@@ -170,8 +170,8 @@ CONFIG_PATH=/path/to/jarvis-node-setup/config.json
 # jarvis-node-mobile/.env
 EXPO_PUBLIC_DEV_MODE=true
 EXPO_PUBLIC_SIMULATED_NODE_IP=<ubuntu-ip>
-EXPO_PUBLIC_COMMAND_CENTER_URL=http://<ubuntu-ip>:8002
-EXPO_PUBLIC_AUTH_API_BASE_URL=http://<ubuntu-ip>:8007
+EXPO_PUBLIC_COMMAND_CENTER_URL=http://<ubuntu-ip>:7703
+EXPO_PUBLIC_AUTH_API_BASE_URL=http://<ubuntu-ip>:7701
 ```
 
 ---
@@ -207,7 +207,7 @@ Request:
   "wifi_ssid": "HomeNetwork",
   "wifi_password": "secret123",
   "room": "kitchen",
-  "command_center_url": "http://192.168.1.50:8002"
+  "command_center_url": "http://192.168.1.50:7703"
 }
 ```
 Response:

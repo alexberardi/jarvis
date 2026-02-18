@@ -7,7 +7,7 @@ globs: jarvis-whisper-api/**
 
 REST API wrapper for whisper.cpp with optional speaker recognition.
 
-## Running (Port 8012)
+## Running (Port 7706)
 
 ```bash
 ./run.sh --docker              # Start in Docker (standard)
@@ -35,11 +35,11 @@ app/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | 8012 | API port |
+| `PORT` | 7706 | API port |
 | `WHISPER_MODEL` | `~/whisper.cpp/models/ggml-base.en.bin` | GGML model path |
 | `WHISPER_CLI` | auto-detected | Path to whisper-cli binary |
 | `USE_VOICE_RECOGNITION` | false | Enable speaker identification |
-| `JARVIS_AUTH_BASE_URL` | http://localhost:8007 | Auth service URL |
+| `JARVIS_AUTH_BASE_URL` | http://localhost:7701 | Auth service URL |
 | `JARVIS_APP_ID` | jarvis-whisper | App ID for auth |
 | `JARVIS_APP_KEY` | - | App key (required for auth) |
 
@@ -55,9 +55,9 @@ Set `USE_VOICE_RECOGNITION=true`, add WAV files to `voice_profiles/` (filename =
 ## Service Dependencies
 
 **Must be running:**
-- `jarvis-auth` (8007) - App-to-app auth validation
-- `jarvis-config-service` (8013) - Service discovery
-- `jarvis-logs` (8006) - Centralized logging
+- `jarvis-auth` (7701) - App-to-app auth validation
+- `jarvis-config-service` (7700) - Service discovery
+- `jarvis-logs` (7702) - Centralized logging
 - `jarvis-settings-client` - Runtime configuration
 
 ## Dependencies

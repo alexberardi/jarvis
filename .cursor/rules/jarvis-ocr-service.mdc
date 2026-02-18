@@ -7,7 +7,7 @@ globs: jarvis-ocr-service/**
 
 OCR service with opt-in pluggable backends. You enable the OCR technologies you want, and the service runs the image through each enabled backend and returns all results.
 
-## Running (Port 5009)
+## Running (Port 7031)
 
 **On macOS:** Run natively (required for Apple Vision backend):
 ```bash
@@ -59,8 +59,8 @@ app/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OCR_PORT` | 5009 | API port |
-| `JARVIS_AUTH_BASE_URL` | http://localhost:8007 | Auth service URL |
+| `OCR_PORT` | 7031 | API port |
+| `JARVIS_AUTH_BASE_URL` | http://localhost:7701 | Auth service URL |
 | `REDIS_URL` | - | Redis URL (from shared jarvis-data-services) |
 
 OCR backend opt-in configuration should live in settings table (via jarvis-settings-client), not env vars.
@@ -73,11 +73,11 @@ OCR backend opt-in configuration should live in settings table (via jarvis-setti
 ## Service Dependencies
 
 **Must be running:**
-- `jarvis-auth` (8007) - App-to-app auth
-- `jarvis-logs` (8006) - Centralized logging
+- `jarvis-auth` (7701) - App-to-app auth
+- `jarvis-logs` (7702) - Centralized logging
 
 **Should use but not yet confirmed/implemented:**
-- `jarvis-config-service` (8013) - Service discovery (should use if not already)
+- `jarvis-config-service` (7700) - Service discovery (should use if not already)
 - `jarvis-settings-client` - Runtime configuration, including OCR backend opt-in (should replace env vars)
 
 **Data services (from jarvis-data-stores/):**

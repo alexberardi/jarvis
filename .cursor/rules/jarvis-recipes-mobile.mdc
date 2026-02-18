@@ -36,7 +36,7 @@ Browse recipes, meal planning, and interact with the recipe system. Can send ima
 
 ## Service Dependencies
 
-- `jarvis-auth` (8007) - User authentication
-- `jarvis-recipes-server` (8001) - Recipe CRUD, URL import, meal planning (primary server)
+- `jarvis-auth` (7701) - User authentication
+- `jarvis-recipes-server` (7030) - Recipe CRUD, URL import, meal planning (primary server)
 
 **Design goal:** Clients should talk only to their respective server, which acts as passthrough to auth and other services.

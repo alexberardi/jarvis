@@ -7,7 +7,7 @@ globs: jarvis-auth/**
 
 FastAPI authentication microservice with JWT tokens, user management, and app-to-app credentials.
 
-## Running (Port 8007)
+## Running (Port 7701)
 
 ```bash
 ./run.sh --docker              # Start in Docker (standard)

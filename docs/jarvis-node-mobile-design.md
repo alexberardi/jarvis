@@ -37,7 +37,7 @@ React Native cross-platform mobile app that serves as the **admin panel and orch
 │  ┌──────────────────┐        ┌──────────────────┐                          │
 │  │ jarvis-node-     │        │ jarvis-command-  │                          │
 │  │ mobile (Admin)   │──────▶ │ center           │                          │
-│  │                  │  HTTP  │ (port 8002)      │                          │
+│  │                  │  HTTP  │ (port 7703)      │                          │
 │  └──────────────────┘        └────────┬─────────┘                          │
 │          │                            │                                     │
 │          │                   ┌────────┼─────────┐                          │
@@ -45,7 +45,7 @@ React Native cross-platform mobile app that serves as the **admin panel and orch
 │          │              ┌────▼──┐ ┌───▼───┐ ┌───▼───┐                      │
 │          │              │jarvis │ │jarvis │ │jarvis │                      │
 │          │              │-auth  │ │-llm   │ │-tts   │                      │
-│          │              │(8007) │ │(8000) │ │(8009) │                      │
+│          │              │(7701) │ │(7704) │ │(7707) │                      │
 │          │              └───────┘ └───────┘ └───────┘                      │
 │          │                                                                  │
 │  ┌───────▼──────────────────────────────────────────┐                      │
@@ -207,8 +207,8 @@ python scripts/run_provisioning_simulator.py
 # jarvis-node-mobile/.env
 EXPO_PUBLIC_DEV_MODE=true
 EXPO_PUBLIC_SIMULATED_NODE_IP=192.168.1.XXX  # Ubuntu IP
-EXPO_PUBLIC_COMMAND_CENTER_URL=http://192.168.1.XXX:8002
-EXPO_PUBLIC_AUTH_API_BASE_URL=http://192.168.1.XXX:8007
+EXPO_PUBLIC_COMMAND_CENTER_URL=http://192.168.1.XXX:7703
+EXPO_PUBLIC_AUTH_API_BASE_URL=http://192.168.1.XXX:7701
 ```
 
 Dev mode skips "connect to hotspot" step, uses configurable IP.
@@ -249,7 +249,7 @@ Dev mode skips "connect to hotspot" step, uses configurable IP.
   "wifi_ssid": "HomeNetwork",
   "wifi_password": "secret123",
   "room": "kitchen",
-  "command_center_url": "http://192.168.1.50:8002"
+  "command_center_url": "http://192.168.1.50:7703"
 }
 
 // Response
@@ -271,7 +271,7 @@ Dev mode skips "connect to hotspot" step, uses configurable IP.
 
 ### 2. Command Center Admin API
 
-**Base:** `http://{command-center}:8002/api/v0/admin`
+**Base:** `http://{command-center}:7703/api/v0/admin`
 **Auth:** `X-Admin-Api-Key` header
 
 #### GET /nodes

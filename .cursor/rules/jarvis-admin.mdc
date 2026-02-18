@@ -7,11 +7,11 @@ globs: jarvis-admin/**
 
 Web admin dashboard for managing Jarvis service settings. React 19 + TypeScript. Superuser-only access.
 
-## Running (Port 5173)
+## Running (Port 7710)
 
 ```bash
 npm install            # Install dependencies
-npm run dev            # Dev server at http://localhost:5173
+npm run dev            # Dev server at http://localhost:7710
 npx tsc -b             # Type check
 npm run build          # Production build
 ```
@@ -35,7 +35,7 @@ src/
 
 ## Auth Flow
 
-1. Login via `POST /auth/login` to jarvis-auth (8007)
+1. Login via `POST /auth/login` to jarvis-auth (7701)
 2. Non-superuser accounts rejected at frontend
 3. Tokens in localStorage, attached via axios interceptor
 4. Auto-refresh on 401; redirect to login on failure
@@ -44,7 +44,7 @@ src/
 
 Auto-discovers jarvis-config-service:
 1. Check localStorage cache
-2. Scan localhost ports 8013-8020
+2. Scan localhost ports 7700-7711
 3. If needed, discover local IP via WebRTC, scan /24 subnet
 4. Match `{"service": "jarvis-config-service"}`
 5. Resolve auth URL from config service
@@ -57,8 +57,8 @@ Auto-discovers jarvis-config-service:
 
 ## Service Dependencies
 
-- `jarvis-config-service` (8013) - Auto-discovered via network scan, provides all other URLs
-- `jarvis-auth` (8007) - User login, superuser validation
+- `jarvis-config-service` (7700) - Auto-discovered via network scan, provides all other URLs
+- `jarvis-auth` (7701) - User login, superuser validation
 - Settings API on config-service (`/v1/settings`) - Settings CRUD
 
 ## Dependencies

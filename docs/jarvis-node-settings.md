@@ -679,16 +679,16 @@ Clients construct AAD from the stored fields. Canonical JSON format:
 
 ```bash
 # 1. Create a settings request (mobile → CC)
-curl -X POST http://localhost:8002/api/v0/nodes/my-node/settings/requests \
+curl -X POST http://localhost:7703/api/v0/nodes/my-node/settings/requests \
   -H "x-api-key: $ADMIN_API_KEY"
 
 # 2. Node receives MQTT message on: jarvis/nodes/my-node/settings/request
 # 3. Node confirms request exists
-curl http://localhost:8002/api/v0/nodes/my-node/settings/requests/{request_id} \
+curl http://localhost:7703/api/v0/nodes/my-node/settings/requests/{request_id} \
   -H "x-api-key: $NODE_API_KEY"
 
 # 4. Node uploads encrypted snapshot
-curl -X PUT http://localhost:8002/api/v0/nodes/my-node/settings/requests/{request_id}/snapshot \
+curl -X PUT http://localhost:7703/api/v0/nodes/my-node/settings/requests/{request_id}/snapshot \
   -H "x-api-key: $NODE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -701,7 +701,7 @@ curl -X PUT http://localhost:8002/api/v0/nodes/my-node/settings/requests/{reques
   }'
 
 # 5. Mobile polls for result
-curl http://localhost:8002/api/v0/nodes/my-node/settings/requests/{request_id}/result \
+curl http://localhost:7703/api/v0/nodes/my-node/settings/requests/{request_id}/result \
   -H "x-api-key: $ADMIN_API_KEY"
 ```
 

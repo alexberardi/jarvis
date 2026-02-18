@@ -39,26 +39,26 @@ NETWORK_MODE="${JARVIS_NETWORK_MODE:-bridge}"
 # mode: docker or local
 # tier: startup order (0 = first)
 SERVICES=(
-    "jarvis-config-service|8013|0|docker|/health"
-    "jarvis-auth|8007|1|docker|/health"
-    "jarvis-logs|8006|1|docker|/health"
-    "jarvis-command-center|8002|2|docker|/health"
-    "jarvis-llm-proxy-api|8000|2|docker|/health"
-    "jarvis-tts|8009|3|docker|/health"
-    "jarvis-whisper-api|8012|3|docker|/health"
-    "jarvis-ocr-service|5009|3|docker|/health"
-    "jarvis-recipes-server|8001|3|docker|/health"
-    "jarvis-settings-server|8014|4|docker|/health"
-    "jarvis-mcp|8011|4|docker|/health"
-    "jarvis-admin|5173|5|npm|/"
+    "jarvis-config-service|7700|0|docker|/health"
+    "jarvis-auth|7701|1|docker|/health"
+    "jarvis-logs|7702|1|docker|/health"
+    "jarvis-command-center|7703|2|docker|/health"
+    "jarvis-llm-proxy-api|7704|2|docker|/health"
+    "jarvis-tts|7707|3|docker|/health"
+    "jarvis-whisper-api|7706|3|docker|/health"
+    "jarvis-ocr-service|7031|3|docker|/health"
+    "jarvis-recipes-server|7030|3|docker|/health"
+    "jarvis-settings-server|7708|4|docker|/health"
+    "jarvis-mcp|7709|4|docker|/health"
+    "jarvis-admin|7710|5|npm|/"
 )
 
 # macOS overrides: GPU services run locally for Metal/Apple Vision
 if [[ "$(uname -s)" == "Darwin" ]]; then
     for i in "${!SERVICES[@]}"; do
         case "${SERVICES[$i]}" in
-            jarvis-llm-proxy-api*) SERVICES[$i]="jarvis-llm-proxy-api|8000|2|local|/health" ;;
-            jarvis-ocr-service*)   SERVICES[$i]="jarvis-ocr-service|5009|3|local|/health" ;;
+            jarvis-llm-proxy-api*) SERVICES[$i]="jarvis-llm-proxy-api|7704|2|local|/health" ;;
+            jarvis-ocr-service*)   SERVICES[$i]="jarvis-ocr-service|7031|3|local|/health" ;;
         esac
     done
 fi
@@ -442,10 +442,12 @@ _stamp_env_files() {
         local env_file="${dir}/.env"
         local env_example="${dir}/.env.example"
 
-        # Copy .env.example -> .env if .env doesn't exist (or --force)
+        # Copy .env.example (or env.template) -> .env if .env doesn't exist (or --force)
         if [[ ! -f "$env_file" ]] || [[ "$FORCE_INIT" == true ]]; then
             if [[ -f "$env_example" ]]; then
                 cp "$env_example" "$env_file"
+            elif [[ -f "${dir}/env.template" ]]; then
+                cp "${dir}/env.template" "$env_file"
             else
                 touch "$env_file"
             fi
@@ -459,7 +461,7 @@ _stamp_env_files() {
 
         # --- Shared tokens (all services) ---
         _inject_env_var "$env_file" "JARVIS_AUTH_ADMIN_TOKEN" "$JARVIS_AUTH_ADMIN_TOKEN"
-        _inject_env_var "$env_file" "JARVIS_CONFIG_URL" "http://${svc_host}:8013"
+        _inject_env_var "$env_file" "JARVIS_CONFIG_URL" "http://${svc_host}:7700"
 
         # --- Service-specific tokens ---
         case "$name" in
@@ -468,7 +470,7 @@ _stamp_env_files() {
                 ;;
             jarvis-config-service)
                 _inject_env_var "$env_file" "JARVIS_CONFIG_ADMIN_TOKEN" "$JARVIS_CONFIG_ADMIN_TOKEN"
-                _inject_env_var "$env_file" "JARVIS_AUTH_URL" "http://${svc_host}:8007"
+                _inject_env_var "$env_file" "JARVIS_AUTH_URL" "http://${svc_host}:7701"
                 _inject_env_var "$env_file" "DOCKER_HOST_GATEWAY" "host.docker.internal"
                 _inject_env_var "$env_file" "JARVIS_HOST_ROOT" "$JARVIS_ROOT"
                 _inject_env_var "$env_file" "JARVIS_ROOT" "/jarvis"
@@ -484,7 +486,7 @@ _stamp_env_files() {
                 _inject_env_var "$env_file" "LLM_PROXY_INTERNAL_TOKEN" "$LLM_PROXY_INTERNAL_TOKEN"
                 ;;
             jarvis-admin)
-                _inject_env_var "$env_file" "PORT" "8016"
+                _inject_env_var "$env_file" "PORT" "7711"
                 ;;
         esac
 
@@ -495,7 +497,7 @@ _stamp_env_files() {
 
         # --- Auth service URL (env var fallback for module-level auth init) ---
         if [[ "$name" != "jarvis-auth" && "$name" != "jarvis-config-service" && "$name" != "jarvis-admin" ]]; then
-            _inject_env_var "$env_file" "JARVIS_AUTH_BASE_URL" "http://${svc_host}:8007"
+            _inject_env_var "$env_file" "JARVIS_AUTH_BASE_URL" "http://${svc_host}:7701"
         fi
 
         # --- Redis password (for services that use Redis) ---
@@ -1007,11 +1009,11 @@ _auto_register() {
     fi
 
     # Wait for config-service and auth to be ready
-    if ! _wait_for_health "jarvis-config-service" 8013 "/health" 10; then
+    if ! _wait_for_health "jarvis-config-service" 7700 "/health" 10; then
         echo -e "  ${YELLOW}SKIP${NC}  Auto-registration (config-service not ready)"
         return 0
     fi
-    if ! _wait_for_health "jarvis-auth" 8007 "/health" 10; then
+    if ! _wait_for_health "jarvis-auth" 7701 "/health" 10; then
         echo -e "  ${YELLOW}SKIP${NC}  Auto-registration (jarvis-auth not ready)"
         return 0
     fi
@@ -1020,8 +1022,7 @@ _auto_register() {
     local services_json="["
     local first=true
     for name in "${healthy[@]}"; do
-        # Skip config-service (it IS the registry) and admin (no backend registration needed)
-        [[ "$name" == "jarvis-config-service" ]] && continue
+        # Skip admin (no backend registration needed)
         [[ "$name" == "jarvis-admin" ]] && continue
 
         local port=""
@@ -1041,7 +1042,7 @@ _auto_register() {
     # No base_path — config-service uses JARVIS_ROOT volume mount
     local response body http_code
     response=$(curl -s -w "\n%{http_code}" -X POST \
-        "http://localhost:8013/v1/services/register" \
+        "http://localhost:7700/v1/services/register" \
         -H "X-Jarvis-Admin-Token: ${token}" \
         -H "Content-Type: application/json" \
         -d "{\"services\":${services_json}}" 2>/dev/null)
@@ -1098,7 +1099,8 @@ for r in data.get('results', []):
         elif [[ "$auth_ok" == "True" ]]; then
             # Existing auth client — check if .env is missing the key
             _inject_env_var "$svc_env" "JARVIS_APP_ID" "$svc_name"
-            if ! grep -q "^JARVIS_APP_KEY=.\+" "$svc_env" 2>/dev/null; then
+            if ! grep -q "^JARVIS_APP_KEY=.\+" "$svc_env" 2>/dev/null || \
+               grep -q "^JARVIS_APP_KEY=your-.*-here$" "$svc_env" 2>/dev/null; then
                 need_key+=("$svc_name")
             fi
         fi
@@ -1108,7 +1110,7 @@ for r in data.get('results', []):
     for svc_name in "${need_key[@]}"; do
         local rotate_resp rotate_body rotate_code
         rotate_resp=$(curl -s -w "\n%{http_code}" -X POST \
-            "http://localhost:8013/v1/services/rotate-key" \
+            "http://localhost:7700/v1/services/rotate-key" \
             -H "X-Jarvis-Admin-Token: ${token}" \
             -H "Content-Type: application/json" \
             -d "{\"service_name\":\"${svc_name}\"}" 2>/dev/null)
@@ -1256,6 +1258,8 @@ cmd_start() {
             echo ""
             echo -e "${DIM}Restarting services with new credentials${NC}"
             for svc_name in "${RESTART_SERVICES[@]}"; do
+                # Config-service doesn't use app-to-app credentials — no restart needed
+                [[ "$svc_name" == "jarvis-config-service" ]] && continue
                 local entry
                 entry=$(_find_service "$svc_name") || continue
                 echo -ne "  ${BLUE}...${NC}   ${svc_name}"

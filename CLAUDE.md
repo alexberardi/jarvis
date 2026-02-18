@@ -10,8 +10,8 @@ Personal voice assistant with Pi Zero nodes and self-hosted microservices.
 
 | Instead of... | Use MCP tool... |
 |---------------|-----------------|
-| `curl localhost:8006/health` | `debug_health` |
-| `curl localhost:8007/health` | `debug_health` |
+| `curl localhost:7702/health` | `debug_health` |
+| `curl localhost:7701/health` | `debug_health` |
 | Querying logs via curl | `query_logs`, `logs_tail` |
 | Getting service info | `debug_service_info` |
 
@@ -159,11 +159,11 @@ Data stores (shared infra)
 
 | Service | Port | Description |
 |---------|------|-------------|
-| jarvis-auth | 8007 | JWT authentication (register, login, refresh, logout) |
-| jarvis-command-center | 8002 | Central voice/command API, node management, tool routing |
+| jarvis-auth | 7701 | JWT authentication (register, login, refresh, logout) |
+| jarvis-command-center | 7703 | Central voice/command API, node management, tool routing |
 | jarvis-whisper-api | 9999 | Speech-to-text via whisper.cpp |
-| jarvis-ocr-service | 5009 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) |
-| jarvis-recipes-server | 8001 | Recipe CRUD and meal planning |
+| jarvis-ocr-service | 7031 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) |
+| jarvis-recipes-server | 7030 | Recipe CRUD and meal planning |
 | jarvis-node-setup | - | Client-side node code (not a server) |
 
 ## Common Patterns
@@ -192,11 +192,11 @@ cp .env.example .env  # configure
 **IMPORTANT**: Always use Docker dev scripts to start services, not direct uvicorn commands:
 
 ```bash
-# jarvis-command-center (port 8002)
+# jarvis-command-center (port 7703)
 cd /home/alex/jarvis/jarvis-command-center && bash run-docker-dev.sh
 
 # Health check endpoint: /api/v0/health
-curl http://localhost:8002/api/v0/health
+curl http://localhost:7703/api/v0/health
 ```
 
 This ensures proper environment configuration and database connections.
@@ -225,73 +225,73 @@ This ensures proper environment configuration and database connections.
 │                         JARVIS SERVICE DEPENDENCIES                      │
 └─────────────────────────────────────────────────────────────────────────┘
 
-jarvis-config-service (8013) ◄─── Service discovery hub
+jarvis-config-service (7700) ◄─── Service discovery hub
     │
     ├─── Used by: ALL services (for service URL discovery)
     └─── Dependencies: PostgreSQL
 
-jarvis-auth (8007) ◄─── Authentication hub
+jarvis-auth (7701) ◄─── Authentication hub
     │
     ├─── Used by: command-center, whisper-api, ocr-service, tts, logs, settings-server, admin
     ├─── Dependencies: PostgreSQL, jarvis-logs (optional)
     └─── Impact if down: No new logins, no app-to-app auth validation
 
-jarvis-logs (8006) ◄─── Centralized logging
+jarvis-logs (7702) ◄─── Centralized logging
     │
     ├─── Used by: ALL services (via jarvis-log-client)
-    ├─── Dependencies: Loki (3100), Grafana (8015), jarvis-auth
+    ├─── Dependencies: Loki (7032), Grafana (7033), jarvis-auth
     └─── Impact if down: Services continue, logs go to console only
 
-jarvis-command-center (8002) ◄─── Voice command orchestrator
+jarvis-command-center (7703) ◄─── Voice command orchestrator
     │
     ├─── Used by: jarvis-node-setup (Pi Zero nodes)
     ├─── Dependencies: PostgreSQL, jarvis-llm-proxy-api, jarvis-auth, jarvis-logs
     ├─── Optional calls: jarvis-whisper-api, jarvis-ocr-service
     └─── Impact if down: No voice commands processed
 
-jarvis-llm-proxy-api (8000/8010) ◄─── LLM inference
+jarvis-llm-proxy-api (7704/7705) ◄─── LLM inference
     │
     ├─── Used by: command-center, tts (wake responses)
     ├─── Dependencies: None (standalone)
     └─── Impact if down: No LLM-based command parsing, no wake responses
 
-jarvis-whisper-api (8012) ◄─── Speech-to-text
+jarvis-whisper-api (7706) ◄─── Speech-to-text
     │
     ├─── Used by: command-center (optional)
     ├─── Dependencies: whisper.cpp, jarvis-auth, jarvis-logs
     └─── Impact if down: No speech transcription (if command-center uses it)
 
-jarvis-ocr-service (5009) ◄─── Image-to-text
+jarvis-ocr-service (7031) ◄─── Image-to-text
     │
     ├─── Used by: command-center (optional)
     ├─── Dependencies: Tesseract/EasyOCR/PaddleOCR, jarvis-auth
     └─── Impact if down: No OCR functionality
 
-jarvis-tts (8009) ◄─── Text-to-speech
+jarvis-tts (7707) ◄─── Text-to-speech
     │
     ├─── Used by: jarvis-node-setup (via MQTT or direct)
     ├─── Dependencies: Piper TTS, jarvis-auth, jarvis-logs, jarvis-llm-proxy-api (wake responses)
     └─── Impact if down: No voice responses
 
-jarvis-recipes-server (8001) ◄─── Recipe CRUD
+jarvis-recipes-server (7030) ◄─── Recipe CRUD
     │
     ├─── Used by: command-center (recipe commands)
     ├─── Dependencies: PostgreSQL
     └─── Impact if down: No recipe functionality
 
-jarvis-settings-server (8014) ◄─── Settings aggregator
+jarvis-settings-server (7708) ◄─── Settings aggregator
     │
     ├─── Used by: jarvis-admin (web UI)
     ├─── Dependencies: jarvis-config-service, jarvis-auth (JWT validation)
     └─── Impact if down: No settings management UI
 
-jarvis-mcp (8011) ◄─── Claude Code integration
+jarvis-mcp (7709) ◄─── Claude Code integration
     │
     ├─── Used by: Claude Code (development)
     ├─── Dependencies: jarvis-config-service, jarvis-logs, jarvis-auth
     └─── Impact if down: No Claude Code tools
 
-jarvis-admin (5173) ◄─── Web admin UI
+jarvis-admin (7710) ◄─── Web admin UI
     │
     ├─── Used by: Administrators (browser)
     ├─── Dependencies: jarvis-config-service, jarvis-auth, jarvis-settings-server
@@ -417,8 +417,8 @@ huggingface-cli download <org>/<model-name> --local-dir ./.models/<model-name>
 **2. Ensure required services are running**
 
 Use MCP `debug_health` tool to check service status. Required services:
-- `jarvis-command-center` (port 8002)
-- `jarvis-llm-proxy-api` (port 8000 API, port 8010 queue worker)
+- `jarvis-command-center` (port 7703)
+- `jarvis-llm-proxy-api` (port 7704 API, port 7705 queue worker)
 
 If not running, start them:
 ```bash
@@ -448,7 +448,7 @@ Optional parameters:
 **4. Monitor training status**
 
 ```bash
-curl http://localhost:8000/v1/training/status/<job_id>
+curl http://localhost:7704/v1/training/status/<job_id>
 ```
 
 Or use the job ID returned from step 3 to poll status until complete.
@@ -460,8 +460,8 @@ Run end-to-end tests to validate voice command parsing across all Jarvis command
 **1. Ensure required services are running**
 
 Use MCP `debug_health` tool to check service status. Required services:
-- `jarvis-command-center` (port 8002)
-- `jarvis-llm-proxy-api` (port 8000)
+- `jarvis-command-center` (port 7703)
+- `jarvis-llm-proxy-api` (port 7704)
 
 If not running, start them (see each service's CLAUDE.md for details):
 ```bash
@@ -532,9 +532,9 @@ The output includes:
 
 | Service | Port | Status |
 |---------|------|--------|
-| ~~jarvis-ocr-service~~ | ~~5009~~ | ✅ **DONE** - 5 test files (validation, llm queue, callback, async flow) |
-| jarvis-tts | 8009 | ⚠️ Minimal (test_deps.py only) |
-| ~~jarvis-config-service~~ | ~~8013~~ | ✅ **DONE** - 44 tests, 93% coverage |
+| ~~jarvis-ocr-service~~ | ~~7031~~ | ✅ **DONE** - 5 test files (validation, llm queue, callback, async flow) |
+| jarvis-tts | 7707 | ⚠️ Minimal (test_deps.py only) |
+| ~~jarvis-config-service~~ | ~~7700~~ | ✅ **DONE** - 44 tests, 93% coverage |
 
 ### 🟡 High Priority - Code Quality
 
@@ -624,16 +624,16 @@ The output includes:
 
 | Service | Port | Size | Tests | Health |
 |---------|------|------|-------|--------|
-| jarvis-auth | 8007 | Small | ✅ Good | Clean |
-| jarvis-command-center | 8002 | Large | ✅ Good | ✅ model_service.py refactored (309 lines) |
-| jarvis-recipes-server | 8001 | Medium | ✅ Good | ✅ url_recipe_parser.py refactored (285 lines) |
-| jarvis-whisper-api | 8012 | Small | ⚠️ Minimal | Clean |
-| jarvis-ocr-service | 5009 | Medium | ✅ Good | Clean |
-| jarvis-llm-proxy-api | 8000/8010 | Medium | ⚠️ Partial | ✅ main.py refactored (87 lines) |
-| jarvis-tts | 8009 | Small | ⚠️ Minimal | Needs more tests |
-| jarvis-logs | 8006 | Small | ✅ Good | Clean |
-| jarvis-mcp | 8011 | Small | ✅ Good | Clean |
-| jarvis-config-service | 8013 | Small | ✅ Good (93%) | Clean |
+| jarvis-auth | 7701 | Small | ✅ Good | Clean |
+| jarvis-command-center | 7703 | Large | ✅ Good | ✅ model_service.py refactored (309 lines) |
+| jarvis-recipes-server | 7030 | Medium | ✅ Good | ✅ url_recipe_parser.py refactored (285 lines) |
+| jarvis-whisper-api | 7706 | Small | ⚠️ Minimal | Clean |
+| jarvis-ocr-service | 7031 | Medium | ✅ Good | Clean |
+| jarvis-llm-proxy-api | 7704/7705 | Medium | ⚠️ Partial | ✅ main.py refactored (87 lines) |
+| jarvis-tts | 7707 | Small | ⚠️ Minimal | Needs more tests |
+| jarvis-logs | 7702 | Small | ✅ Good | Clean |
+| jarvis-mcp | 7709 | Small | ✅ Good | Clean |
+| jarvis-config-service | 7700 | Small | ✅ Good (93%) | Clean |
 
 ### Libraries
 

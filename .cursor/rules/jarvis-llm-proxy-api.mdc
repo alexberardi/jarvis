@@ -7,7 +7,7 @@ globs: jarvis-llm-proxy-api/**
 
 LLM proxy service with local model inference, LoRA adapter training, and queue workers.
 
-## Running (Port 8000 API, Port 8010 Queue Worker)
+## Running (Port 7704 API, Port 7705 Queue Worker)
 
 **On macOS:** Run natively (required for Metal acceleration):
 ```bash
@@ -30,13 +30,13 @@ LLM proxy service with local model inference, LoRA adapter training, and queue w
 
 ## Two API Modes
 
-### 1. Synchronous - OpenAI-Compatible Passthrough (Port 8000)
+### 1. Synchronous - OpenAI-Compatible Passthrough (Port 7704)
 
 Accepts OpenAI-style requests and forwards them to the local model, returning OpenAI-style responses. Extra sugar added for enhanced capabilities, but the interface is standard OpenAI.
 
 This is what command-center and other services call for real-time inference.
 
-### 2. Async Queue - Long-Running Jobs (Port 8010)
+### 2. Async Queue - Long-Running Jobs (Port 7705)
 
 Queue worker for tasks that take minutes/hours:
 
@@ -53,7 +53,7 @@ jarvis-llm-proxy-api/
 ├── app/
 │   ├── api_server.py          # FastAPI routes (OpenAI-compatible)
 │   ├── model_service.py       # Model loading, inference
-│   └── queue_worker.py        # Background job processing (port 8010)
+│   └── queue_worker.py        # Background job processing (port 7705)
 ├── scripts/
 │   └── common.sh              # Shared bash functions
 ├── .models/                   # Local model storage
@@ -73,9 +73,9 @@ Env vars should only hold sensitive values. All non-sensitive config (model name
 ## Service Dependencies
 
 **Must be running:**
-- `jarvis-auth` (8007) - App-to-app auth
-- `jarvis-config-service` (8013) - Service discovery
-- `jarvis-logs` (8006) - Centralized logging
+- `jarvis-auth` (7701) - App-to-app auth
+- `jarvis-config-service` (7700) - Service discovery
+- `jarvis-logs` (7702) - Centralized logging
 - `jarvis-settings-client` - Runtime configuration (model name, context window, etc.)
 
 **Data services (from jarvis-data-stores/):**

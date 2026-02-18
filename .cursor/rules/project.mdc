@@ -18,7 +18,7 @@ Private, self-hosted voice assistant with Pi Zero nodes and microservices.
 ## Architecture
 
 ```
-Pi Zero Nodes → Command Center (8002) → Speech-to-Text (Whisper)
+Pi Zero Nodes → Command Center (7703) → Speech-to-Text (Whisper)
                                       → LLM Processing
                                       → Tool Execution → Service Response
 ```
@@ -27,16 +27,16 @@ Pi Zero Nodes → Command Center (8002) → Speech-to-Text (Whisper)
 
 | Service | Port | Description |
 |---------|------|-------------|
-| jarvis-auth | 8007 | JWT authentication, user management, app-to-app credentials |
-| jarvis-command-center | 8002 | Central voice/command API, node management, tool routing |
-| jarvis-whisper-api | 8012 | Speech-to-text via whisper.cpp |
-| jarvis-ocr-service | 5009 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) |
-| jarvis-recipes-server | 8001 | Recipe CRUD and meal planning |
-| jarvis-tts | 8009 | Text-to-speech via Piper TTS |
-| jarvis-logs | 8006 | Centralized logging (Loki + Grafana) |
-| jarvis-mcp | 8011 | MCP server for Claude Code integration |
-| jarvis-config-service | 8013 | Service discovery and configuration |
-| jarvis-llm-proxy-api | 8000/8010 | LLM proxy (API + queue worker) |
+| jarvis-auth | 7701 | JWT authentication, user management, app-to-app credentials |
+| jarvis-command-center | 7703 | Central voice/command API, node management, tool routing |
+| jarvis-whisper-api | 7706 | Speech-to-text via whisper.cpp |
+| jarvis-ocr-service | 7031 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) |
+| jarvis-recipes-server | 7030 | Recipe CRUD and meal planning |
+| jarvis-tts | 7707 | Text-to-speech via Piper TTS |
+| jarvis-logs | 7702 | Centralized logging (Loki + Grafana) |
+| jarvis-mcp | 7709 | MCP server for Claude Code integration |
+| jarvis-config-service | 7700 | Service discovery and configuration |
+| jarvis-llm-proxy-api | 7704/7705 | LLM proxy (API + queue worker) |
 
 ### Libraries
 

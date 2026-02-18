@@ -7,7 +7,7 @@ globs: jarvis-recipes-server/**
 
 Recipe CRUD and meal planning service.
 
-## Running (Port 8001)
+## Running (Port 7030)
 
 ```bash
 ./run.sh --docker              # Start in Docker (includes PostgreSQL)
@@ -52,13 +52,13 @@ app/
 ## Service Dependencies
 
 **Must be running:**
-- `jarvis-auth` (8007) - App-to-app auth
-- `jarvis-logs` (8006) - Centralized logging
-- `jarvis-ocr-service` (5009) - Image-based recipe OCR (photo/screenshot → text)
-- `jarvis-llm-proxy-api` (8000) - Validates OCR output and parses URL-based recipes
+- `jarvis-auth` (7701) - App-to-app auth
+- `jarvis-logs` (7702) - Centralized logging
+- `jarvis-ocr-service` (7031) - Image-based recipe OCR (photo/screenshot → text)
+- `jarvis-llm-proxy-api` (7704) - Validates OCR output and parses URL-based recipes
 
 **Should use but not yet confirmed/implemented:**
-- `jarvis-config-service` (8013) - Service discovery (may still use hardcoded URLs)
+- `jarvis-config-service` (7700) - Service discovery (may still use hardcoded URLs)
 - `jarvis-settings-client` - Runtime configuration (future)
 
 **Data services (from ~/jarvis-data-services):**

@@ -19,7 +19,7 @@ pytest
 ```python
 from jarvis_config_client import init, get_service_url
 
-init(config_url="http://localhost:8013")
+init(config_url="http://localhost:7700")
 auth_url = get_service_url("jarvis-auth")
 logs_url = get_service_url("jarvis-logs")
 ```
@@ -28,7 +28,7 @@ With database persistence:
 ```python
 from sqlalchemy import create_engine
 engine = create_engine("postgresql://...")
-init(config_url="http://localhost:8013", db_engine=engine)
+init(config_url="http://localhost:7700", db_engine=engine)
 ```
 
 ## Architecture
@@ -42,7 +42,7 @@ jarvis_config_client/
 ## Service Dependencies
 
 Talks to its respective service only:
-- `jarvis-config-service` (8013) - Fetches service URLs (GET /services)
+- `jarvis-config-service` (7700) - Fetches service URLs (GET /services)
 
 ## Features
 
