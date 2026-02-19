@@ -1059,6 +1059,28 @@ for d in sorted(os.listdir(models_dir)):
             context_window="32768"
         fi
 
+        # Cap context window for vLLM based on GPU VRAM
+        # config.json's max_position_embeddings is the theoretical max, not what
+        # the GPU can handle after model weights are loaded.
+        if [[ "$backend" == "VLLM" ]] && (( gpu_vram_mb > 0 )); then
+            local max_ctx
+            if (( gpu_vram_mb <= 8192 )); then
+                max_ctx=4096
+            elif (( gpu_vram_mb <= 12288 )); then
+                max_ctx=8192
+            elif (( gpu_vram_mb <= 16384 )); then
+                max_ctx=16384
+            elif (( gpu_vram_mb <= 24576 )); then
+                max_ctx=32768
+            else
+                max_ctx=131072
+            fi
+            if [[ "$context_window" =~ ^[0-9]+$ ]] && (( context_window > max_ctx )); then
+                echo -e "  ${YELLOW}NOTE${NC}  Capping context window from ${context_window} to ${max_ctx} (${gpu_vram_mb}MB VRAM)"
+                context_window="$max_ctx"
+            fi
+        fi
+
     elif [[ "$menu_type" == "catalog" ]]; then
         # Find the actual catalog entry (accounting for VRAM-filtered indices)
         local filtered_idx=0
