@@ -1059,28 +1059,6 @@ for d in sorted(os.listdir(models_dir)):
             context_window="32768"
         fi
 
-        # Cap context window for vLLM based on GPU VRAM
-        # config.json's max_position_embeddings is the theoretical max, not what
-        # the GPU can handle after model weights are loaded.
-        if [[ "$backend" == "VLLM" ]] && (( gpu_vram_mb > 0 )); then
-            local max_ctx
-            if (( gpu_vram_mb <= 8192 )); then
-                max_ctx=4096
-            elif (( gpu_vram_mb <= 12288 )); then
-                max_ctx=8192
-            elif (( gpu_vram_mb <= 16384 )); then
-                max_ctx=16384
-            elif (( gpu_vram_mb <= 24576 )); then
-                max_ctx=32768
-            else
-                max_ctx=131072
-            fi
-            if [[ "$context_window" =~ ^[0-9]+$ ]] && (( context_window > max_ctx )); then
-                echo -e "  ${YELLOW}NOTE${NC}  Capping context window from ${context_window} to ${max_ctx} (${gpu_vram_mb}MB VRAM)"
-                context_window="$max_ctx"
-            fi
-        fi
-
     elif [[ "$menu_type" == "catalog" ]]; then
         # Find the actual catalog entry (accounting for VRAM-filtered indices)
         local filtered_idx=0
@@ -1340,6 +1318,79 @@ snapshot_download(
             gpu_mem_util="0.9"
         else
             gpu_mem_util="0.8"
+        fi
+    fi
+
+    # ── Step 7b: Compute optimal context window for vLLM ──────────────────────
+    # Uses model architecture (config.json) + GPU VRAM to calculate the max
+    # context window that will actually fit in memory after model weights load.
+    if [[ "$backend" == "VLLM" ]] && (( gpu_vram_mb > 0 )); then
+        local model_dir="${models_dir}/${model_value#.models/}"
+        local config_json="${model_dir}/config.json"
+
+        if [[ -f "$config_json" ]]; then
+            local computed_ctx
+            computed_ctx=$(python3 -c "
+import json, os, sys
+
+config_path = sys.argv[1]
+gpu_vram_mb = int(sys.argv[2])
+gpu_mem_util = float(sys.argv[3])
+max_context = int(sys.argv[4])
+
+with open(config_path) as f:
+    config = json.load(f)
+
+# Architecture parameters for KV cache calculation
+num_layers = config.get('num_hidden_layers', 32)
+num_kv_heads = config.get('num_key_value_heads',
+                          config.get('num_attention_heads', 32))
+hidden_size = config.get('hidden_size', 4096)
+num_attn_heads = config.get('num_attention_heads', 32)
+head_dim = hidden_size // num_attn_heads
+
+# KV cache per token in bytes: K + V, each num_layers * num_kv_heads * head_dim * fp16
+kv_bytes_per_token = 2 * num_layers * num_kv_heads * head_dim * 2
+
+# Estimate model weight size from weight files on disk
+# Multiply by 1.4 to account for GPU overhead: CUDA kernels, activation
+# buffers, dequantization workspace, layer norms in fp32, etc.
+model_dir = os.path.dirname(config_path)
+weight_bytes = sum(
+    os.path.getsize(os.path.join(dp, f))
+    for dp, _, fnames in os.walk(model_dir)
+    for f in fnames
+    if f.endswith(('.safetensors', '.bin', '.pt', '.gguf'))
+)
+weight_mb = weight_bytes / (1024 * 1024) * 1.4
+
+# Available VRAM for KV cache after model weights + runtime overhead
+usable_mb = gpu_vram_mb * gpu_mem_util
+overhead_mb = 512  # vLLM runtime, CUDA context
+available_kv_mb = usable_mb - weight_mb - overhead_mb
+
+if available_kv_mb <= 0:
+    print(2048)
+    sys.exit(0)
+
+available_kv_bytes = available_kv_mb * 1024 * 1024
+max_feasible = int(available_kv_bytes / kv_bytes_per_token)
+
+# Leave 15% headroom for concurrent requests, then round down to nearest 1024
+max_feasible = int(max_feasible * 0.85)
+max_feasible = (max_feasible // 1024) * 1024
+
+# Clamp between reasonable bounds
+result = max(2048, min(max_feasible, max_context))
+print(result)
+" "$config_json" "$gpu_vram_mb" "${gpu_mem_util:-0.8}" "$context_window" 2>/dev/null)
+
+            if [[ -n "$computed_ctx" ]] && [[ "$computed_ctx" =~ ^[0-9]+$ ]]; then
+                if (( computed_ctx < context_window )); then
+                    echo -e "  ${YELLOW}NOTE${NC}  Context window: ${context_window} → ${computed_ctx} (fits ${gpu_vram_mb}MB VRAM)"
+                    context_window="$computed_ctx"
+                fi
+            fi
         fi
     fi
 
