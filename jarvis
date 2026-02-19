@@ -3,6 +3,7 @@
 # Usage: ./jarvis <command> [service|--all] [options]
 #
 # Commands:
+#   quickstart                  Full setup: init + start + LLM wizard
 #   init                        Generate tokens, create .env files, start infra, run migrations
 #   start [service|--all]       Start service(s) in dependency order
 #   stop [service|--all]        Stop service(s) in reverse order
@@ -112,6 +113,19 @@ REDIS_SERVICES=(
     "jarvis-llm-proxy-api"
     "jarvis-ocr-service"
     "jarvis-recipes-server"
+)
+
+# ── LLM Model Catalog ─────────────────────────────────────────────────────────
+# Format: "display_name|hf_repo_vllm|hf_repo_gguf|gguf_filename|chat_format|context_window|size_vllm|size_gguf|vram_mb|gated|quantization"
+# vLLM repos use AWQ 4-bit quantization; GGUF repos use Q4_K_M.
+# vram_mb = minimum VRAM (MB) needed for vLLM to load the AWQ model.
+LLM_MODELS=(
+    "Qwen 3 4B|Qwen/Qwen3-4B-AWQ|bartowski/Qwen3-4B-GGUF|Qwen3-4B-Q4_K_M.gguf|qwen3|40960|2.5GB|2.5GB|4096|no|awq"
+    "Llama 3.2 3B Instruct|AMead10/Llama-3.2-3B-Instruct-AWQ|bartowski/Llama-3.2-3B-Instruct-GGUF|Llama-3.2-3B-Instruct-Q4_K_M.gguf|llama3|131072|2.9GB|2GB|4096|yes|awq"
+    "Qwen 3 8B|Qwen/Qwen3-8B-AWQ|bartowski/Qwen3-8B-GGUF|Qwen3-8B-Q4_K_M.gguf|qwen3|40960|5.7GB|5GB|7168|no|awq"
+    "Llama 3.1 8B Instruct|hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4|bartowski/Meta-Llama-3.1-8B-Instruct-GGUF|Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf|llama3|131072|5.4GB|5GB|7168|yes|awq"
+    "Mistral Nemo 12B|casperhansen/mistral-nemo-instruct-2407-awq|bartowski/Mistral-Nemo-Instruct-2407-GGUF|Mistral-Nemo-Instruct-2407-Q4_K_M.gguf|mistral|131072|7.8GB|7GB|10240|no|awq"
+    "Qwen 3 14B|Qwen/Qwen3-14B-AWQ|bartowski/Qwen3-14B-GGUF|Qwen3-14B-Q4_K_M.gguf|qwen3|40960|9.4GB|9GB|12288|no|awq"
 )
 
 # ── Colors ───────────────────────────────────────────────────────────────────
@@ -490,8 +504,9 @@ _stamp_env_files() {
                 ;;
         esac
 
-        # --- App identity (all services except config-service and admin) ---
-        if [[ "$name" != "jarvis-config-service" && "$name" != "jarvis-admin" ]]; then
+        # --- App identity (all services except admin) ---
+        # Config-service needs JARVIS_APP_ID for settings gateway (app-to-app auth to other services)
+        if [[ "$name" != "jarvis-admin" ]]; then
             _inject_env_var "$env_file" "JARVIS_APP_ID" "$name"
         fi
 
@@ -541,6 +556,18 @@ _stamp_env_files() {
 
         echo -e "  ${GREEN}OK${NC}    ${name}/.env"
     done
+
+    # Stamp ~/.jarvis/admin.json with correct service URLs
+    local admin_json="${TOKEN_DIR}/admin.json"
+    cat > "$admin_json" << ADMINJSON
+{
+  "authUrl": "http://localhost:7701",
+  "configServiceUrl": "http://localhost:7700",
+  "llmProxyUrl": "http://localhost:7704",
+  "commandCenterUrl": "http://localhost:7703"
+}
+ADMINJSON
+    echo -e "  ${GREEN}OK${NC}    ~/.jarvis/admin.json"
 }
 
 _start_infra() {
@@ -793,6 +820,642 @@ cmd_init() {
     echo ""
     echo -e "${BOLD}Init complete.${NC}"
     echo -e "  Next: ${CYAN}./jarvis start --all${NC}"
+}
+
+# ── LLM Wizard ────────────────────────────────────────────────────────────────
+
+_write_llm_env_fallback() {
+    # Write LLM settings to .env file (used when API is unavailable)
+    local llm_env="$1" model_value="$2" backend="$3" chat_format="$4"
+    local context_window="$5" n_threads="$6" gpu_mem_util="$7" quantization="${8:-}"
+
+    _inject_env_var "$llm_env" "JARVIS_MODEL_NAME" "$model_value"
+    _inject_env_var "$llm_env" "JARVIS_MODEL_BACKEND" "$backend"
+    _inject_env_var "$llm_env" "JARVIS_CHAT_FORMAT" "$chat_format"
+    _inject_env_var "$llm_env" "JARVIS_CONTEXT_WINDOW" "$context_window"
+
+    if [[ "$backend" == "GGUF" && -n "$n_threads" ]]; then
+        _inject_env_var "$llm_env" "JARVIS_GGUF_N_THREADS" "$n_threads"
+        _inject_env_var "$llm_env" "JARVIS_GGUF_N_GPU_LAYERS" "-1"
+    fi
+    if [[ "$backend" == "VLLM" ]]; then
+        if [[ -n "$gpu_mem_util" ]]; then
+            _inject_env_var "$llm_env" "JARVIS_VLLM_GPU_MEMORY_UTILIZATION" "$gpu_mem_util"
+        fi
+        if [[ -n "$quantization" ]]; then
+            _inject_env_var "$llm_env" "JARVIS_VLLM_QUANTIZATION" "$quantization"
+        fi
+    fi
+}
+
+_llm_wizard() {
+    echo ""
+    echo -e "${BOLD}LLM SETUP WIZARD${NC}"
+    echo ""
+
+    local llm_dir="${JARVIS_ROOT}/jarvis-llm-proxy-api"
+    local models_dir="${llm_dir}/.models"
+    mkdir -p "$models_dir"
+
+    # ── Step 1: Detect OS, backend, and GPU VRAM ─────────────────────────────
+    local os_name backend gpu_vram_mb=0
+    os_name="$(uname -s)"
+    if [[ "$os_name" == "Darwin" ]]; then
+        backend="GGUF"
+        echo -e "  Detected ${CYAN}macOS${NC} — using ${CYAN}GGUF${NC} backend (llama.cpp + Metal)"
+    else
+        backend="VLLM"
+        if command -v nvidia-smi >/dev/null 2>&1; then
+            gpu_vram_mb=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
+            gpu_vram_mb="${gpu_vram_mb// /}"
+            [[ "$gpu_vram_mb" =~ ^[0-9]+$ ]] || gpu_vram_mb=0
+            if (( gpu_vram_mb > 0 )); then
+                echo -e "  Detected ${CYAN}Linux + NVIDIA GPU${NC} (${CYAN}$((gpu_vram_mb / 1024))GB VRAM${NC}) — using ${CYAN}vLLM${NC} backend"
+            else
+                backend="GGUF"
+                echo -e "  Detected ${CYAN}Linux (no NVIDIA GPU)${NC} — using ${CYAN}GGUF${NC} backend (llama.cpp)"
+            fi
+        else
+            backend="GGUF"
+            echo -e "  Detected ${CYAN}Linux (no NVIDIA GPU)${NC} — using ${CYAN}GGUF${NC} backend (llama.cpp)"
+        fi
+    fi
+    echo ""
+
+    # ── Step 2: Scan already-downloaded models ────────────────────────────────
+    local -a local_models=()   # "dir_name|model_type|quant_method|bits|context_window|disk_size"
+    local local_model_data
+    local_model_data=$(python3 -c "
+import json, os, sys, subprocess
+models_dir = sys.argv[1]
+for d in sorted(os.listdir(models_dir)):
+    config = os.path.join(models_dir, d, 'config.json')
+    if not os.path.isfile(config):
+        continue
+    try:
+        c = json.load(open(config))
+    except Exception:
+        continue
+    mt = c.get('model_type', 'unknown')
+    qc = c.get('quantization_config', {})
+    qm = qc.get('quant_method', 'fp16')
+    bits = qc.get('bits', 16)
+    ctx = c.get('max_position_embeddings', 0)
+    # Get disk size
+    try:
+        out = subprocess.check_output(['du', '-sh', os.path.join(models_dir, d)], stderr=subprocess.DEVNULL, text=True)
+        size = out.split()[0]
+    except Exception:
+        size = '?'
+    print(f'{d}|{mt}|{qm}|{bits}|{ctx}|{size}')
+" "$models_dir" 2>/dev/null)
+
+    if [[ -n "$local_model_data" ]]; then
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && local_models+=("$line")
+        done <<< "$local_model_data"
+    fi
+
+    # ── Step 3: Display model menu ────────────────────────────────────────────
+    local idx=0
+    local -a menu_entries=()   # "type|index"  type=local or catalog
+    local -a menu_labels=()    # display labels for menu items
+
+    # Show local models first
+    if (( ${#local_models[@]} > 0 )); then
+        echo -e "  ${BOLD}Already downloaded:${NC}"
+        echo ""
+
+        for lm in "${local_models[@]}"; do
+            local dir_name quant_method bits disk_size model_type
+            dir_name=$(_parse_field "$lm" 1)
+            model_type=$(_parse_field "$lm" 2)
+            quant_method=$(_parse_field "$lm" 3)
+            bits=$(_parse_field "$lm" 4)
+            disk_size=$(_parse_field "$lm" 6)
+
+            local quant_label="${quant_method}"
+            if [[ "$quant_method" != "fp16" ]]; then
+                quant_label="${quant_method} ${bits}-bit"
+            fi
+
+            idx=$((idx + 1))
+            menu_entries+=("local|$((idx - 1))")
+            menu_labels+=("$dir_name")
+
+            printf "    ${CYAN}%2d)${NC} %-40s ${DIM}%s, %s${NC}\n" "$idx" "$dir_name" "$quant_label" "$disk_size"
+        done
+        echo ""
+    fi
+
+    # Show downloadable catalog (filtered by VRAM for vLLM)
+    echo -e "  ${BOLD}Download new model:${NC}"
+    if [[ "$backend" == "VLLM" ]] && (( gpu_vram_mb > 0 )); then
+        echo -e "  ${DIM}Showing models that fit in ${gpu_vram_mb}MB VRAM (with headroom)${NC}"
+    fi
+    echo ""
+
+    local usable_vram_mb=0
+    if (( gpu_vram_mb > 0 )); then
+        # Reserve ~15% headroom for KV cache and overhead
+        usable_vram_mb=$(( gpu_vram_mb * 85 / 100 ))
+    fi
+
+    local catalog_count=0
+    for model_entry in "${LLM_MODELS[@]}"; do
+        local display_name size_display gated_badge vram_required
+        display_name=$(_parse_field "$model_entry" 1)
+        vram_required=$(_parse_field "$model_entry" 9)
+        gated_badge=""
+        if [[ "$(_parse_field "$model_entry" 10)" == "yes" ]]; then
+            gated_badge=" ${YELLOW}[gated]${NC}"
+        fi
+
+        if [[ "$backend" == "GGUF" ]]; then
+            size_display=$(_parse_field "$model_entry" 8)
+        else
+            size_display=$(_parse_field "$model_entry" 7)
+        fi
+
+        # Filter by VRAM for vLLM
+        if [[ "$backend" == "VLLM" ]] && (( usable_vram_mb > 0 )) && [[ "$vram_required" =~ ^[0-9]+$ ]]; then
+            if (( vram_required > usable_vram_mb )); then
+                continue
+            fi
+        fi
+
+        idx=$((idx + 1))
+        catalog_count=$((catalog_count + 1))
+        menu_entries+=("catalog|$((catalog_count - 1))")
+        menu_labels+=("$display_name")
+
+        printf "    ${CYAN}%2d)${NC} %-40s ${DIM}~%s${NC}%b\n" "$idx" "$display_name" "$size_display" "$gated_badge"
+    done
+
+    if (( catalog_count == 0 )); then
+        echo -e "    ${DIM}(no models fit in detected VRAM — use 'Other' below)${NC}"
+    fi
+
+    # "Other" option
+    idx=$((idx + 1))
+    menu_entries+=("custom|0")
+    menu_labels+=("Other")
+    printf "    ${CYAN}%2d)${NC} %-40s ${DIM}(enter HuggingFace model ID)${NC}\n" "$idx" "Other"
+    echo ""
+
+    # ── Step 4: Prompt for selection ──────────────────────────────────────────
+    local selection
+    while true; do
+        printf "  Select model [1-%d]: " "$idx"
+        read -r selection
+        if [[ "$selection" =~ ^[0-9]+$ ]] && (( selection >= 1 && selection <= idx )); then
+            break
+        fi
+        echo -e "  ${RED}Invalid selection. Please enter a number 1-${idx}.${NC}"
+    done
+
+    local menu_type menu_idx
+    menu_type=$(_parse_field "${menu_entries[$((selection - 1))]}" 1)
+    menu_idx=$(_parse_field "${menu_entries[$((selection - 1))]}" 2)
+
+    local model_name hf_repo_vllm hf_repo_gguf gguf_filename chat_format context_window is_gated quantization=""
+    local skip_download=false
+
+    if [[ "$menu_type" == "local" ]]; then
+        # User picked an already-downloaded model
+        local lm_entry="${local_models[$menu_idx]}"
+        local dir_name model_type quant_method
+        dir_name=$(_parse_field "$lm_entry" 1)
+        model_type=$(_parse_field "$lm_entry" 2)
+        quant_method=$(_parse_field "$lm_entry" 3)
+        context_window=$(_parse_field "$lm_entry" 5)
+
+        model_name="$dir_name"
+        hf_repo_vllm=""
+        hf_repo_gguf=""
+        gguf_filename=""
+        is_gated="no"
+        skip_download=true
+
+        # Map model_type → chat_format
+        case "$model_type" in
+            llama)   chat_format="llama3" ;;
+            qwen2)   chat_format="qwen2" ;;
+            qwen3)   chat_format="qwen3" ;;
+            mistral) chat_format="mistral" ;;
+            gemma|gemma2|gemma3) chat_format="gemma" ;;
+            *)       chat_format="chatml" ;;
+        esac
+
+        # Detect quantization
+        if [[ "$quant_method" == "awq" ]]; then
+            quantization="awq"
+        elif [[ "$quant_method" == "gptq" || "$quant_method" == "compressed-tensors" ]]; then
+            quantization="$quant_method"
+        fi
+
+        # Default context if not detected
+        if [[ "$context_window" == "0" || -z "$context_window" ]]; then
+            context_window="32768"
+        fi
+
+    elif [[ "$menu_type" == "catalog" ]]; then
+        # Find the actual catalog entry (accounting for VRAM-filtered indices)
+        local filtered_idx=0
+        local selected_entry=""
+        for model_entry in "${LLM_MODELS[@]}"; do
+            local vram_required
+            vram_required=$(_parse_field "$model_entry" 9)
+
+            # Apply same VRAM filter as display
+            if [[ "$backend" == "VLLM" ]] && (( usable_vram_mb > 0 )) && [[ "$vram_required" =~ ^[0-9]+$ ]]; then
+                if (( vram_required > usable_vram_mb )); then
+                    continue
+                fi
+            fi
+
+            if (( filtered_idx == menu_idx )); then
+                selected_entry="$model_entry"
+                break
+            fi
+            filtered_idx=$((filtered_idx + 1))
+        done
+
+        model_name=$(_parse_field "$selected_entry" 1)
+        hf_repo_vllm=$(_parse_field "$selected_entry" 2)
+        hf_repo_gguf=$(_parse_field "$selected_entry" 3)
+        gguf_filename=$(_parse_field "$selected_entry" 4)
+        chat_format=$(_parse_field "$selected_entry" 5)
+        context_window=$(_parse_field "$selected_entry" 6)
+        is_gated=$(_parse_field "$selected_entry" 10)
+        quantization=$(_parse_field "$selected_entry" 11)
+
+    elif [[ "$menu_type" == "custom" ]]; then
+        printf "  HuggingFace repo (e.g. org/model-name): "
+        read -r hf_repo_vllm
+        if [[ -z "$hf_repo_vllm" ]]; then
+            echo -e "  ${RED}HuggingFace repo is required.${NC}"
+            return 1
+        fi
+        if ! [[ "$hf_repo_vllm" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
+            echo -e "  ${RED}Invalid repo format. Expected: org/model-name${NC}"
+            return 1
+        fi
+        hf_repo_gguf="$hf_repo_vllm"
+        gguf_filename=""
+
+        if [[ "$backend" == "GGUF" ]]; then
+            printf "  GGUF filename (e.g. model-Q4_K_M.gguf): "
+            read -r gguf_filename
+            if [[ -z "$gguf_filename" ]]; then
+                echo -e "  ${RED}GGUF filename is required.${NC}"
+                return 1
+            fi
+            if [[ "$gguf_filename" == */* || "$gguf_filename" == *..* ]] || ! [[ "$gguf_filename" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+                echo -e "  ${RED}Invalid filename. Must not contain path separators.${NC}"
+                return 1
+            fi
+            printf "  GGUF repo (if different, or press Enter): "
+            read -r custom_gguf_repo
+            if [[ -n "$custom_gguf_repo" ]]; then
+                if ! [[ "$custom_gguf_repo" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
+                    echo -e "  ${RED}Invalid repo format. Expected: org/model-name${NC}"
+                    return 1
+                fi
+                hf_repo_gguf="$custom_gguf_repo"
+            fi
+        fi
+
+        printf "  Chat format (llama3/qwen3/mistral/gemma/chatml): "
+        read -r chat_format
+        chat_format="${chat_format:-chatml}"
+        case "$chat_format" in
+            llama3|qwen2|qwen3|mistral|gemma|chatml) ;;
+            *) echo -e "  ${RED}Invalid chat format. Must be: llama3, qwen2, qwen3, mistral, gemma, or chatml${NC}"; return 1 ;;
+        esac
+
+        printf "  Context window [32768]: "
+        read -r context_window
+        context_window="${context_window:-32768}"
+        if ! [[ "$context_window" =~ ^[0-9]+$ ]]; then
+            echo -e "  ${RED}Context window must be a number. Using default 32768.${NC}"
+            context_window="32768"
+        fi
+
+        printf "  Quantization (awq/gptq/none) [none]: "
+        read -r quantization
+        quantization="${quantization:-}"
+        case "$quantization" in
+            awq|gptq|compressed-tensors|""|none) [[ "$quantization" == "none" ]] && quantization="" ;;
+            *) echo -e "  ${RED}Invalid quantization. Must be: awq, gptq, or none${NC}"; return 1 ;;
+        esac
+
+        model_name="$hf_repo_vllm"
+        is_gated="no"
+    fi
+
+    echo ""
+    echo -e "  Selected: ${CYAN}${model_name}${NC} (${backend})"
+
+    # ── Step 5: Handle gated models ───────────────────────────────────────────
+    if [[ "$is_gated" == "yes" ]]; then
+        echo ""
+        echo -e "  ${YELLOW}This model requires a HuggingFace access agreement.${NC}"
+        echo -e "  ${DIM}Visit the model page on huggingface.co and accept the terms first.${NC}"
+
+        local hf_token=""
+
+        if [[ -n "${HUGGINGFACE_HUB_TOKEN:-}" ]]; then
+            hf_token="$HUGGINGFACE_HUB_TOKEN"
+            echo -e "  ${GREEN}OK${NC}    Found HuggingFace token in environment"
+        elif [[ -f "${HOME}/.cache/huggingface/token" ]]; then
+            hf_token=$(cat "${HOME}/.cache/huggingface/token" 2>/dev/null)
+            echo -e "  ${GREEN}OK${NC}    Found HuggingFace token in ~/.cache/huggingface/token"
+        fi
+
+        if [[ -z "$hf_token" ]]; then
+            printf "  Enter HuggingFace token (hf_...): "
+            read -rs hf_token
+            echo ""
+            if [[ -z "$hf_token" ]]; then
+                echo -e "  ${RED}No token provided. Cannot download gated model.${NC}"
+                return 1
+            fi
+        fi
+
+        export HUGGINGFACE_HUB_TOKEN="$hf_token"
+
+        _inject_env_var "$TOKEN_FILE" "HUGGINGFACE_HUB_TOKEN" "$hf_token"
+        chmod 600 "$TOKEN_FILE"
+        echo -e "  ${GREEN}OK${NC}    Saved HuggingFace token to ${TOKEN_FILE}"
+    fi
+
+    # ── Step 6: Download model (if needed) ────────────────────────────────────
+    local model_value
+
+    if [[ "$skip_download" == true ]]; then
+        # Local model — already have it
+        model_value=".models/${model_name}"
+        echo ""
+        echo -e "  ${GREEN}OK${NC}    Using existing model at ${models_dir}/${model_name}"
+    else
+        # Check if model already exists on disk
+        local model_exists=false
+        local model_path
+
+        if [[ "$backend" == "GGUF" ]]; then
+            model_path="${models_dir}/${gguf_filename}"
+            [[ -f "$model_path" ]] && model_exists=true
+        else
+            local repo_basename="${hf_repo_vllm##*/}"
+            model_path="${models_dir}/${repo_basename}"
+            [[ -d "$model_path" && -f "${model_path}/config.json" ]] && model_exists=true
+        fi
+
+        if [[ "$model_exists" == true ]]; then
+            echo ""
+            echo -e "  ${GREEN}OK${NC}    Model already downloaded at ${model_path}"
+        else
+            echo ""
+            echo -e "  ${DIM}Downloading model (this may take a while)...${NC}"
+
+            # Find a Python with huggingface_hub installed
+            local hf_python=""
+            for candidate in "${llm_dir}/.venv/bin/python" "${llm_dir}/venv/bin/python" "python3"; do
+                if [[ -x "$candidate" ]] || command -v "$candidate" >/dev/null 2>&1; then
+                    if "$candidate" -c "import huggingface_hub" 2>/dev/null; then
+                        hf_python="$candidate"
+                        break
+                    fi
+                fi
+            done
+
+            if [[ -z "$hf_python" ]]; then
+                # Try to install huggingface-hub
+                echo -e "  ${DIM}Installing huggingface-hub...${NC}"
+                local pip_cmd=""
+                if [[ -x "${llm_dir}/.venv/bin/pip" ]]; then
+                    pip_cmd="${llm_dir}/.venv/bin/pip"
+                elif [[ -x "${llm_dir}/venv/bin/pip" ]]; then
+                    pip_cmd="${llm_dir}/venv/bin/pip"
+                else
+                    pip_cmd="pip3"
+                fi
+
+                if "$pip_cmd" install -q huggingface-hub 2>/dev/null; then
+                    for candidate in "${llm_dir}/.venv/bin/python" "${llm_dir}/venv/bin/python" "python3"; do
+                        if "$candidate" -c "import huggingface_hub" 2>/dev/null; then
+                            hf_python="$candidate"
+                            break
+                        fi
+                    done
+                fi
+            fi
+
+            if [[ -z "$hf_python" ]]; then
+                echo -e "  ${RED}FAIL${NC}  Cannot find Python with huggingface_hub installed"
+                echo -e "  ${DIM}Install manually: pip install huggingface-hub${NC}"
+                return 1
+            fi
+
+            if [[ "$backend" == "GGUF" ]]; then
+                echo -e "  ${DIM}Downloading: ${hf_repo_gguf} / ${gguf_filename}${NC}"
+                if ! "$hf_python" -c "
+from huggingface_hub import hf_hub_download
+import sys, os
+token = os.environ.get('HUGGINGFACE_HUB_TOKEN', '') or None
+hf_hub_download(
+    repo_id=sys.argv[1],
+    filename=sys.argv[2],
+    local_dir=sys.argv[3],
+    token=token,
+)
+" "$hf_repo_gguf" "$gguf_filename" "$models_dir"; then
+                    echo -e "  ${RED}FAIL${NC}  Download failed"
+                    return 1
+                fi
+            else
+                local repo_basename="${hf_repo_vllm##*/}"
+                echo -e "  ${DIM}Downloading: ${hf_repo_vllm} → .models/${repo_basename}${NC}"
+                if ! "$hf_python" -c "
+from huggingface_hub import snapshot_download
+import sys, os
+token = os.environ.get('HUGGINGFACE_HUB_TOKEN', '') or None
+snapshot_download(
+    repo_id=sys.argv[1],
+    local_dir=sys.argv[2],
+    token=token,
+)
+" "$hf_repo_vllm" "${models_dir}/${repo_basename}"; then
+                    echo -e "  ${RED}FAIL${NC}  Download failed"
+                    return 1
+                fi
+            fi
+
+            echo -e "  ${GREEN}OK${NC}    Model downloaded"
+        fi
+
+        if [[ "$backend" == "GGUF" ]]; then
+            model_value=".models/${gguf_filename}"
+        else
+            model_value=".models/${hf_repo_vllm##*/}"
+        fi
+    fi
+
+    # ── Step 7: Detect hardware defaults ──────────────────────────────────────
+    local n_threads="" gpu_mem_util=""
+
+    if [[ "$backend" == "GGUF" ]]; then
+        if [[ "$os_name" == "Darwin" ]]; then
+            n_threads=$(sysctl -n hw.logicalcpu 2>/dev/null || echo "4")
+        else
+            n_threads=$(nproc 2>/dev/null || echo "4")
+        fi
+    fi
+
+    if [[ "$backend" == "VLLM" ]] && (( gpu_vram_mb > 0 )); then
+        if (( gpu_vram_mb > 16000 )); then
+            gpu_mem_util="0.9"
+        else
+            gpu_mem_util="0.8"
+        fi
+    fi
+
+    # ── Step 8: Write settings to database via llm-proxy API ──────────────────
+    echo ""
+    echo -e "  ${DIM}Configuring LLM settings...${NC}"
+
+    local llm_env="${llm_dir}/.env"
+    local app_id="" app_key=""
+
+    if [[ -f "$llm_env" ]]; then
+        app_id=$(grep "^JARVIS_APP_ID=" "$llm_env" 2>/dev/null | cut -d= -f2-)
+        app_key=$(grep "^JARVIS_APP_KEY=" "$llm_env" 2>/dev/null | cut -d= -f2-)
+    fi
+
+    if [[ -z "$app_id" || -z "$app_key" ]]; then
+        echo -e "  ${YELLOW}WARN${NC}  No JARVIS_APP_ID/JARVIS_APP_KEY in llm-proxy .env"
+        echo -e "  ${DIM}Settings will be applied on next service restart via env vars.${NC}"
+        _write_llm_env_fallback "$llm_env" "$model_value" "$backend" "$chat_format" \
+            "$context_window" "$n_threads" "$gpu_mem_util" "$quantization"
+        echo -e "  ${GREEN}OK${NC}    Settings written to ${llm_env}"
+    else
+        # Build JSON safely using python to avoid injection
+        local settings_json
+        settings_json=$(python3 -c "
+import json, sys
+s = {
+    'model.main.name': sys.argv[1],
+    'model.main.backend': sys.argv[2],
+    'model.main.chat_format': sys.argv[3],
+    'model.main.context_window': int(sys.argv[4]),
+}
+backend = sys.argv[2]
+n_threads = sys.argv[5]
+gpu_mem = sys.argv[6]
+quantization = sys.argv[7]
+if backend == 'GGUF':
+    s['inference.gguf.n_gpu_layers'] = -1
+    if n_threads:
+        s['inference.gguf.n_threads'] = int(n_threads)
+if backend == 'VLLM':
+    if gpu_mem:
+        s['inference.vllm.gpu_memory_utilization'] = float(gpu_mem)
+    if quantization:
+        s['inference.vllm.quantization'] = quantization
+print(json.dumps({'settings': s}))
+" "$model_value" "$backend" "$chat_format" "$context_window" "${n_threads:-}" "${gpu_mem_util:-}" "${quantization:-}" 2>/dev/null)
+
+        if [[ -z "$settings_json" ]]; then
+            echo -e "  ${YELLOW}WARN${NC}  Failed to build settings JSON, falling back to .env"
+            _write_llm_env_fallback "$llm_env" "$model_value" "$backend" "$chat_format" \
+                "$context_window" "$n_threads" "$gpu_mem_util" "$quantization"
+            echo -e "  ${GREEN}OK${NC}    Settings written to ${llm_env}"
+        else
+            local api_response api_code
+            api_response=$(curl -s -w "\n%{http_code}" --max-time 10 --connect-timeout 5 -X PUT \
+                "http://localhost:7704/settings/" \
+                -H "X-Jarvis-App-Id: ${app_id}" \
+                -H "X-Jarvis-App-Key: ${app_key}" \
+                -H "Content-Type: application/json" \
+                -d "$settings_json" 2>/dev/null)
+
+            api_code=$(echo "$api_response" | tail -1)
+
+            if [[ "$api_code" == "200" ]]; then
+                echo -e "  ${GREEN}OK${NC}    Settings written to database via API"
+            else
+                echo -e "  ${YELLOW}WARN${NC}  API returned HTTP ${api_code}, falling back to .env"
+                _write_llm_env_fallback "$llm_env" "$model_value" "$backend" "$chat_format" \
+                    "$context_window" "$n_threads" "$gpu_mem_util" "$quantization"
+                echo -e "  ${GREEN}OK${NC}    Settings written to ${llm_env}"
+            fi
+        fi
+    fi
+
+    # ── Step 9: Restart llm-proxy ─────────────────────────────────────────────
+    echo ""
+    echo -e "  ${DIM}Restarting LLM proxy service...${NC}"
+
+    local llm_entry
+    llm_entry=$(_find_service "jarvis-llm-proxy-api") || {
+        echo -e "  ${YELLOW}WARN${NC}  jarvis-llm-proxy-api not found in service registry"
+        return 0
+    }
+
+    _restart_one "$llm_entry" "$STANDALONE"
+
+    echo -ne "  ${BLUE}...${NC}   Waiting for LLM proxy to load model (up to 120s)"
+    if _wait_for_health "jarvis-llm-proxy-api" 7704 "/health" 120; then
+        echo -e "\r  ${GREEN}OK${NC}    LLM proxy healthy                                   "
+    else
+        echo -e "\r  ${YELLOW}WARN${NC}  LLM proxy health check timed out (model may still be loading)"
+        echo -e "  ${DIM}Check status: curl http://localhost:7704/health${NC}"
+    fi
+
+    # Summary
+    echo ""
+    echo -e "  ${GREEN}LLM configured:${NC} ${CYAN}${model_name}${NC} on ${CYAN}${backend}${NC}"
+    if [[ -n "$quantization" ]]; then
+        echo -e "  ${DIM}Quantization: ${quantization}${NC}"
+    fi
+    if [[ "$backend" == "GGUF" ]]; then
+        echo -e "  ${DIM}Threads: ${n_threads}, GPU layers: all${NC}"
+    elif [[ -n "$gpu_mem_util" ]]; then
+        echo -e "  ${DIM}GPU memory utilization: ${gpu_mem_util}${NC}"
+    fi
+}
+
+cmd_quickstart() {
+    echo -e "${BOLD}JARVIS QUICKSTART${NC}"
+    echo -e "${DIM}Full setup: init + start + LLM wizard${NC}"
+    echo ""
+
+    # Step 1-7: Run init (tokens, DBs, env files, infra, migrations)
+    echo -e "${BOLD}Phase 1: Initialize${NC}"
+    cmd_init
+
+    # Step 8: Start all services
+    echo ""
+    echo -e "${BOLD}Phase 2: Start Services${NC}"
+    cmd_start "--all" "" "$STANDALONE"
+
+    # Step 9: LLM Setup Wizard
+    echo ""
+    echo -e "${BOLD}Phase 3: LLM Setup${NC}"
+
+    # Check if llm-proxy is running before starting wizard
+    if ! _wait_for_health "jarvis-llm-proxy-api" 7704 "/health" 30; then
+        echo -e "  ${YELLOW}WARN${NC}  jarvis-llm-proxy-api not responding, skipping LLM wizard"
+        echo -e "  ${DIM}Run the wizard later: ./jarvis llm-setup${NC}"
+    else
+        _llm_wizard
+    fi
+
+    echo ""
+    echo -e "${BOLD}Quickstart complete.${NC}"
+    echo -e "  Dashboard: ${CYAN}http://localhost:7710${NC}"
+    echo -e "  LLM API:   ${CYAN}http://localhost:7704/health${NC}"
 }
 
 # ── Start ────────────────────────────────────────────────────────────────────
@@ -1670,6 +2333,7 @@ usage() {
     echo "Usage: ./jarvis <command> [service|--all] [options]"
     echo ""
     echo "Commands:"
+    echo "  quickstart                  Full setup: init + start + LLM wizard"
     echo "  init                        Generate tokens, create .env files, start infra"
     echo "  start [service|--all]       Start service(s) in dependency order"
     echo "  stop [service|--all]        Stop service(s) in reverse order"
@@ -1678,6 +2342,7 @@ usage() {
     echo "  status                      Show all service statuses"
     echo "  health                      Hit health endpoints"
     echo "  logs <service>              Tail Docker logs for a service"
+    echo "  llm-setup                   Run the LLM setup wizard"
     echo "  doctor                      Run system diagnostics"
     echo ""
     echo "Options:"
@@ -1726,6 +2391,9 @@ done
 set -- "${POSITIONAL[@]}"
 
 case "${1:-}" in
+    quickstart)
+        cmd_quickstart
+        ;;
     init)
         cmd_init
         ;;
@@ -1760,6 +2428,9 @@ case "${1:-}" in
             exit 1
         fi
         cmd_logs "$2"
+        ;;
+    llm-setup)
+        _llm_wizard
         ;;
     doctor)
         cmd_doctor
