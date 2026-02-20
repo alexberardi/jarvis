@@ -116,16 +116,16 @@ REDIS_SERVICES=(
 )
 
 # ── LLM Model Catalog ─────────────────────────────────────────────────────────
-# Format: "display_name|hf_repo_vllm|hf_repo_gguf|gguf_filename|chat_format|context_window|size_vllm|size_gguf|vram_mb|gated|quantization"
-# vLLM repos use AWQ 4-bit quantization; GGUF repos use Q4_K_M.
+# Format: "display_name|hf_repo_vllm|hf_repo_gguf|gguf_filename|chat_format|context_window|size_vllm|size_gguf|vram_mb|gated|quantization|hf_repo_mlx|size_mlx"
+# vLLM repos use AWQ 4-bit quantization; GGUF repos use Q4_K_M; MLX repos use 4-bit.
 # vram_mb = minimum VRAM (MB) needed for vLLM to load the AWQ model.
 LLM_MODELS=(
-    "Qwen 3 4B|Qwen/Qwen3-4B-AWQ|bartowski/Qwen3-4B-GGUF|Qwen3-4B-Q4_K_M.gguf|qwen3|40960|2.5GB|2.5GB|4096|no|awq"
-    "Llama 3.2 3B Instruct|AMead10/Llama-3.2-3B-Instruct-AWQ|bartowski/Llama-3.2-3B-Instruct-GGUF|Llama-3.2-3B-Instruct-Q4_K_M.gguf|llama3|131072|2.9GB|2GB|4096|yes|awq"
-    "Qwen 3 8B|Qwen/Qwen3-8B-AWQ|bartowski/Qwen3-8B-GGUF|Qwen3-8B-Q4_K_M.gguf|qwen3|40960|5.7GB|5GB|7168|no|awq"
-    "Llama 3.1 8B Instruct|hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4|bartowski/Meta-Llama-3.1-8B-Instruct-GGUF|Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf|llama3|131072|5.4GB|5GB|7168|yes|awq"
-    "Mistral Nemo 12B|casperhansen/mistral-nemo-instruct-2407-awq|bartowski/Mistral-Nemo-Instruct-2407-GGUF|Mistral-Nemo-Instruct-2407-Q4_K_M.gguf|mistral|131072|7.8GB|7GB|10240|no|awq"
-    "Qwen 3 14B|Qwen/Qwen3-14B-AWQ|bartowski/Qwen3-14B-GGUF|Qwen3-14B-Q4_K_M.gguf|qwen3|40960|9.4GB|9GB|12288|no|awq"
+    "Qwen 3 4B|Qwen/Qwen3-4B-AWQ|bartowski/Qwen3-4B-GGUF|Qwen3-4B-Q4_K_M.gguf|qwen3|40960|2.5GB|2.5GB|4096|no|awq|mlx-community/Qwen3-4B-4bit|2.5GB"
+    "Llama 3.2 3B Instruct|AMead10/Llama-3.2-3B-Instruct-AWQ|bartowski/Llama-3.2-3B-Instruct-GGUF|Llama-3.2-3B-Instruct-Q4_K_M.gguf|llama3|131072|2.9GB|2GB|4096|yes|awq|mlx-community/Llama-3.2-3B-Instruct-4bit|2GB"
+    "Qwen 3 8B|Qwen/Qwen3-8B-AWQ|bartowski/Qwen3-8B-GGUF|Qwen3-8B-Q4_K_M.gguf|qwen3|40960|5.7GB|5GB|7168|no|awq|mlx-community/Qwen3-8B-4bit|5GB"
+    "Llama 3.1 8B Instruct|hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4|bartowski/Meta-Llama-3.1-8B-Instruct-GGUF|Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf|llama3|131072|5.4GB|5GB|7168|yes|awq|mlx-community/Meta-Llama-3.1-8B-Instruct-4bit|5GB"
+    "Mistral Nemo 12B|casperhansen/mistral-nemo-instruct-2407-awq|bartowski/Mistral-Nemo-Instruct-2407-GGUF|Mistral-Nemo-Instruct-2407-Q4_K_M.gguf|mistral|131072|7.8GB|7GB|10240|no|awq|mlx-community/Mistral-Nemo-Instruct-2407-4bit|7GB"
+    "Qwen 3 14B|Qwen/Qwen3-14B-AWQ|bartowski/Qwen3-14B-GGUF|Qwen3-14B-Q4_K_M.gguf|qwen3|40960|9.4GB|9GB|12288|no|awq|mlx-community/Qwen3-14B-4bit|9GB"
 )
 
 # ── Colors ───────────────────────────────────────────────────────────────────
@@ -834,11 +834,19 @@ _write_llm_env_fallback() {
     _inject_env_var "$llm_env" "JARVIS_CHAT_FORMAT" "$chat_format"
     _inject_env_var "$llm_env" "JARVIS_CONTEXT_WINDOW" "$context_window"
 
-    if [[ "$backend" == "GGUF" && -n "$n_threads" ]]; then
-        _inject_env_var "$llm_env" "JARVIS_GGUF_N_THREADS" "$n_threads"
+    if [[ "$backend" == "GGUF" ]]; then
+        _inject_env_var "$llm_env" "JARVIS_INFERENCE_ENGINE" "llama_cpp"
+        if [[ -n "$n_threads" ]]; then
+            _inject_env_var "$llm_env" "JARVIS_GGUF_N_THREADS" "$n_threads"
+        fi
         _inject_env_var "$llm_env" "JARVIS_GGUF_N_GPU_LAYERS" "-1"
-    fi
-    if [[ "$backend" == "VLLM" ]]; then
+    elif [[ "$backend" == "MLX" ]]; then
+        _inject_env_var "$llm_env" "JARVIS_INFERENCE_ENGINE" "mlx"
+    elif [[ "$backend" == "TRANSFORMERS" ]]; then
+        _inject_env_var "$llm_env" "JARVIS_INFERENCE_ENGINE" "transformers"
+        _inject_env_var "$llm_env" "JARVIS_DEVICE" "mps"
+    elif [[ "$backend" == "VLLM" ]]; then
+        _inject_env_var "$llm_env" "JARVIS_INFERENCE_ENGINE" "vllm"
         if [[ -n "$gpu_mem_util" ]]; then
             _inject_env_var "$llm_env" "JARVIS_VLLM_GPU_MEMORY_UTILIZATION" "$gpu_mem_util"
         fi
@@ -861,8 +869,24 @@ _llm_wizard() {
     local os_name backend gpu_vram_mb=0
     os_name="$(uname -s)"
     if [[ "$os_name" == "Darwin" ]]; then
-        backend="GGUF"
-        echo -e "  Detected ${CYAN}macOS${NC} — using ${CYAN}GGUF${NC} backend (llama.cpp + Metal)"
+        echo -e "  Detected ${CYAN}macOS (Apple Silicon)${NC}"
+        echo ""
+        echo -e "  Select backend:"
+        echo -e "    ${CYAN}1)${NC} GGUF          llama.cpp + Metal ${DIM}(recommended, lowest memory)${NC}"
+        echo -e "    ${CYAN}2)${NC} MLX           Apple MLX framework ${DIM}(fastest on Apple Silicon)${NC}"
+        echo -e "    ${CYAN}3)${NC} Transformers  HuggingFace Transformers + MPS ${DIM}(most compatible)${NC}"
+        echo ""
+        local backend_choice
+        printf "  Backend [1]: "
+        read -r backend_choice
+        backend_choice="${backend_choice:-1}"
+        case "$backend_choice" in
+            1) backend="GGUF" ;;
+            2) backend="MLX" ;;
+            3) backend="TRANSFORMERS" ;;
+            *) echo -e "  ${RED}Invalid selection. Using GGUF.${NC}"; backend="GGUF" ;;
+        esac
+        echo -e "  Using ${CYAN}${backend}${NC} backend"
     else
         backend="VLLM"
         if command -v nvidia-smi >/dev/null 2>&1; then
@@ -883,13 +907,26 @@ _llm_wizard() {
     echo ""
 
     # ── Step 2: Scan already-downloaded models ────────────────────────────────
-    local -a local_models=()   # "dir_name|model_type|quant_method|bits|context_window|disk_size"
+    # Format: "dir_name|model_type|quant_method|bits|context_window|disk_size|model_format"
+    # model_format: gguf, mlx, hf (HuggingFace/vLLM/Transformers)
+    local -a local_models=()
     local local_model_data
     local_model_data=$(python3 -c "
-import json, os, sys, subprocess
+import json, os, sys, subprocess, glob
 models_dir = sys.argv[1]
+backend = sys.argv[2]
+
+def get_size(path):
+    try:
+        out = subprocess.check_output(['du', '-sh', path], stderr=subprocess.DEVNULL, text=True)
+        return out.split()[0]
+    except Exception:
+        return '?'
+
+# Scan directories with config.json (HF, MLX, vLLM models)
 for d in sorted(os.listdir(models_dir)):
-    config = os.path.join(models_dir, d, 'config.json')
+    full_path = os.path.join(models_dir, d)
+    config = os.path.join(full_path, 'config.json')
     if not os.path.isfile(config):
         continue
     try:
@@ -901,20 +938,51 @@ for d in sorted(os.listdir(models_dir)):
     qm = qc.get('quant_method', 'fp16')
     bits = qc.get('bits', 16)
     ctx = c.get('max_position_embeddings', 0)
-    # Get disk size
-    try:
-        out = subprocess.check_output(['du', '-sh', os.path.join(models_dir, d)], stderr=subprocess.DEVNULL, text=True)
-        size = out.split()[0]
-    except Exception:
-        size = '?'
-    print(f'{d}|{mt}|{qm}|{bits}|{ctx}|{size}')
-" "$models_dir" 2>/dev/null)
+    size = get_size(full_path)
+    # Detect format: MLX has .safetensors + weights in specific MLX layout
+    has_mlx_weights = any(f.endswith('.safetensors') for f in os.listdir(full_path))
+    model_format = 'hf'
+    if os.path.isfile(os.path.join(full_path, 'config.json')):
+        try:
+            cfg = json.load(open(os.path.join(full_path, 'config.json')))
+            if 'model_type' in cfg and cfg.get('quantization_config', {}).get('quant_method') in ('mlx', ):
+                model_format = 'mlx'
+            elif os.path.isfile(os.path.join(full_path, 'weights.npz')) or \
+                 any(f.startswith('model') and f.endswith('.safetensors') for f in os.listdir(full_path)):
+                # Check for MLX-specific marker files
+                if os.path.isfile(os.path.join(full_path, 'tokenizer_config.json')) and qm == 'fp16' and '4bit' in d.lower():
+                    model_format = 'mlx'
+        except Exception:
+            pass
+    print(f'{d}|{mt}|{qm}|{bits}|{ctx}|{size}|{model_format}')
+
+# Scan standalone .gguf files
+for f in sorted(os.listdir(models_dir)):
+    if f.lower().endswith('.gguf') and os.path.isfile(os.path.join(models_dir, f)):
+        size = get_size(os.path.join(models_dir, f))
+        print(f'{f}|unknown|gguf|4|0|{size}|gguf')
+" "$models_dir" "$backend" 2>/dev/null)
 
     if [[ -n "$local_model_data" ]]; then
         while IFS= read -r line; do
             [[ -n "$line" ]] && local_models+=("$line")
         done <<< "$local_model_data"
     fi
+
+    # Filter local models by backend compatibility
+    local -a filtered_local_models=()
+    for lm in "${local_models[@]}"; do
+        local fmt
+        fmt=$(_parse_field "$lm" 7)
+        case "$backend" in
+            GGUF)         [[ "$fmt" == "gguf" ]] && filtered_local_models+=("$lm") ;;
+            MLX)          [[ "$fmt" == "mlx" || "$fmt" == "hf" ]] && filtered_local_models+=("$lm") ;;
+            TRANSFORMERS) [[ "$fmt" == "hf" ]] && filtered_local_models+=("$lm") ;;
+            VLLM)         [[ "$fmt" == "hf" ]] && filtered_local_models+=("$lm") ;;
+            *)            filtered_local_models+=("$lm") ;;
+        esac
+    done
+    local_models=("${filtered_local_models[@]}")
 
     # ── Step 3: Display model menu ────────────────────────────────────────────
     local idx=0
@@ -973,6 +1041,14 @@ for d in sorted(os.listdir(models_dir)):
 
         if [[ "$backend" == "GGUF" ]]; then
             size_display=$(_parse_field "$model_entry" 8)
+            # Skip entries without GGUF repo
+            [[ -z "$(_parse_field "$model_entry" 3)" ]] && continue
+        elif [[ "$backend" == "MLX" ]]; then
+            size_display=$(_parse_field "$model_entry" 13)
+            # Skip entries without MLX repo
+            [[ -z "$(_parse_field "$model_entry" 12)" ]] && continue
+        elif [[ "$backend" == "TRANSFORMERS" ]]; then
+            size_display=$(_parse_field "$model_entry" 7)
         else
             size_display=$(_parse_field "$model_entry" 7)
         fi
@@ -1018,7 +1094,7 @@ for d in sorted(os.listdir(models_dir)):
     menu_type=$(_parse_field "${menu_entries[$((selection - 1))]}" 1)
     menu_idx=$(_parse_field "${menu_entries[$((selection - 1))]}" 2)
 
-    local model_name hf_repo_vllm hf_repo_gguf gguf_filename chat_format context_window is_gated quantization=""
+    local model_name hf_repo_vllm hf_repo_gguf gguf_filename chat_format context_window is_gated quantization="" hf_repo_mlx=""
     local skip_download=false
 
     if [[ "$menu_type" == "local" ]]; then
@@ -1089,19 +1165,25 @@ for d in sorted(os.listdir(models_dir)):
         context_window=$(_parse_field "$selected_entry" 6)
         is_gated=$(_parse_field "$selected_entry" 10)
         quantization=$(_parse_field "$selected_entry" 11)
+        hf_repo_mlx=$(_parse_field "$selected_entry" 12)
 
     elif [[ "$menu_type" == "custom" ]]; then
         printf "  HuggingFace repo (e.g. org/model-name): "
-        read -r hf_repo_vllm
-        if [[ -z "$hf_repo_vllm" ]]; then
+        local custom_repo
+        read -r custom_repo
+        if [[ -z "$custom_repo" ]]; then
             echo -e "  ${RED}HuggingFace repo is required.${NC}"
             return 1
         fi
-        if ! [[ "$hf_repo_vllm" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
+        if ! [[ "$custom_repo" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
             echo -e "  ${RED}Invalid repo format. Expected: org/model-name${NC}"
             return 1
         fi
-        hf_repo_gguf="$hf_repo_vllm"
+
+        # Route the repo to the correct backend variable
+        hf_repo_vllm="$custom_repo"
+        hf_repo_gguf="$custom_repo"
+        hf_repo_mlx=""
         gguf_filename=""
 
         if [[ "$backend" == "GGUF" ]]; then
@@ -1116,6 +1198,7 @@ for d in sorted(os.listdir(models_dir)):
                 return 1
             fi
             printf "  GGUF repo (if different, or press Enter): "
+            local custom_gguf_repo
             read -r custom_gguf_repo
             if [[ -n "$custom_gguf_repo" ]]; then
                 if ! [[ "$custom_gguf_repo" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
@@ -1124,6 +1207,8 @@ for d in sorted(os.listdir(models_dir)):
                 fi
                 hf_repo_gguf="$custom_gguf_repo"
             fi
+        elif [[ "$backend" == "MLX" ]]; then
+            hf_repo_mlx="$custom_repo"
         fi
 
         printf "  Chat format (llama3/qwen3/mistral/gemma/chatml): "
@@ -1142,15 +1227,17 @@ for d in sorted(os.listdir(models_dir)):
             context_window="32768"
         fi
 
-        printf "  Quantization (awq/gptq/none) [none]: "
-        read -r quantization
-        quantization="${quantization:-}"
-        case "$quantization" in
-            awq|gptq|compressed-tensors|""|none) [[ "$quantization" == "none" ]] && quantization="" ;;
-            *) echo -e "  ${RED}Invalid quantization. Must be: awq, gptq, or none${NC}"; return 1 ;;
-        esac
+        if [[ "$backend" == "VLLM" ]]; then
+            printf "  Quantization (awq/gptq/none) [none]: "
+            read -r quantization
+            quantization="${quantization:-}"
+            case "$quantization" in
+                awq|gptq|compressed-tensors|""|none) [[ "$quantization" == "none" ]] && quantization="" ;;
+                *) echo -e "  ${RED}Invalid quantization. Must be: awq, gptq, or none${NC}"; return 1 ;;
+            esac
+        fi
 
-        model_name="$hf_repo_vllm"
+        model_name="$custom_repo"
         is_gated="no"
     fi
 
@@ -1206,6 +1293,14 @@ for d in sorted(os.listdir(models_dir)):
         if [[ "$backend" == "GGUF" ]]; then
             model_path="${models_dir}/${gguf_filename}"
             [[ -f "$model_path" ]] && model_exists=true
+        elif [[ "$backend" == "MLX" ]]; then
+            local mlx_basename="${hf_repo_mlx##*/}"
+            model_path="${models_dir}/${mlx_basename}"
+            [[ -d "$model_path" && -f "${model_path}/config.json" ]] && model_exists=true
+        elif [[ "$backend" == "TRANSFORMERS" ]]; then
+            local tf_basename="${hf_repo_vllm##*/}"
+            model_path="${models_dir}/${tf_basename}"
+            [[ -d "$model_path" && -f "${model_path}/config.json" ]] && model_exists=true
         else
             local repo_basename="${hf_repo_vllm##*/}"
             model_path="${models_dir}/${repo_basename}"
@@ -1274,7 +1369,24 @@ hf_hub_download(
                     echo -e "  ${RED}FAIL${NC}  Download failed"
                     return 1
                 fi
+            elif [[ "$backend" == "MLX" ]]; then
+                local mlx_basename="${hf_repo_mlx##*/}"
+                echo -e "  ${DIM}Downloading: ${hf_repo_mlx} → .models/${mlx_basename}${NC}"
+                if ! "$hf_python" -c "
+from huggingface_hub import snapshot_download
+import sys, os
+token = os.environ.get('HUGGINGFACE_HUB_TOKEN', '') or None
+snapshot_download(
+    repo_id=sys.argv[1],
+    local_dir=sys.argv[2],
+    token=token,
+)
+" "$hf_repo_mlx" "${models_dir}/${mlx_basename}"; then
+                    echo -e "  ${RED}FAIL${NC}  Download failed"
+                    return 1
+                fi
             else
+                # TRANSFORMERS and VLLM both use snapshot_download from the vLLM/HF repo
                 local repo_basename="${hf_repo_vllm##*/}"
                 echo -e "  ${DIM}Downloading: ${hf_repo_vllm} → .models/${repo_basename}${NC}"
                 if ! "$hf_python" -c "
@@ -1297,6 +1409,8 @@ snapshot_download(
 
         if [[ "$backend" == "GGUF" ]]; then
             model_value=".models/${gguf_filename}"
+        elif [[ "$backend" == "MLX" ]]; then
+            model_value=".models/${hf_repo_mlx##*/}"
         else
             model_value=".models/${hf_repo_vllm##*/}"
         fi
@@ -1428,10 +1542,17 @@ n_threads = sys.argv[5]
 gpu_mem = sys.argv[6]
 quantization = sys.argv[7]
 if backend == 'GGUF':
+    s['inference.general.engine'] = 'llama_cpp'
     s['inference.gguf.n_gpu_layers'] = -1
     if n_threads:
         s['inference.gguf.n_threads'] = int(n_threads)
-if backend == 'VLLM':
+elif backend == 'MLX':
+    s['inference.general.engine'] = 'mlx'
+elif backend == 'TRANSFORMERS':
+    s['inference.general.engine'] = 'transformers'
+    s['inference.transformers.device'] = 'mps'
+elif backend == 'VLLM':
+    s['inference.general.engine'] = 'vllm'
     if gpu_mem:
         s['inference.vllm.gpu_memory_utilization'] = float(gpu_mem)
     if quantization:
@@ -1466,7 +1587,11 @@ print(json.dumps({'settings': s}))
         fi
     fi
 
-    # ── Step 9: Restart llm-proxy ─────────────────────────────────────────────
+    # ── Step 9: Enable model service + restart llm-proxy ─────────────────────
+    # On macOS, run.sh defaults RUN_MODEL_SERVICE=false to avoid vllm import crash.
+    # Now that we've configured a macOS-friendly backend, enable the model service.
+    _inject_env_var "$llm_env" "RUN_MODEL_SERVICE" "true"
+
     echo ""
     echo -e "  ${DIM}Restarting LLM proxy service...${NC}"
 
@@ -1489,11 +1614,15 @@ print(json.dumps({'settings': s}))
     # Summary
     echo ""
     echo -e "  ${GREEN}LLM configured:${NC} ${CYAN}${model_name}${NC} on ${CYAN}${backend}${NC}"
-    if [[ -n "$quantization" ]]; then
+    if [[ -n "$quantization" && "$backend" != "GGUF" && "$backend" != "MLX" ]]; then
         echo -e "  ${DIM}Quantization: ${quantization}${NC}"
     fi
     if [[ "$backend" == "GGUF" ]]; then
         echo -e "  ${DIM}Threads: ${n_threads}, GPU layers: all${NC}"
+    elif [[ "$backend" == "MLX" ]]; then
+        echo -e "  ${DIM}Engine: MLX (Apple Silicon optimized)${NC}"
+    elif [[ "$backend" == "TRANSFORMERS" ]]; then
+        echo -e "  ${DIM}Engine: Transformers, Device: MPS${NC}"
     elif [[ -n "$gpu_mem_util" ]]; then
         echo -e "  ${DIM}GPU memory utilization: ${gpu_mem_util}${NC}"
     fi
@@ -1508,10 +1637,10 @@ cmd_quickstart() {
     echo -e "${BOLD}Phase 1: Initialize${NC}"
     cmd_init
 
-    # Step 8: Start all services
+    # Step 8: Start all services (--build ensures fresh images)
     echo ""
     echo -e "${BOLD}Phase 2: Start Services${NC}"
-    cmd_start "--all" "" "$STANDALONE"
+    cmd_start "--all" "--build" "$STANDALONE"
 
     # Step 9: LLM Setup Wizard
     echo ""
@@ -1596,6 +1725,27 @@ _start_one() {
 
     # Check if already running
     if curl -sf --max-time 2 "http://localhost:${port}$(_get_health "$entry")" >/dev/null 2>&1; then
+        # For npm services with a backend server, also verify the backend is up.
+        # The frontend (e.g. Vite on 7710) may be running from a tmux session while
+        # the backend (e.g. Fastify on 7711) is not — we need to start the backend.
+        if [[ "$mode" == "npm" && -f "${dir}/server/package.json" ]]; then
+            local backend_port=$((port + 1))
+            if ! curl -sf --max-time 2 "http://localhost:${backend_port}/" >/dev/null 2>&1; then
+                echo -e "  ${GREEN}UP${NC}    ${name} :${port} ${DIM}(starting backend server)${NC}"
+                local nvm_init="${HOME}/.nvm/nvm.sh"
+                local nvm_cmd=""
+                if [[ -f "$nvm_init" ]]; then
+                    nvm_cmd="source $nvm_init && nvm use default --silent &&"
+                fi
+                local env_export=""
+                if [[ -f "$dir/.env" ]]; then
+                    env_export="set -a && source $dir/.env && set +a &&"
+                fi
+                (cd "$dir/server" && eval "$env_export $nvm_cmd exec npm run dev" >> "${LOG_DIR}/${name}-server.log" 2>&1) &
+                echo $! > "${PID_DIR}/${name}-server.pid"
+                return 0
+            fi
+        fi
         echo -e "  ${GREEN}UP${NC}    ${name} :${port}"
         return 0
     fi
