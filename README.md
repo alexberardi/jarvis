@@ -181,6 +181,17 @@ The LLM proxy supports multiple inference backends, so you can match your hardwa
 | **Transformers** | HuggingFace models without conversion | CUDA, CPU |
 | **REST** | Remote APIs (OpenAI, Anthropic, Ollama) | N/A |
 
+### Command Parsing Benchmarks
+
+Tested on 72 voice commands across 19 command types (weather, timers, sports, calendar, smart home, etc.) on an Apple M2 Max. GGUF backend with llama.cpp, Metal acceleration.
+
+| Model | Quant | Size | Success Rate | Avg Latency |
+|-------|-------|------|-------------|-------------|
+| Hermes 3 Llama 3.1 8B | Q4_K_M | 4.6 GB | **93.1%** | **1.32s** |
+| Llama 3.1 8B Instruct | Q6_K | 6.1 GB | 90.3% | 2.19s |
+
+Both use text-based tool calling with prompt providers tuned to each model's native function-calling format. No adapter fine-tuning applied — these are base model results.
+
 ### LoRA Adapter Training
 
 Jarvis can fine-tune per-node LoRA adapters to improve command recognition for your specific voice and vocabulary:
