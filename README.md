@@ -187,10 +187,11 @@ Tested on 72 voice commands across 19 command types (weather, timers, sports, ca
 
 | Model | Quant | Size | Success Rate | Avg Latency |
 |-------|-------|------|-------------|-------------|
-| Hermes 3 Llama 3.1 8B | Q4_K_M | 4.6 GB | **93.1%** | **1.32s** |
+| Qwen 2.5 7B Instruct | Q4_K_M | 4.3 GB | **93.1%** | **1.14s** |
+| Hermes 3 Llama 3.1 8B | Q4_K_M | 4.6 GB | **93.1%** | 1.32s |
 | Llama 3.1 8B Instruct | Q6_K | 6.1 GB | 90.3% | 2.19s |
 
-Both use text-based tool calling with prompt providers tuned to each model's native function-calling format. No adapter fine-tuning applied — these are base model results.
+All use text-based tool calling with prompt providers tuned to each model's native function-calling format. No adapter fine-tuning applied — these are base model results.
 
 ### LoRA Adapter Training
 
