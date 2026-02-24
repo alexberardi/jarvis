@@ -185,13 +185,15 @@ The LLM proxy supports multiple inference backends, so you can match your hardwa
 
 Tested on 72 voice commands across 19 command types (weather, timers, sports, calendar, smart home, etc.) on an Apple M2 Max. GGUF backend with llama.cpp, Metal acceleration.
 
-| Model | Quant | Size | Success Rate | Avg Latency |
-|-------|-------|------|-------------|-------------|
-| Qwen 2.5 7B Instruct | Q4_K_M | 4.3 GB | **93.1%** | **1.14s** |
-| Hermes 3 Llama 3.1 8B | Q4_K_M | 4.6 GB | **93.1%** | 1.32s |
-| Llama 3.1 8B Instruct | Q6_K | 6.1 GB | 90.3% | 2.19s |
+| Model | Quant | Size | Chat Format | Untrained | | Trained | |
+|-------|-------|------|-------------|-----------|---------|---------|---------|
+| | | | | Success Rate | Avg Latency | Success Rate | Avg Latency |
+| Llama 3.1 8B Instruct | Q6_K | 6.1 GB | `llama-3` | **93.1%** | **1.3s** | — | — |
+| Gemma 2 9B Instruct | Q4_K_M | 5.4 GB | `chatml` | **93.1%** | 2.5s | — | — |
+| Hermes 3 Llama 3.1 8B | Q4_K_M | 4.6 GB | `chatml` | 91.7% | 1.4s | — | — |
+| Qwen 2.5 7B Instruct | Q4_K_M | 4.3 GB | `chatml` | 91.7% | 1.1s | — | — |
 
-All use text-based tool calling with prompt providers tuned to each model's native function-calling format. No adapter fine-tuning applied — these are base model results.
+Chat Format is the `model.main.chat_format` setting for llama-cpp-python. Note: Gemma 2 requires `chatml` (not `gemma`) because the `gemma` chat format does not support system messages. All use text-based tool calling with prompt providers tuned to each model's native function-calling format. "Untrained" = base model results. "Trained" = with LoRA adapter fine-tuned on Jarvis command examples.
 
 ### LoRA Adapter Training
 
