@@ -35,13 +35,13 @@ The jarvis-mcp server provides these tools:
 | **Architecture** | 9/10 | All monolithic files split (llm-proxy, command-center, url_recipe_parser), clean module boundaries |
 | **Design** | 7/10 | Good separation of concerns, improved exception handling |
 | **Security** | 7/10 | JWT auth, encrypted secrets, app-to-app auth. Needs: rate limiting, CORS |
-| **Testing** | 7/10 | Core services tested, ocr-service tests added |
+| **Testing** | 8/10 | Core services tested, ocr-service + tts tests added |
 | **Documentation** | 8/10 | Per-service CLAUDE.md, comprehensive main docs |
 | **Maintainability** | 8/10 | Smaller files, specific exceptions, all logging via JarvisLogger |
 | **Code Quality** | 9/10 | Bare excepts fixed, broad exceptions fixed, print() migrated, 132 unused imports removed |
 | **Observability** | 8/10 | All production code uses JarvisLogger (worker `_safe_print` is acceptable) |
 
-**Average: 7.88/10** → Target: 9/10
+**Average: 8.00/10** → Target: 9/10
 
 ### Quick Wins to Improve
 - [x] ~~Add tests to config-service~~ ✅ 44 tests, 93% coverage
@@ -533,7 +533,7 @@ The output includes:
 | Service | Port | Status |
 |---------|------|--------|
 | ~~jarvis-ocr-service~~ | ~~7031~~ | ✅ **DONE** - 5 test files (validation, llm queue, callback, async flow) |
-| jarvis-tts | 7707 | ⚠️ Minimal (test_deps.py only) |
+| ~~jarvis-tts~~ | ~~7707~~ | ✅ **DONE** - 59 tests, 98% coverage, CI workflow |
 | ~~jarvis-config-service~~ | ~~7700~~ | ✅ **DONE** - 44 tests, 93% coverage |
 
 ### 🟡 High Priority - Code Quality
@@ -630,7 +630,7 @@ The output includes:
 | jarvis-whisper-api | 7706 | Small | ⚠️ Minimal | Clean |
 | jarvis-ocr-service | 7031 | Medium | ✅ Good | Clean |
 | jarvis-llm-proxy-api | 7704/7705 | Medium | ⚠️ Partial | ✅ main.py refactored (87 lines) |
-| jarvis-tts | 7707 | Small | ⚠️ Minimal | Needs more tests |
+| jarvis-tts | 7707 | Small | ✅ Good (98%) | Clean |
 | jarvis-logs | 7702 | Small | ✅ Good | Clean |
 | jarvis-mcp | 7709 | Small | ✅ Good | Clean |
 | jarvis-config-service | 7700 | Small | ✅ Good (93%) | Clean |
