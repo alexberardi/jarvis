@@ -14,6 +14,11 @@ Personal voice assistant with Pi Zero nodes and self-hosted microservices.
 | `curl localhost:7701/health` | `debug_health` |
 | Querying logs via curl | `query_logs`, `logs_tail` |
 | Getting service info | `debug_service_info` |
+| `docker ps` | `docker_ps` |
+| `docker logs <container>` | `docker_logs` |
+| `docker restart <container>` | `docker_restart` |
+| `docker compose up -d` | `docker_compose_up` |
+| `docker compose down` | `docker_compose_down` |
 
 The jarvis-mcp server provides these tools:
 - `debug_health` - Check health of all services (or specific ones)
@@ -21,6 +26,11 @@ The jarvis-mcp server provides these tools:
 - `query_logs` - Query logs with filters
 - `logs_tail` - Get recent logs from a service
 - `get_log_stats` - Get log statistics
+- `docker_ps` - List jarvis containers (name, status, image, ports)
+- `docker_logs` - Get recent logs from a container (partial name match)
+- `docker_restart` / `docker_stop` / `docker_start` - Container lifecycle
+- `docker_compose_up` / `docker_compose_down` - Compose stack management
+- `docker_compose_list` - List services with compose files
 
 ## Core Principles
 
@@ -697,7 +707,7 @@ To add:
 - [ ] **Node status** - `node_list`, `node_status` to see Pi Zero online state, last activity
 - [ ] **Training dashboard** - `training_status`, `adapter_list` to check training jobs and deployed adapters
 - [x] **Database MCP** - Read-only access for debugging
-- [ ] **Docker MCP** - Container status, logs, restart services
+- [x] **Docker MCP** - Container status, logs, restart services, compose up/down
 
 **System tools (called by services at runtime):**
 - [x] **Date resolution** - `datetime_resolve`, `datetime_context` - resolve "tomorrow morning" → ISO datetime (feat/datetime-tools)
