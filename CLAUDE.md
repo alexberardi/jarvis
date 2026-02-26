@@ -211,6 +211,73 @@ curl http://localhost:7703/api/v0/health
 
 This ensures proper environment configuration and database connections.
 
+### Development Model (Mixed Local/Docker)
+
+Jarvis uses a **mixed local/Docker model** that varies by platform. The `./jarvis` CLI handles this automatically.
+
+#### macOS (Apple Silicon)
+
+GPU-dependent services run **locally** to access Metal and Apple Vision frameworks. Everything else runs in Docker.
+
+```
+┌─ Docker (jarvis-net) ──────────────────────────────────┐
+│  jarvis-config-service  (7700)                         │
+│  jarvis-auth            (7701)                         │
+│  jarvis-logs            (7702)                         │
+│  jarvis-command-center  (7703)                         │
+│  jarvis-tts             (7707)                         │
+│  jarvis-whisper-api     (7706)                         │
+│  jarvis-recipes-server  (7030)                         │
+│  jarvis-settings-server (7708)                         │
+│  jarvis-mcp             (7709)                         │
+│  jarvis-admin           (7710)                         │
+│  PostgreSQL, Redis, MinIO                              │
+└────────────────────────────────────────────────────────┘
+         ▲ host.docker.internal
+         │
+┌─ Local (native) ──────────────────────────────────────┐
+│  jarvis-llm-proxy-api  (7704/7705)  ← Metal/MLX/GGUF │
+│  jarvis-ocr-service    (7031)       ← Apple Vision    │
+└────────────────────────────────────────────────────────┘
+```
+
+The `jarvis` script detects Darwin and overrides `mode=docker` → `mode=local` for llm-proxy and ocr-service. Local services connect to dockerized infrastructure (PostgreSQL, Redis) via `localhost`.
+
+#### Linux (NVIDIA GPU)
+
+**Everything runs in Docker**, including GPU services. LLM inference uses `nvidia-docker` (NVIDIA Container Toolkit) for GPU passthrough.
+
+```
+┌─ Docker (jarvis-net) ──────────────────────────────────┐
+│  All services from macOS list, plus:                   │
+│  jarvis-llm-proxy-api  (7704/7705)  ← vLLM + CUDA    │
+│  jarvis-ocr-service    (7031)       ← Tesseract/etc   │
+│  PostgreSQL, Redis, MinIO                              │
+│                                                        │
+│  GPU services use:                                     │
+│    deploy.resources.reservations.devices:               │
+│      - driver: nvidia                                  │
+│        count: all                                      │
+│        capabilities: [gpu]                             │
+└────────────────────────────────────────────────────────┘
+```
+
+#### Network Modes
+
+The `./jarvis` CLI supports three network modes:
+
+| Mode | Flag | How services communicate |
+|------|------|--------------------------|
+| **Bridge** (default) | — | Shared `jarvis-net` Docker network, services use container names |
+| **Host** | `--no-network` | No shared network, services use `host.docker.internal` |
+| **Standalone** | `--standalone` | Single service with its own PostgreSQL container |
+
+#### How Docker ↔ Local Communication Works
+
+- Docker containers reach **local** services via `host.docker.internal` (mapped by `extra_hosts` in compose files)
+- Local services reach **Docker** infrastructure (PostgreSQL, Redis) via `localhost` (ports are bound to host)
+- `JARVIS_CONFIG_URL_STYLE=dockerized` tells config-service to return `host.docker.internal` URLs for Docker consumers
+
 ## Environment Variables (Cross-Service)
 
 | Variable | Used By | Description |

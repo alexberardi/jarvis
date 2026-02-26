@@ -13,6 +13,7 @@
 #   health                      Hit health endpoints
 #   logs <service>              Tail Docker logs for a service
 #   doctor                      Run system diagnostics
+#   test [service|--all]        Run tests for service(s)
 #
 # Options:
 #   --standalone                Start service with its own postgres (solo dev)
@@ -52,6 +53,31 @@ SERVICES=(
     "jarvis-settings-server|7708|4|docker|/health"
     "jarvis-mcp|7709|4|docker|/health"
     "jarvis-admin|7710|5|npm|/"
+)
+
+# ── Test registry ─────────────────────────────────────────────────────────
+# Format: "name|type|test_command|cov_package"
+# type: pytest (uses .venv), poetry (uses poetry run), npm (uses npm), skip
+# test_command: custom command, or empty for default (pytest -v --tb=short)
+# cov_package: package name for --cov flag
+TEST_REGISTRY=(
+    "jarvis-config-service|pytest||app"
+    "jarvis-auth|poetry||jarvis_auth"
+    "jarvis-logs|pytest||app"
+    "jarvis-log-client|pytest||jarvis_log_client"
+    "jarvis-config-client|pytest||jarvis_config_client"
+    "jarvis-command-center|pytest|pytest tests/test_settings.py tests/test_tool_routing.py tests/test_date_resolution.py tests/test_tool_builder.py tests/test_tool_execution_engine.py tests/test_core_rules.py tests/test_param_validation.py tests/test_system_prompt_builder.py tests/test_prompt_provider_factory.py tests/test_service_config.py tests/test_node_settings.py tests/test_settings_service.py tests/test_tts_client.py tests/test_usage_logging.py tests/test_conversation_handler.py tests/test_date_detector.py tests/test_media.py tests/test_warmup_service.py tests/test_whisper_client.py tests/test_test_commands.py tests/test_provisioning_tokens.py -v --tb=short|app"
+    "jarvis-llm-proxy-api|pytest|pytest -v --tb=short --ignore=tests/manual --ignore=tests/test_adapter_cache.py|app"
+    "jarvis-tts|pytest||app"
+    "jarvis-whisper-api|pytest||app"
+    "jarvis-ocr-service|poetry||app"
+    "jarvis-recipes-server|poetry||jarvis_recipes"
+    "jarvis-settings-server|pytest||app"
+    "jarvis-settings-client|pytest||jarvis_settings_client"
+    "jarvis-mcp|pytest||jarvis_mcp"
+    "jarvis-auth-client|pytest||jarvis_auth_client"
+    "jarvis-node-setup|pytest|pytest tests/test_provisioning/ tests/integration/test_ha_commands.py tests/integration/test_timer_commands.py -v --tb=short|core"
+    "jarvis-installer|npm|npm test|"
 )
 
 # macOS overrides: GPU services run locally for Metal/Apple Vision
@@ -2550,6 +2576,289 @@ cmd_doctor() {
     echo ""
 }
 
+# ── Test runner ────────────────────────────────────────────────────────────
+
+_test_field() { echo "$1" | cut -d'|' -f"$2"; }
+
+_ensure_test_env() {
+    local service_dir="$1"
+
+    # Find or create venv
+    local venv_dir=""
+    if [[ -d "${service_dir}/.venv" ]]; then
+        venv_dir="${service_dir}/.venv"
+    elif [[ -d "${service_dir}/venv" ]]; then
+        venv_dir="${service_dir}/venv"
+    else
+        venv_dir="${service_dir}/.venv"
+        python3 -m venv "$venv_dir" 2>/dev/null || {
+            echo -e "    ${RED}Failed to create venv${NC}"
+            return 1
+        }
+    fi
+
+    # Smart install: skip if marker is newer than pyproject.toml
+    local marker="${venv_dir}/.deps_installed"
+    local pyproject="${service_dir}/pyproject.toml"
+
+    if [[ -f "$marker" ]] && [[ -f "$pyproject" ]] && [[ "$marker" -nt "$pyproject" ]]; then
+        return 0
+    fi
+
+    # Install dependencies
+    local pip="${venv_dir}/bin/pip"
+    if [[ -f "$pyproject" ]] && grep -q 'optional-dependencies' "$pyproject" && grep -q 'dev' "$pyproject"; then
+        "$pip" install -q -e "${service_dir}[dev]" 2>&1 | tail -1 || {
+            echo -e "    ${YELLOW}Retrying without [dev] extras...${NC}"
+            "$pip" install -q -e "${service_dir}" 2>&1 | tail -1 || return 1
+            "$pip" install -q pytest pytest-asyncio 2>&1 | tail -1 || return 1
+        }
+    else
+        "$pip" install -q -e "${service_dir}" 2>&1 | tail -1 || return 1
+        "$pip" install -q pytest pytest-asyncio 2>&1 | tail -1 || return 1
+    fi
+
+    touch "$marker"
+    return 0
+}
+
+_run_test_one() {
+    local name="$1" coverage="${2:-false}"
+    local entry=""
+
+    # Look up in TEST_REGISTRY
+    for reg in "${TEST_REGISTRY[@]}"; do
+        if [[ "$(_test_field "$reg" 1)" == "$name" ]]; then
+            entry="$reg"
+            break
+        fi
+    done
+
+    if [[ -z "$entry" ]]; then
+        echo -e "  ${RED}✗${NC} ${name} — not in test registry"
+        return 1
+    fi
+
+    local type test_cmd cov_pkg
+    type=$(_test_field "$entry" 2)
+    test_cmd=$(_test_field "$entry" 3)
+    cov_pkg=$(_test_field "$entry" 4)
+
+    if [[ "$type" == "skip" ]]; then
+        echo -e "  ${DIM}⊘${NC} ${name} — skipped"
+        return 0
+    fi
+
+    local service_dir="${JARVIS_ROOT}/${name}"
+    if [[ ! -d "$service_dir" ]]; then
+        echo -e "  ${RED}✗${NC} ${name} — directory not found"
+        return 1
+    fi
+
+    local start_time
+    start_time=$(date +%s)
+    local exit_code=0
+
+    case "$type" in
+        pytest)
+            # Ensure venv + deps
+            _ensure_test_env "$service_dir" || return 1
+
+            local venv_dir=""
+            [[ -d "${service_dir}/.venv" ]] && venv_dir="${service_dir}/.venv"
+            [[ -d "${service_dir}/venv" ]] && venv_dir="${service_dir}/venv"
+
+            # Build command
+            if [[ -z "$test_cmd" ]]; then
+                test_cmd="pytest -v --tb=short"
+            fi
+
+            # Append coverage flags
+            if [[ "$coverage" == true ]] && [[ -n "$cov_pkg" ]]; then
+                test_cmd="${test_cmd} --cov=${cov_pkg} --cov-report=term-missing"
+            fi
+
+            # Run tests (use PATH so pytest resolves from venv)
+            (cd "$service_dir" && PATH="${venv_dir}/bin:$PATH" ${test_cmd}) 2>&1 | sed 's/^/    /'
+            exit_code=${PIPESTATUS[0]}
+            ;;
+
+        poetry)
+            # Ensure poetry deps are installed
+            (cd "$service_dir" && poetry install -q 2>&1 | tail -1) || true
+
+            # Build command
+            if [[ -z "$test_cmd" ]]; then
+                test_cmd="pytest -v --tb=short"
+            fi
+
+            # Append coverage flags
+            if [[ "$coverage" == true ]] && [[ -n "$cov_pkg" ]]; then
+                test_cmd="${test_cmd} --cov=${cov_pkg} --cov-report=term-missing"
+            fi
+
+            # Run tests
+            (cd "$service_dir" && poetry run ${test_cmd}) 2>&1 | sed 's/^/    /'
+            exit_code=${PIPESTATUS[0]}
+            ;;
+
+        npm)
+            # Ensure node_modules
+            if [[ ! -d "${service_dir}/node_modules" ]]; then
+                (cd "$service_dir" && npm install --silent 2>&1 | tail -1) || true
+            fi
+
+            # Build command
+            if [[ -z "$test_cmd" ]]; then
+                test_cmd="npm test"
+            fi
+
+            # Coverage for npm uses different flag
+            if [[ "$coverage" == true ]]; then
+                test_cmd="${test_cmd} -- --coverage"
+            fi
+
+            # Run tests
+            (cd "$service_dir" && ${test_cmd}) 2>&1 | sed 's/^/    /'
+            exit_code=${PIPESTATUS[0]}
+            ;;
+
+        *)
+            echo -e "  ${RED}✗${NC} ${name} — unknown test type: ${type}"
+            return 1
+            ;;
+    esac
+
+    local end_time elapsed
+    end_time=$(date +%s)
+    elapsed=$((end_time - start_time))
+
+    if [[ $exit_code -eq 0 ]]; then
+        echo -e "  ${GREEN}✓${NC} ${name} — ${GREEN}passed${NC} (${elapsed}s)"
+    else
+        echo -e "  ${RED}✗${NC} ${name} — ${RED}FAILED${NC} (${elapsed}s)"
+    fi
+
+    return $exit_code
+}
+
+cmd_test() {
+    local coverage=false
+    local targets=()
+
+    # Parse arguments
+    for arg in "$@"; do
+        case "$arg" in
+            --coverage) coverage=true ;;
+            --all)      targets=("--all") ;;
+            *)          targets+=("$arg") ;;
+        esac
+    done
+
+    if [[ ${#targets[@]} -eq 0 ]]; then
+        echo -e "${RED}Usage: ./jarvis test [service ...] [--all] [--coverage]${NC}"
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${BOLD}═══════════════════════════════════${NC}"
+    echo -e "${BOLD}  Jarvis Test Runner${NC}"
+    echo -e "${BOLD}═══════════════════════════════════${NC}"
+    echo ""
+
+    # Build list of services to test
+    local services=()
+    if [[ "${targets[0]}" == "--all" ]]; then
+        for reg in "${TEST_REGISTRY[@]}"; do
+            services+=("$(_test_field "$reg" 1)")
+        done
+    else
+        for t in "${targets[@]}"; do
+            # Validate service exists in registry
+            local found=false
+            for reg in "${TEST_REGISTRY[@]}"; do
+                if [[ "$(_test_field "$reg" 1)" == "$t" ]]; then
+                    found=true
+                    break
+                fi
+            done
+            if [[ "$found" == false ]]; then
+                echo -e "${RED}Unknown service: ${t}${NC}"
+                echo ""
+                echo "Available services:"
+                for reg in "${TEST_REGISTRY[@]}"; do
+                    echo "  $(_test_field "$reg" 1)"
+                done
+                exit 1
+            fi
+            services+=("$t")
+        done
+    fi
+
+    # Run tests and collect results
+    local passed=0 failed=0 skipped=0
+    local results=()
+
+    for name in "${services[@]}"; do
+        echo -e "${DIM}Testing ${name}...${NC}"
+
+        local type=""
+        for reg in "${TEST_REGISTRY[@]}"; do
+            if [[ "$(_test_field "$reg" 1)" == "$name" ]]; then
+                type=$(_test_field "$reg" 2)
+                break
+            fi
+        done
+
+        if [[ "$type" == "skip" ]]; then
+            skipped=$((skipped + 1))
+            results+=("skip|${name}")
+            echo -e "  ${DIM}⊘${NC} ${name} — skipped"
+            echo ""
+            continue
+        fi
+
+        set +e
+        _run_test_one "$name" "$coverage"
+        local rc=$?
+        set -e
+
+        if [[ $rc -eq 0 ]]; then
+            passed=$((passed + 1))
+            results+=("pass|${name}")
+        else
+            failed=$((failed + 1))
+            results+=("fail|${name}")
+        fi
+        echo ""
+    done
+
+    # Print summary
+    local total=$((passed + failed))
+    echo -e "${BOLD}═══════════════════════════════════${NC}"
+    if [[ $failed -eq 0 ]]; then
+        echo -e "${BOLD}  Results: ${GREEN}${passed}/${total} passed${NC}"
+    else
+        echo -e "${BOLD}  Results: ${RED}${passed}/${total} passed${NC}"
+    fi
+    echo -e "${BOLD}═══════════════════════════════════${NC}"
+
+    for r in "${results[@]}"; do
+        local status="${r%%|*}"
+        local sname="${r#*|}"
+        case "$status" in
+            pass) echo -e "  ${GREEN}✓${NC} ${sname}" ;;
+            fail) echo -e "  ${RED}✗${NC} ${sname}" ;;
+            skip) echo -e "  ${DIM}⊘${NC} ${sname}" ;;
+        esac
+    done
+
+    echo -e "${BOLD}═══════════════════════════════════${NC}"
+
+    [[ $failed -gt 0 ]] && exit 1
+    exit 0
+}
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 usage() {
@@ -2567,12 +2876,14 @@ usage() {
     echo "  logs <service>              Tail Docker logs for a service"
     echo "  llm-setup                   Run the LLM setup wizard"
     echo "  doctor                      Run system diagnostics"
+    echo "  test [service|--all]        Run tests for service(s)"
     echo ""
     echo "Options:"
     echo "  --standalone                Start service with its own postgres (solo dev)"
     echo "  --no-network                Skip jarvis-net (distributed mode)"
     echo "  --force                     Force overwrite .env files during init"
     echo "  --custom                    Prompt for custom database names during init"
+    echo "  --coverage                  Include coverage report (with test command)"
     echo ""
     echo "Services:"
     for entry in "${SERVICES[@]}"; do
@@ -2657,6 +2968,10 @@ case "${1:-}" in
         ;;
     doctor)
         cmd_doctor
+        ;;
+    test)
+        shift
+        cmd_test "$@"
         ;;
     *)
         usage
