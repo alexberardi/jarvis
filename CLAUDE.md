@@ -122,6 +122,31 @@ Voice-controlled assistant system. Pi Zero nodes (with mic + speaker) capture vo
 └────────────────┘
 ```
 
+### Speaker ID & Memory Flow
+
+```
+Node (mic) ──▶ Whisper ──▶ {text, speaker: {user_id, confidence}}
+                                │
+                                ▼
+              Command Center receives transcription
+                │
+                ├─ Extracts speaker_user_id from whisper response
+                ├─ Resolves user_id → display name via jarvis-auth (cached 5min)
+                ├─ Loads user memories from PostgreSQL (MemoryService)
+                ├─ Injects speaker name + memories into system prompt
+                │
+                └─▶ LLM sees: "About Alex: - Likes black coffee - Morning person"
+                    LLM can call: remember({content: "..."}) / forget({content_match: "..."})
+```
+
+**Key files:**
+- Node: `stt_providers/jarvis_whisper_client.py` (TranscriptionResult with speaker data)
+- Command Center: `app/core/utils/speaker_resolver.py` (name resolution)
+- Command Center: `app/services/memory_service.py` (memory CRUD + prompt formatting)
+- Command Center: `app/core/tools/remember_tool.py`, `forget_tool.py` (server tools)
+- Command Center: `app/api/memories.py` (REST CRUD API)
+- Whisper: `app/api/voice_profiles.py` (enrollment endpoints)
+
 ## Service Dependency Graph (Runtime)
 
 ```
@@ -656,6 +681,7 @@ The output includes:
 - [x] Speaker/voice identification (Whisper-based)
 - [x] Migrate all production print() to JarvisLogger
 - [x] Fix all broad `except Exception:` without `as e` (63 production + 13 E2E test instances)
+- [x] Voice-identified persistent memory (speaker ID wiring, user memory table, memory-aware prompts, remember/forget tools, voice enrollment API, memory CRUD API)
 
 ### 🚀 Future Enhancements (Feature Parity Roadmap)
 
@@ -704,7 +730,7 @@ The output includes:
 | jarvis-auth | 7701 | Small | ✅ Good | Clean |
 | jarvis-command-center | 7703 | Large | ✅ Good | ✅ model_service.py refactored (309 lines) |
 | jarvis-recipes-server | 7030 | Medium | ✅ Good | ✅ url_recipe_parser.py refactored (285 lines) |
-| jarvis-whisper-api | 7706 | Small | ⚠️ Minimal | Clean |
+| jarvis-whisper-api | 7706 | Small | ✅ Good | Voice profiles API + tests |
 | jarvis-ocr-service | 7031 | Medium | ✅ Good | Clean |
 | jarvis-llm-proxy-api | 7704/7705 | Medium | ⚠️ Partial | ✅ main.py refactored (87 lines) |
 | jarvis-tts | 7707 | Small | ✅ Good (98%) | Clean |
@@ -782,7 +808,7 @@ To add:
 - [ ] **Calendar context** - Query user's calendar (iCloud) for availability, upcoming events. "Am I free tomorrow?" from any service
 - [ ] **Timer/alarm management** - Cross-node timer state. Set from kitchen, query from living room. Centralized so any node can interact
 - [ ] **Unit conversion** - "350F to Celsius", "cups to liters". Pure logic, useful for recipes and general commands
-- [ ] **User preferences** - Home location, preferred units, dietary restrictions, "the usual". Shared context across all services
+- [x] **User preferences** - ✅ User memories (remember/forget tools + memory CRUD API). Shared context across conversations via speaker identification
 
 ### Testing
 - [ ] **Automated integration tests** - CI for service communication
