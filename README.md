@@ -183,17 +183,36 @@ The LLM proxy supports multiple inference backends, so you can match your hardwa
 
 ### Command Parsing Benchmarks
 
-Tested on 72 voice commands across 19 command types (weather, timers, sports, calendar, smart home, etc.) on an Apple M2 Max. GGUF backend with llama.cpp, Metal acceleration.
+Tested on 86 voice commands across 20+ command types (weather, timers, sports, calendar, smart home, etc.) on an Apple M2 Max with Metal acceleration. Node-side parameter validation enabled (auto-correction + retry).
 
-| Model | Quant | Size | Chat Format | Untrained | | Trained | |
-|-------|-------|------|-------------|-----------|---------|---------|---------|
-| | | | | Success Rate | Avg Latency | Success Rate | Avg Latency |
-| Llama 3.1 8B Instruct | Q6_K | 6.1 GB | `llama-3` | **93.1%** | **1.3s** | — | — |
-| Gemma 2 9B Instruct | Q4_K_M | 5.4 GB | `chatml` | **93.1%** | 2.5s | — | — |
-| Hermes 3 Llama 3.1 8B | Q4_K_M | 4.6 GB | `chatml` | 91.7% | 1.4s | — | — |
-| Qwen 2.5 7B Instruct | Q4_K_M | 4.3 GB | `chatml` | 91.7% | 1.1s | — | — |
+**Recommended setup:** Qwen 2.5 7B Instruct with `Qwen25Compressed` prompt provider.
 
-Chat Format is the `model.main.chat_format` setting for llama-cpp-python. Note: Gemma 2 requires `chatml` (not `gemma`) because the `gemma` chat format does not support system messages. All use text-based tool calling with prompt providers tuned to each model's native function-calling format. "Untrained" = base model results. "Trained" = with LoRA adapter fine-tuned on Jarvis command examples.
+#### With LoRA Adapter (GGUF only, trained 2 epochs)
+
+| Model | Backend | Quant | Size | Success Rate | Avg Latency |
+|-------|---------|-------|------|-------------|-------------|
+| Qwen 2.5 7B Instruct | GGUF | Q4_K_M | 4.3 GB | **100%** (86/86) | 1.42s |
+| Qwen 2.5 3B Instruct | GGUF | Q4_K_M | 2.0 GB | 98.8% (85/86) | 1.18s |
+
+> **Note:** LoRA adapters currently degrade accuracy on the MLX backend. Adapters are trained against full-precision HuggingFace weights, which pair well with GGUF's quantization-aware adapter loading but cause regressions when applied to MLX's quantized inference. MLX results below are without adapters.
+
+#### Baseline (no adapter)
+
+| Model | Backend | Quant | Size | Provider | Success Rate | Avg Latency |
+|-------|---------|-------|------|----------|-------------|-------------|
+| Qwen 2.5 7B Instruct | MLX | 8-bit | 8.1 GB | Compressed | 97.7% (84/86) | 1.56s |
+| Qwen 2.5 7B Instruct | MLX | 4-bit | 4.3 GB | Compressed | 95.4% (82/86) | 1.19s |
+| Qwen 2.5 7B Instruct | GGUF | Q4_K_M | 4.3 GB | Compressed | 95.1% (78/82)&dagger; | 1.10s |
+| Qwen 2.5 7B Instruct | GGUF | Q4_K_M | 4.3 GB | Standard | 91.5% (75/82)&dagger; | 1.1s |
+| Llama 3.1 8B Instruct | GGUF | Q6_K | 6.1 GB | Standard | 93.1% (67/72)&Dagger; | 1.3s |
+| Gemma 2 9B Instruct | GGUF | Q4_K_M | 5.4 GB | Standard | 93.1% (67/72)&Dagger; | 2.5s |
+| Hermes 3 Llama 3.1 8B | GGUF | Q4_K_M | 4.6 GB | Compressed | 91.5% (75/82)&dagger; | 1.4s |
+| Hermes 3 Llama 3.1 8B | GGUF | Q4_K_M | 4.6 GB | Standard | 90.2% (74/82)&dagger; | 1.4s |
+| Qwen 2.5 3B Instruct | GGUF | Q4_K_M | 2.0 GB | Compressed | 89.5% (77/86) | 0.85s |
+
+&dagger; Tested on 82-command suite. &Dagger; Tested on prior 72-command suite without node-side validation.
+
+**Provider** refers to the prompt provider — **Compressed** (`Qwen25Compressed`, `HermesCompressed`, etc.) uses a compact tool listing with DT_KEYS date vocabulary injection, reducing prompt tokens ~26% while improving accuracy. **Standard** uses the full prompt with verbose parameter descriptions. All models use `chatml` chat format except Llama 3.1 (`llama-3`).
 
 ### LoRA Adapter Training
 
