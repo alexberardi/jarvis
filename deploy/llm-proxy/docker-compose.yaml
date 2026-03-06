@@ -1,0 +1,111 @@
+# ============================================================================
+# Jarvis LLM Proxy API — Remote Deployment
+# ============================================================================
+# Usage:
+#   docker compose up -d
+#   docker compose pull && docker compose up -d   # update
+#
+# Prerequisites:
+#   - NVIDIA GPU + Container Toolkit (nvidia-ctk)
+#   - .env configured (run setup.sh first)
+#   - Models downloaded to .models/ directory
+# ============================================================================
+
+x-common: &common
+  image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${LLM_PROXY_VERSION:-dev}
+  env_file: .env
+  environment:
+    - VLLM_WORKER_MULTIPROC_METHOD=spawn
+    - MODEL_SERVICE_URL=http://llm-proxy-model:7705
+    - JARVIS_CONFIG_URL_STYLE=remote
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ${MODELS_DIR:-./.models}:/app/.models:ro
+    - adapter-data:/tmp/jarvis-adapters
+  restart: unless-stopped
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  # --------------------------------------------------------------------------
+  # Database Migration (init container — runs once and exits)
+  # --------------------------------------------------------------------------
+  alembic-migrate:
+    image: ghcr.io/alexberardi/jarvis-llm-proxy-api:${LLM_PROXY_VERSION:-dev}
+    env_file: .env
+    command: python -m alembic upgrade head
+    restart: "no"
+
+  # --------------------------------------------------------------------------
+  # API Server (port 7704)
+  # --------------------------------------------------------------------------
+  llm-proxy-api:
+    <<: *common
+    container_name: llm-proxy-api
+    ports:
+      - "${SERVER_PORT:-7704}:7704"
+    command: >
+      python -m uvicorn main:app
+      --host 0.0.0.0
+      --port 7704
+      --workers ${UVICORN_WORKERS:-1}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7704/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      alembic-migrate:
+        condition: service_completed_successfully
+      llm-proxy-model:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Model Service (port 7705)
+  # --------------------------------------------------------------------------
+  llm-proxy-model:
+    <<: *common
+    container_name: llm-proxy-model
+    ports:
+      - "${MODEL_SERVICE_PORT:-7705}:7705"
+    command: >
+      python -m uvicorn services.model_service:app
+      --host 0.0.0.0
+      --port 7705
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7705/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    depends_on:
+      alembic-migrate:
+        condition: service_completed_successfully
+
+  # --------------------------------------------------------------------------
+  # Queue Worker (async training jobs)
+  # --------------------------------------------------------------------------
+  llm-proxy-worker:
+    <<: *common
+    container_name: llm-proxy-worker
+    environment:
+      - VLLM_WORKER_MULTIPROC_METHOD=spawn
+      - MODEL_SERVICE_URL=http://llm-proxy-model:7705
+      - LLM_PROXY_PROCESS_ROLE=worker
+      - JARVIS_CONFIG_URL_STYLE=remote
+    command: python scripts/queue_worker.py
+    depends_on:
+      alembic-migrate:
+        condition: service_completed_successfully
+      llm-proxy-model:
+        condition: service_healthy
+
+volumes:
+  adapter-data:

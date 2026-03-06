@@ -503,6 +503,11 @@ _stamp_env_files() {
         _inject_env_var "$env_file" "JARVIS_AUTH_ADMIN_TOKEN" "$JARVIS_AUTH_ADMIN_TOKEN"
         _inject_env_var "$env_file" "JARVIS_CONFIG_URL" "http://${svc_host}:7700"
 
+        # Docker services need dockerized URLs from config-service
+        if [[ "$mode" == "docker" ]]; then
+            _inject_env_var "$env_file" "JARVIS_CONFIG_URL_STYLE" "dockerized"
+        fi
+
         # --- Service-specific tokens ---
         case "$name" in
             jarvis-auth)
@@ -524,6 +529,12 @@ _stamp_env_files() {
             jarvis-llm-proxy-api)
                 _inject_env_var "$env_file" "MODEL_SERVICE_TOKEN" "$MODEL_SERVICE_TOKEN"
                 _inject_env_var "$env_file" "LLM_PROXY_INTERNAL_TOKEN" "$LLM_PROXY_INTERNAL_TOKEN"
+                ;;
+            jarvis-whisper-api)
+                # In Docker, ~/whisper.cpp is mounted at /root/whisper.cpp
+                if [[ "$mode" == "docker" ]]; then
+                    _inject_env_var "$env_file" "WHISPER_MODEL" "/root/whisper.cpp/models/ggml-base.en.bin"
+                fi
                 ;;
             jarvis-admin)
                 _inject_env_var "$env_file" "PORT" "7711"

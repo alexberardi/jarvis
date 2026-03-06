@@ -559,7 +559,25 @@ Or use the job ID returned from step 3 to poll status until complete.
 
 Run end-to-end tests to validate voice command parsing across all Jarvis commands.
 
-**1. Ensure required services are running**
+**1. Register a dev node (if not already done)**
+
+E2E tests authenticate to the command center as a registered node. See `jarvis-node-setup/CLAUDE.md` "Node Authentication" section for full details.
+
+```bash
+cd /home/alex/jarvis/jarvis-node-setup
+
+# Get admin key from CC's .env
+grep ADMIN_API_KEY ../jarvis-command-center/.env
+
+# Register node and update config
+python utils/authorize_node.py \
+  --cc-key <admin_key_from_env> \
+  --household-id <household-uuid> \
+  --room office --name dev-mac \
+  --update-config config-mac.json
+```
+
+**2. Ensure required services are running**
 
 Use MCP `debug_health` tool to check service status. Required services:
 - `jarvis-command-center` (port 7703)
@@ -574,7 +592,7 @@ cd /home/alex/jarvis/jarvis-command-center && bash run-docker-dev.sh
 cd /home/alex/jarvis/jarvis-llm-proxy-api && ./run.sh
 ```
 
-**2. Run the test suite**
+**3. Run the test suite**
 
 ```bash
 cd /home/alex/jarvis/jarvis-node-setup
@@ -602,7 +620,7 @@ python test_command_parsing.py -c calculate
 python test_command_parsing.py -c get_sports_scores -o sports_results.json
 ```
 
-**3. Review results**
+**4. Review results**
 
 Results are written to:
 - `test_results.json` (or custom path via `-o`)
@@ -663,6 +681,23 @@ The output includes:
 - [ ] Stronger default secrets in .env.example files
 - [ ] TypedDict for tool definitions instead of Dict[str, Any]
 - [ ] Consistent CommandResponse patterns across all commands
+
+### 🔒 Security & Compliance (B2B Readiness)
+
+Full roadmap: [`docs/security-compliance-todos.md`](docs/security-compliance-todos.md)
+
+Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS.
+
+| Phase | What | Scope | Depends On |
+|-------|------|-------|------------|
+| 1 | Audit logging (events table, audit-client lib, account lockout) | ~2-3 sessions | — |
+| 2 | Encryption in transit (TLS for Postgres, Redis, MQTT, MinIO) | ~2-3 sessions | — |
+| 3 | Encryption at rest (LUKS/FileVault, MinIO SSE, encrypted backups) | ~2 sessions | Phase 2 |
+| 4 | RBAC (roles/permissions tables, enforcement middleware, JWT claims) | ~3-4 sessions | Phase 1 |
+| 5 | Rate limiting & session management (slowapi, lockout, max sessions) | ~1-2 sessions | Phase 1 |
+| 6 | Data classification & PII handling (log sanitization, retention, GDPR deletion) | ~2 sessions | Phase 1 |
+| 7 | Network hardening (Docker segmentation, CORS, security headers, MQTT ACLs) | ~1-2 sessions | Phase 2 |
+| 8 | Compliance docs & monitoring (policy docs, Grafana dashboards, compliance checks) | ~2 sessions | All |
 
 ### ✅ Done
 - [x] Local wake word detection (Porcupine)
