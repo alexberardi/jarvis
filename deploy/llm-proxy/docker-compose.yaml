@@ -23,6 +23,8 @@ x-common: &common
   volumes:
     - ${MODELS_DIR:-./.models}:/app/.models:ro
     - adapter-data:/tmp/jarvis-adapters
+  ipc: host
+  shm_size: "8gb"
   restart: unless-stopped
   deploy:
     resources:

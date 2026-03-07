@@ -183,9 +183,9 @@ The LLM proxy supports multiple inference backends, so you can match your hardwa
 
 ### Command Parsing Benchmarks
 
-Tested on 86 voice commands across 20+ command types (weather, timers, sports, calendar, smart home, etc.) on an Apple M2 Max with Metal acceleration. Node-side parameter validation enabled (auto-correction + retry).
+Tested across 20+ command types (weather, timers, sports, calendar, smart home, etc.) with node-side parameter validation enabled (auto-correction + retry). Local tests on Apple M2 Max with Metal acceleration; remote tests on dual RTX 3090 via llama.cpp layer splitting.
 
-**Recommended setup:** Qwen 2.5 7B Instruct with `Qwen25Compressed` prompt provider.
+**Recommended setup:** Qwen 2.5 7B Instruct with `Qwen25Compressed` prompt provider (best accuracy/latency on Apple Silicon). For dedicated GPU servers, Qwen3-32B achieves 98.3% accuracy.
 
 #### With LoRA Adapter (GGUF only, trained 2 epochs)
 
@@ -209,8 +209,11 @@ Tested on 86 voice commands across 20+ command types (weather, timers, sports, c
 | Hermes 3 Llama 3.1 8B | GGUF | Q4_K_M | 4.6 GB | Compressed | 91.5% (75/82)&dagger; | 1.4s |
 | Hermes 3 Llama 3.1 8B | GGUF | Q4_K_M | 4.6 GB | Standard | 90.2% (74/82)&dagger; | 1.4s |
 | Qwen 2.5 3B Instruct | GGUF | Q4_K_M | 2.0 GB | Compressed | 89.5% (77/86) | 0.85s |
+| Qwen3-32B | GGUF | Q4_K_M | 19 GB | Compressed | **98.3%** (116/118)&sect; | 1.4s&para; |
+| Mixtral 8x7B Instruct v0.1 | GGUF | Q4_K_M | 26 GB | Compressed | 94.9% (112/118)&sect; | 3.0s |
+| Qwen3-30B-A3B (MoE) | GGUF | Q4_K_M | 19 GB | Compressed | 92.4% (109/118)&sect; | 2.9s |
 
-&dagger; Tested on 82-command suite. &Dagger; Tested on prior 72-command suite without node-side validation.
+&dagger; Tested on 82-command suite. &Dagger; Tested on prior 72-command suite without node-side validation. &sect; Tested on 118-command suite on remote dual RTX 3090 (24GB each) via llama.cpp GPU layer splitting. &para; LLM inference time only; end-to-end with network overhead is ~4s.
 
 **Provider** refers to the prompt provider — **Compressed** (`Qwen25Compressed`, `HermesCompressed`, etc.) uses a compact tool listing with DT_KEYS date vocabulary injection, reducing prompt tokens ~26% while improving accuracy. **Standard** uses the full prompt with verbose parameter descriptions. All models use `chatml` chat format except Llama 3.1 (`llama-3`).
 

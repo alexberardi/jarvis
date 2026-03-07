@@ -55,36 +55,41 @@ prompt_secret() {
 # ============================================================================
 # Model presets
 # ============================================================================
-# Each preset: "HF_REPO|MODEL_NAME|BACKEND|CHAT_FORMAT|CONTEXT_WINDOW|STOP_TOKENS|HF_FILENAME"
+# Each preset: "HF_REPO^MODEL_NAME^BACKEND^CHAT_FORMAT^CONTEXT_WINDOW^STOP_TOKENS^HF_FILENAME"
+# Delimiter is ^ (pipe conflicts with stop tokens like <|im_end|>).
 # HF_FILENAME is empty for full-repo downloads, set for single-file GGUF downloads.
 # For GGUF: MODEL_NAME is the path to the .gguf file; HF_FILENAME is the file to download.
 # For vLLM/transformers: MODEL_NAME is the directory; HF_FILENAME is empty.
 
-PRESET_COUNT=6
+PRESET_COUNT=8
 
 declare -A MODEL_PRESETS
 MODEL_PRESETS=(
-    [1]="Qwen/Qwen2.5-7B-Instruct|.models/Qwen2.5-7B-Instruct|VLLM|qwen|32768|<|im_end|>,<|endoftext|>|"
-    [2]="Qwen/Qwen2.5-14B-Instruct|.models/Qwen2.5-14B-Instruct|VLLM|qwen|32768|<|im_end|>,<|endoftext|>|"
-    [3]="meta-llama/Llama-3.1-8B-Instruct|.models/Llama-3.1-8B-Instruct|VLLM|llama3|131072|<|eot_id|>|"
-    [4]="mistralai/Mistral-7B-Instruct-v0.3|.models/Mistral-7B-Instruct-v0.3|VLLM|mistral|32768|</s>|"
-    [5]="google/gemma-2-9b-it|.models/gemma-2-9b-it|VLLM|chatml|8192|<end_of_turn>|"
-    [6]="TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF|.models/mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf|GGUF|mistral|32768|</s>|mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf"
+    [1]="Qwen/Qwen2.5-7B-Instruct^.models/Qwen2.5-7B-Instruct^VLLM^qwen^32768^<|im_end|>,<|endoftext|>^"
+    [2]="Qwen/Qwen2.5-14B-Instruct^.models/Qwen2.5-14B-Instruct^VLLM^qwen^32768^<|im_end|>,<|endoftext|>^"
+    [3]="meta-llama/Llama-3.1-8B-Instruct^.models/Llama-3.1-8B-Instruct^VLLM^llama3^131072^<|eot_id|>^"
+    [4]="mistralai/Mistral-7B-Instruct-v0.3^.models/Mistral-7B-Instruct-v0.3^VLLM^mistral^32768^</s>^"
+    [5]="google/gemma-2-9b-it^.models/gemma-2-9b-it^VLLM^chatml^8192^<end_of_turn>^"
+    [6]="mradermacher/Mixtral-8x7B-Instruct-v0.1-GGUF^.models/Mixtral-8x7B-Instruct-v0.1.Q4_K_M.gguf^GGUF^chatml^32768^</s>^Mixtral-8x7B-Instruct-v0.1.Q4_K_M.gguf"
+    [7]="TheBloke/Mixtral-8x7B-Instruct-v0.1-AWQ^.models/Mixtral-8x7B-Instruct-v0.1-AWQ^VLLM^chatml^32768^</s>^"
+    [8]="bartowski/Qwen_Qwen3-30B-A3B-GGUF^.models/Qwen3-30B-A3B-Q4_K_M/Qwen_Qwen3-30B-A3B-Q4_K_M.gguf^GGUF^chatml^32768^<|im_end|>,<|endoftext|>^Qwen_Qwen3-30B-A3B-Q4_K_M.gguf"
 )
 
 declare -A MODEL_LABELS
 MODEL_LABELS=(
-    [1]="Qwen 2.5 7B Instruct       (7B vLLM, recommended)"
+    [1]="Qwen 2.5 7B Instruct       (7B vLLM, recommended for single GPU)"
     [2]="Qwen 2.5 14B Instruct      (14B vLLM, needs ~28GB VRAM)"
     [3]="Llama 3.1 8B Instruct      (8B vLLM, 128K context)"
     [4]="Mistral 7B Instruct        (7B vLLM)"
     [5]="Gemma 2 9B IT              (9B vLLM)"
-    [6]="Mixtral 8x7B Instruct GGUF (MoE, Q4_K_M, ~26GB)"
+    [6]="Mixtral 8x7B Instruct GGUF (MoE, 4-bit, ~26GB, multi-GPU via llama.cpp)"
+    [7]="Mixtral 8x7B Instruct AWQ  (MoE, 4-bit, ⚠ vLLM TP broken in 0.16)"
+    [8]="Qwen3 30B-A3B GGUF         (MoE, 3B active, 4-bit, ~19GB, single GPU)"
 )
 
 parse_preset() {
     local preset="$1"
-    IFS='|' read -r HF_REPO MODEL_NAME MODEL_BACKEND MODEL_CHAT_FORMAT MODEL_CONTEXT_WINDOW MODEL_STOP_TOKENS HF_FILENAME <<< "$preset"
+    IFS='^' read -r HF_REPO MODEL_NAME MODEL_BACKEND MODEL_CHAT_FORMAT MODEL_CONTEXT_WINDOW MODEL_STOP_TOKENS HF_FILENAME <<< "$preset"
 }
 
 # ============================================================================
@@ -113,6 +118,48 @@ if [[ ${#missing[@]} -gt 0 ]]; then
     err "Missing required tools: ${missing[*]}"
     err "Install them and re-run this script."
     exit 1
+fi
+
+# Check Docker Compose v2
+if ! docker compose version &>/dev/null; then
+    warn "Docker Compose v2 not found. Installing..."
+    # Add Docker repo if needed
+    if ! apt-cache show docker-compose-plugin &>/dev/null 2>&1; then
+        sudo install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+        sudo apt-get update -qq
+    fi
+    sudo apt-get install -y -qq docker-compose-plugin || {
+        err "Failed to install docker-compose-plugin."
+        err "Install manually: sudo apt install docker-compose-plugin"
+        exit 1
+    }
+    ok "Docker Compose v2 installed"
+fi
+
+# Check NVIDIA Container Toolkit (required for GPU passthrough to Docker)
+if [[ "$GPU_COUNT" -gt 0 ]]; then
+    if ! docker run --rm --gpus all nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi &>/dev/null 2>&1; then
+        warn "NVIDIA Container Toolkit not working. Installing..."
+        # Add NVIDIA repo
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+            | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg 2>/dev/null
+        curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+            | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+            | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq nvidia-container-toolkit || {
+            err "Failed to install nvidia-container-toolkit."
+            err "See: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html"
+            exit 1
+        }
+        sudo nvidia-ctk runtime configure --runtime=docker >/dev/null
+        sudo systemctl restart docker
+        ok "NVIDIA Container Toolkit installed and configured"
+    else
+        ok "NVIDIA Container Toolkit working"
+    fi
 fi
 
 ok "Prerequisites satisfied"
@@ -183,23 +230,26 @@ echo
 
 info "Registering llm-proxy as app-client with jarvis-auth..."
 
-REGISTER_RESPONSE=$(curl -sf -X POST "http://${MAIN_SERVER_IP}:7701/admin/app-clients" \
+REGISTER_HTTP_CODE=$(curl -s -o /tmp/jarvis-register-response.json -w "%{http_code}" \
+    -X POST "http://${MAIN_SERVER_IP}:7701/admin/app-clients" \
     -H "Content-Type: application/json" \
-    -H "X-Admin-Token: ${AUTH_ADMIN_TOKEN}" \
-    -d '{"app_id": "jarvis-llm-proxy-api", "description": "LLM Proxy (remote)"}' \
-    2>&1) || {
-    # Check if it already exists (409 Conflict)
-    if echo "$REGISTER_RESPONSE" | grep -q "already exists"; then
-        warn "App client 'jarvis-llm-proxy-api' already registered. Using existing credentials."
-        prompt_secret APP_KEY "Enter existing JARVIS_APP_KEY for jarvis-llm-proxy-api"
-    else
-        err "Failed to register with jarvis-auth: $REGISTER_RESPONSE"
-        exit 1
-    fi
-}
+    -H "X-Jarvis-Admin-Token: ${AUTH_ADMIN_TOKEN}" \
+    -d '{"app_id": "jarvis-llm-proxy-api", "name": "LLM Proxy (remote)"}')
+REGISTER_RESPONSE=$(cat /tmp/jarvis-register-response.json 2>/dev/null)
+
+if [[ "$REGISTER_HTTP_CODE" == "200" || "$REGISTER_HTTP_CODE" == "201" ]]; then
+    : # success, parse key below
+elif echo "$REGISTER_RESPONSE" | grep -q "already exists"; then
+    warn "App client 'jarvis-llm-proxy-api' already registered."
+    echo "  Find the key in jarvis-llm-proxy-api/.env on the main server (JARVIS_APP_KEY)."
+    prompt_secret APP_KEY "Enter existing JARVIS_APP_KEY for jarvis-llm-proxy-api"
+else
+    err "Failed to register with jarvis-auth (HTTP $REGISTER_HTTP_CODE): $REGISTER_RESPONSE"
+    exit 1
+fi
 
 if [[ -z "${APP_KEY:-}" ]]; then
-    APP_KEY=$(echo "$REGISTER_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['app_key'])" 2>/dev/null) || {
+    APP_KEY=$(echo "$REGISTER_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['key'])" 2>/dev/null) || {
         err "Failed to parse app_key from auth response: $REGISTER_RESPONSE"
         exit 1
     }
@@ -282,10 +332,17 @@ echo
 
 VLLM_TENSOR_PARALLEL=""
 VLLM_GPU_MEMORY_UTIL=""
+VLLM_MAX_LORAS="1"
 GGUF_TENSOR_SPLIT=""
 GGUF_SPLIT_MODE=""
 GGUF_MAIN_GPU=""
 VLLM_TOKENIZER=""
+
+# Disable LoRA for MoE models (Mixtral) — vLLM LoRA + MoE + tensor parallel is unsupported
+if echo "$HF_REPO" | grep -qi "mixtral\|moe"; then
+    VLLM_MAX_LORAS="0"
+    info "MoE model detected — LoRA disabled (unsupported with tensor parallel)"
+fi
 
 if [[ "$GPU_COUNT" -gt 1 ]]; then
     echo
@@ -298,37 +355,27 @@ if [[ "$GPU_COUNT" -gt 1 ]]; then
         prompt VLLM_GPU_MEMORY_UTIL "GPU memory utilization (0.0-1.0)" "0.90"
         ok "vLLM will use ${VLLM_TENSOR_PARALLEL} GPU(s)"
     elif [[ "${MODEL_BACKEND^^}" == "GGUF" ]]; then
-        echo -e "  ${BOLD}Inference engine:${NC} GGUF models can run via llama.cpp or vLLM."
-        echo -e "    ${CYAN}1)${NC} vLLM   (faster, tensor parallelism, recommended for multi-GPU)"
-        echo -e "    ${CYAN}2)${NC} llama.cpp (native GGUF, layer-split across GPUs)"
-        echo
-        prompt GGUF_ENGINE_CHOICE "Select inference engine (1-2)" "1"
-
-        if [[ "$GGUF_ENGINE_CHOICE" == "1" ]]; then
-            # Switch to VLLM backend for GGUF
-            MODEL_BACKEND="VLLM"
-            prompt VLLM_TENSOR_PARALLEL "Tensor parallel size (number of GPUs to use)" "$GPU_COUNT"
-            prompt VLLM_GPU_MEMORY_UTIL "GPU memory utilization (0.0-1.0)" "0.90"
-            # vLLM needs a tokenizer for GGUF files
-            echo
-            echo -e "  ${BOLD}vLLM needs a HuggingFace tokenizer for GGUF files.${NC}"
-            echo "  This is the original HF repo the GGUF was quantized from."
-            prompt VLLM_TOKENIZER "HuggingFace tokenizer repo (e.g., Qwen/Qwen2.5-7B-Instruct)"
-            ok "vLLM + GGUF with ${VLLM_TENSOR_PARALLEL} GPU(s), tokenizer: ${VLLM_TOKENIZER}"
-        else
-            # Even split across GPUs by default
-            PROPORTIONS=$(python3 -c "n=${GPU_COUNT}; print(','.join([f'{1/n:.2f}']*n))" 2>/dev/null || echo "")
-            prompt GGUF_TENSOR_SPLIT "VRAM split proportions per GPU (comma-separated)" "$PROPORTIONS"
-            prompt GGUF_SPLIT_MODE "Split mode (1=layer, 2=row)" "1"
-            prompt GGUF_MAIN_GPU "Main GPU index (for scratch buffers)" "0"
-            ok "llama.cpp will split across GPUs: ${GGUF_TENSOR_SPLIT}"
-        fi
+        # Auto-configure llama.cpp layer splitting for GGUF models
+        PROPORTIONS=$(python3 -c "n=${GPU_COUNT}; print(','.join([f'{1/n:.2f}']*n))" 2>/dev/null || echo "")
+        prompt GGUF_TENSOR_SPLIT "VRAM split proportions per GPU (comma-separated)" "$PROPORTIONS"
+        prompt GGUF_SPLIT_MODE "Split mode (1=layer, 2=row)" "1"
+        prompt GGUF_MAIN_GPU "Main GPU index (for scratch buffers)" "0"
+        ok "llama.cpp will split across ${GPU_COUNT} GPUs: ${GGUF_TENSOR_SPLIT}"
     fi
 elif [[ "${MODEL_BACKEND^^}" == "VLLM" ]]; then
     VLLM_TENSOR_PARALLEL="1"
     VLLM_GPU_MEMORY_UTIL="0.90"
 fi
 echo
+
+# Helper: ensure huggingface_hub is importable, install if needed
+_ensure_hf_hub() {
+    if python3 -c "import huggingface_hub" &>/dev/null; then return; fi
+    info "Installing huggingface-hub..."
+    pip3 install --break-system-packages --quiet huggingface-hub 2>/dev/null \
+        || pip3 install --user --quiet huggingface-hub 2>/dev/null \
+        || { err "Failed to install huggingface-hub. Install manually: pip3 install --break-system-packages huggingface-hub"; exit 1; }
+}
 
 # Download model if not present
 mkdir -p .models
@@ -342,17 +389,13 @@ if [[ -n "$HF_FILENAME" ]]; then
         echo "  This may take a while depending on model size and connection speed."
         echo
 
-        if ! command -v huggingface-cli &>/dev/null; then
-            info "Installing huggingface-hub..."
-            pip3 install --quiet huggingface-hub || pip install --quiet huggingface-hub || {
-                err "Failed to install huggingface-hub. Install it manually: pip install huggingface-hub"
-                exit 1
-            }
-        fi
+        _ensure_hf_hub
 
-        huggingface-cli download "$HF_REPO" "$HF_FILENAME" --local-dir .models/ || {
+        python3 -c "
+from huggingface_hub import hf_hub_download
+hf_hub_download('${HF_REPO}', '${HF_FILENAME}', local_dir='.models/')
+" || {
             err "Failed to download model. Check the repo ID and filename."
-            err "For gated models, run: huggingface-cli login"
             exit 1
         }
         ok "Model downloaded to $MODEL_NAME"
@@ -366,17 +409,13 @@ else
         echo "  This may take a while depending on model size and connection speed."
         echo
 
-        if ! command -v huggingface-cli &>/dev/null; then
-            info "Installing huggingface-hub..."
-            pip3 install --quiet huggingface-hub || pip install --quiet huggingface-hub || {
-                err "Failed to install huggingface-hub. Install it manually: pip install huggingface-hub"
-                exit 1
-            }
-        fi
+        _ensure_hf_hub
 
-        huggingface-cli download "$HF_REPO" --local-dir "$MODEL_NAME" || {
+        python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download('${HF_REPO}', local_dir='${MODEL_NAME}')
+" || {
             err "Failed to download model. Check the repo ID and your HuggingFace token."
-            err "For gated models, run: huggingface-cli login"
             exit 1
         }
         ok "Model downloaded to $MODEL_NAME"
@@ -422,10 +461,11 @@ sed \
     -e "s|__MODEL_BACKEND__|${MODEL_BACKEND}|g" \
     -e "s|__MODEL_CHAT_FORMAT__|${MODEL_CHAT_FORMAT}|g" \
     -e "s|__MODEL_CONTEXT_WINDOW__|${MODEL_CONTEXT_WINDOW}|g" \
-    -e "s|__MODEL_STOP_TOKENS__|${MODEL_STOP_TOKENS}|g" \
+    -e "s#__MODEL_STOP_TOKENS__#${MODEL_STOP_TOKENS}#g" \
     -e "s|__VLLM_TENSOR_PARALLEL__|${VLLM_TENSOR_PARALLEL}|g" \
     -e "s|__VLLM_GPU_MEMORY_UTIL__|${VLLM_GPU_MEMORY_UTIL}|g" \
     -e "s|__VLLM_TOKENIZER__|${VLLM_TOKENIZER}|g" \
+    -e "s|__VLLM_MAX_LORAS__|${VLLM_MAX_LORAS}|g" \
     -e "s|__GGUF_TENSOR_SPLIT__|${GGUF_TENSOR_SPLIT}|g" \
     -e "s|__GGUF_SPLIT_MODE__|${GGUF_SPLIT_MODE}|g" \
     -e "s|__GGUF_MAIN_GPU__|${GGUF_MAIN_GPU}|g" \
@@ -441,6 +481,26 @@ echo
 info "Pulling Docker image..."
 docker compose pull || { err "Failed to pull image. Check GHCR access."; exit 1; }
 ok "Image pulled"
+echo
+
+# Run migrations first, then sync settings to DB BEFORE starting the model service.
+# This prevents the model service from reading stale DB settings (e.g., wrong backend).
+info "Running database migrations..."
+docker compose run --rm alembic-migrate 2>/dev/null || true
+ok "Migrations complete"
+
+info "Syncing model settings to database..."
+echo "  Using the service's own sync logic (covers ALL settings automatically)."
+docker compose run --rm --no-deps alembic-migrate python -c "
+import sys; sys.path.insert(0, '.')
+from services.settings_service import get_settings_service
+service = get_settings_service()
+results = service.sync_from_env()
+synced = sum(1 for v in results.values() if v)
+print(f'Synced {synced} settings from env to DB')
+" || {
+    warn "Settings sync failed. Will retry via API after startup."
+}
 echo
 
 info "Starting stack..."
