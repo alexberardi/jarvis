@@ -1,0 +1,36 @@
+{
+  "name": "generacy-cluster",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "orchestrator",
+  "runServices": ["orchestrator", "redis"],
+  "workspaceFolder": "/workspaces/project",
+  "shutdownAction": "none",
+  "overrideCommand": false,
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "latest"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropics.claude-code"
+      ],
+      "settings": {
+        "dev.containers.gitCredentialHelperConfigLocation": "none"
+      }
+    }
+  },
+
+  "forwardPorts": [
+    3100,
+    6379
+  ]
+}
