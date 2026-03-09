@@ -1,13 +1,11 @@
 # Generacy Development Cluster Setup
 #
 # Run this script after cloning/forking to configure the cluster
-# for your project. It will:
-#   1. Detect your project from the git remote
-#   2. Create a smee.io webhook channel
-#   3. Generate .env with project settings
-#   4. Generate .env.local with your credentials
-#   5. Update devcontainer.json with project values
-#   6. Ensure ~/.claude.json exists for Docker volume mount
+# for your project. Idempotent — safe to re-run at any time.
+#
+# If .generacy/config.yaml already exists (from the onboarding UI,
+# manual creation, or a previous run), the script reads project info
+# from it and skips those prompts.
 #
 # Usage:
 #   .\setup.ps1
@@ -19,6 +17,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $DevcontainerDir = Join-Path $PSScriptRoot ".devcontainer"
+$GeneracyDir = Join-Path $PSScriptRoot ".generacy"
+$ConfigFile = Join-Path $GeneracyDir "config.yaml"
 
 # -- Helpers ------------------------------------------------------------------
 
@@ -27,38 +27,83 @@ function Write-Ok    { Write-Host "  + $args" -ForegroundColor Green }
 function Write-Warn  { Write-Host "  ! $args" -ForegroundColor Yellow }
 function Write-Err   { Write-Host "  x $args" -ForegroundColor Red }
 
-# -- Step 1: Detect project --------------------------------------------------
-
-Write-Info "Detecting project..."
-
-if (-not $RepoUrl) {
-    try { $RepoUrl = git remote get-url origin 2>$null } catch {}
+function Parse-Repo {
+    param([string]$Input)
+    $Input = $Input -replace '^https?://github\.com/', '' -replace '^github\.com/', '' -replace '\.git$', '' -replace '/$', ''
+    return $Input
 }
 
-if (-not $RepoUrl) {
-    $RepoUrl = Read-Host "  ? Repository URL (e.g., https://github.com/your-org/your-repo.git)"
+# -- Step 1: Load or create .generacy/config.yaml ----------------------------
+
+Write-Info "Checking for existing config..."
+
+if (Test-Path $ConfigFile) {
+    Write-Info "Found existing .generacy/config.yaml"
+
+    $configContent = Get-Content -Path $ConfigFile -Raw
+    $primaryMatch = [regex]::Match($configContent, 'primary:\s*[''"]?([^\s''"]+)[''"]?')
+    if ($primaryMatch.Success) {
+        $primaryRepoRaw = $primaryMatch.Groups[1].Value
+    } else {
+        Write-Err "Could not parse primary repo from config.yaml"
+        exit 1
+    }
+
+    $ownerRepo = Parse-Repo $primaryRepoRaw
+    $parts = $ownerRepo -split '/'
+    $Owner = $parts[0]
+    $RepoName = $parts[1]
+    $RepoUrl = "https://github.com/$ownerRepo.git"
+    $ProjectName = ($RepoName.ToLower() -replace '[^a-z0-9-]', '-')
+
+    Write-Ok "Primary repo: $ownerRepo"
+    Write-Ok "Project name: $ProjectName"
+
+    $configExists = $true
+} else {
+    $configExists = $false
+    Write-Info "No config.yaml found - will create one"
+
+    if (-not $RepoUrl) {
+        try { $RepoUrl = git remote get-url origin 2>$null } catch {}
+    }
+    if (-not $RepoUrl) {
+        $RepoUrl = Read-Host "  ? Repository URL (e.g., https://github.com/your-org/your-repo.git)"
+    }
+    if (-not $RepoUrl) {
+        Write-Err "Repository URL is required"
+        exit 1
+    }
+
+    $ownerRepo = Parse-Repo $RepoUrl
+    $parts = $ownerRepo -split '/'
+    $Owner = $parts[0]
+    $RepoName = $parts[1]
+    $ProjectName = ($RepoName.ToLower() -replace '[^a-z0-9-]', '-')
+
+    Write-Ok "Repository: $RepoUrl"
+    Write-Ok "Owner: $Owner"
+    Write-Ok "Project name: $ProjectName"
+    Write-Ok "Repo name: $RepoName"
 }
-
-if (-not $RepoUrl) {
-    Write-Err "Repository URL is required"
-    exit 1
-}
-
-# Derive names from URL
-$RepoName = [System.IO.Path]::GetFileNameWithoutExtension($RepoUrl.TrimEnd('/'))
-$ProjectName = ($RepoName.ToLower() -replace '[^a-z0-9-]', '-')
-
-Write-Ok "Repository: $RepoUrl"
-Write-Ok "Project name: $ProjectName"
-Write-Ok "Repo name: $RepoName"
 
 # -- Step 2: Branch -----------------------------------------------------------
 
-$RepoBranch = try { git symbolic-ref --short HEAD 2>$null } catch { "main" }
-if (-not $RepoBranch) { $RepoBranch = "main" }
-$input = Read-Host "  ? Default branch [$RepoBranch]"
-if ($input) { $RepoBranch = $input }
-Write-Ok "Branch: $RepoBranch"
+if ($configExists) {
+    $branchMatch = [regex]::Match($configContent, 'baseBranch:\s*[''"]?([^\s''"]+)[''"]?')
+    if ($branchMatch.Success) {
+        $RepoBranch = $branchMatch.Groups[1].Value
+    } else {
+        $RepoBranch = "main"
+    }
+    Write-Ok "Branch (from config): $RepoBranch"
+} else {
+    $RepoBranch = try { git symbolic-ref --short HEAD 2>$null } catch { "main" }
+    if (-not $RepoBranch) { $RepoBranch = "main" }
+    $input = Read-Host "  ? Default branch [$RepoBranch]"
+    if ($input) { $RepoBranch = $input }
+    Write-Ok "Branch: $RepoBranch"
+}
 
 # -- Step 3: Worker count ----------------------------------------------------
 
@@ -72,38 +117,76 @@ Write-Ok "Workers: $WorkerCount"
 Write-Info "Setting up webhook forwarding..."
 
 $SmeeChannelUrl = ""
-$createSmee = Read-Host "  ? Create a new smee.io channel? [Y/n]"
-if ($createSmee -ne "n" -and $createSmee -ne "N") {
-    try {
-        $response = Invoke-WebRequest -Uri "https://smee.io/new" -MaximumRedirection 0 -ErrorAction SilentlyContinue
-    } catch {
-        if ($_.Exception.Response.Headers.Location) {
-            $SmeeChannelUrl = $_.Exception.Response.Headers.Location.ToString()
+$EnvFile = Join-Path $DevcontainerDir ".env"
+
+# Check existing .env for smee URL
+if (Test-Path $EnvFile) {
+    $existingSmee = (Get-Content $EnvFile | Where-Object { $_ -match '^SMEE_CHANNEL_URL=' }) -replace '^SMEE_CHANNEL_URL=', ''
+    if ($existingSmee) { $SmeeChannelUrl = $existingSmee }
+}
+
+if ($SmeeChannelUrl) {
+    Write-Ok "Smee channel (from existing .env): $SmeeChannelUrl"
+} else {
+    $createSmee = Read-Host "  ? Create a new smee.io channel? [Y/n]"
+    if ($createSmee -ne "n" -and $createSmee -ne "N") {
+        try {
+            $response = Invoke-WebRequest -Uri "https://smee.io/new" -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        } catch {
+            if ($_.Exception.Response.Headers.Location) {
+                $SmeeChannelUrl = $_.Exception.Response.Headers.Location.ToString()
+            }
+        }
+        if ($SmeeChannelUrl) {
+            Write-Ok "Smee channel: $SmeeChannelUrl"
+        } else {
+            Write-Warn "Could not create smee.io channel automatically"
         }
     }
-    if ($SmeeChannelUrl) {
-        Write-Ok "Smee channel: $SmeeChannelUrl"
-    } else {
-        Write-Warn "Could not create smee.io channel automatically"
+
+    if (-not $SmeeChannelUrl) {
+        $SmeeChannelUrl = Read-Host "  ? Smee.io channel URL (create one at https://smee.io/new, or press Enter to skip)"
+        if ($SmeeChannelUrl) {
+            Write-Ok "Smee channel: $SmeeChannelUrl"
+        } else {
+            Write-Warn "Skipping smee.io - you can add SMEE_CHANNEL_URL to .env later"
+        }
     }
 }
 
-if (-not $SmeeChannelUrl) {
-    $SmeeChannelUrl = Read-Host "  ? Smee.io channel URL (create one at https://smee.io/new, or press Enter to skip)"
-    if ($SmeeChannelUrl) {
-        Write-Ok "Smee channel: $SmeeChannelUrl"
-    } else {
-        Write-Warn "Skipping smee.io - you can add SMEE_CHANNEL_URL to .env later"
-    }
+# -- Step 5: Generate .generacy/config.yaml (if not present) -----------------
+
+if (-not $configExists) {
+    Write-Info "Creating .generacy/config.yaml..."
+    if (-not (Test-Path $GeneracyDir)) { New-Item -ItemType Directory -Path $GeneracyDir -Force | Out-Null }
+    $configYaml = @"
+# Generacy project configuration
+# Docs: https://github.com/generacy-ai/cluster-base
+
+project:
+  name: "$ProjectName"
+
+repos:
+  primary: "$Owner/$RepoName"
+  dev:
+    # Add repos for active development (owner/repo format):
+    # - $Owner/another-repo
+  clone:
+    # Add repos to clone as read-only reference:
+    # - $Owner/docs
+
+defaults:
+  baseBranch: $RepoBranch
+"@
+    Set-Content -Path $ConfigFile -Value $configYaml
+    Write-Ok "Created $ConfigFile"
 }
 
-# -- Step 5: Generate .env ---------------------------------------------------
+# -- Step 6: Generate .env (Docker Compose variables) -------------------------
 
 Write-Info "Generating .devcontainer/.env..."
 
-$EnvFile = Join-Path $DevcontainerDir ".env"
 $writeEnv = $true
-
 if (Test-Path $EnvFile) {
     $overwrite = Read-Host "  ? .env already exists. Overwrite? [y/N]"
     if ($overwrite -ne "y" -and $overwrite -ne "Y") {
@@ -115,21 +198,27 @@ if (Test-Path $EnvFile) {
 if ($writeEnv) {
     $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $envContent = @"
+# Docker Compose configuration
 # Generated by setup.ps1 -- $timestamp
+#
+# These variables are used by docker-compose.yml for container setup.
+# Project config (repos, monitoring, webhooks) lives in .generacy/config.yaml.
 
 PROJECT_NAME=$ProjectName
-REPO_URL=$RepoUrl
+REPO_URL=https://github.com/$Owner/$RepoName.git
 REPO_NAME=$RepoName
 REPO_BRANCH=$RepoBranch
 WORKER_COUNT=$WorkerCount
 ORCHESTRATOR_PORT=3100
 SMEE_CHANNEL_URL=$SmeeChannelUrl
+LABEL_MONITOR_ENABLED=true
+WEBHOOK_SETUP_ENABLED=true
 "@
     Set-Content -Path $EnvFile -Value $envContent -NoNewline
     Write-Ok "Created $EnvFile"
 }
 
-# -- Step 6: Generate .env.local (secrets) ------------------------------------
+# -- Step 7: Generate .env.local (secrets) ------------------------------------
 
 Write-Info "Setting up credentials..."
 
@@ -178,7 +267,7 @@ CLAUDE_API_KEY=$claudeKey
     Write-Ok "Created $EnvLocalFile"
 }
 
-# -- Step 7: Update devcontainer.json ----------------------------------------
+# -- Step 8: Update devcontainer.json ----------------------------------------
 
 Write-Info "Updating devcontainer.json..."
 
@@ -194,7 +283,7 @@ if (Test-Path $DevcontainerJson) {
     Write-Warn "devcontainer.json not found at $DevcontainerJson"
 }
 
-# -- Step 8: Ensure ~/.claude.json exists ------------------------------------
+# -- Step 9: Ensure ~/.claude.json exists ------------------------------------
 
 Write-Info "Checking Claude config..."
 
@@ -211,6 +300,12 @@ if (-not (Test-Path $ClaudeJson)) {
 
 Write-Host ""
 Write-Info "Setup complete!"
+Write-Host ""
+Write-Host "  Generated files:"
+Write-Host "    .generacy/config.yaml       - project configuration (commit this)"
+Write-Host "    .devcontainer/.env          - Docker Compose settings (commit this)"
+Write-Host "    .devcontainer/.env.local    - secrets (gitignored, never commit)"
+Write-Host "    .devcontainer/devcontainer.json - updated with project values"
 Write-Host ""
 Write-Host "  Next steps:"
 Write-Host "    1. Open this project in VS Code"
