@@ -28,9 +28,9 @@ function Write-Warn  { Write-Host "  ! $args" -ForegroundColor Yellow }
 function Write-Err   { Write-Host "  x $args" -ForegroundColor Red }
 
 function Parse-Repo {
-    param([string]$Input)
-    $Input = $Input -replace '^https?://github\.com/', '' -replace '^github\.com/', '' -replace '\.git$', '' -replace '/$', ''
-    return $Input
+    param([string]$RepoInput)
+    $RepoInput = $RepoInput -replace '^https?://github\.com/', '' -replace '^github\.com/', '' -replace '\.git$', '' -replace '/$', ''
+    return $RepoInput
 }
 
 # -- Step 1: Load or create .generacy/config.yaml ----------------------------
