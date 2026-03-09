@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "stateProvider": {
+    "type": "github-labels"
+  },
+  "paths": {
+    "specs": "specs"
+  }
+}

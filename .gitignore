@@ -1,0 +1,5 @@
+# User secrets — never commit
+.devcontainer/.env.local
+
+# Generated project config — created by setup script
+.devcontainer/.env
