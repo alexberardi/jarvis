@@ -10,6 +10,9 @@ log() {
 
 log "Starting worker setup..."
 
+# Start Docker-in-Docker daemon (workers get DinD but not host context)
+bash /usr/local/bin/setup-docker-dind.sh
+
 # Configure git credentials
 bash /usr/local/bin/setup-credentials.sh
 
