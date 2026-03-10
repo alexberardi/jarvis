@@ -33,8 +33,26 @@ USER root
 # Add Claude to system-wide PATH
 ENV PATH="/home/node/.local/bin:${PATH}"
 
-# -- Stage 3: Final image -----------------------------------------------------
-FROM tooling AS final
+# -- Stage 3: Docker-in-Docker (CLI + daemon + compose) -----------------------
+FROM tooling AS dind
+
+# Install Docker CE for standalone DinD (docker compose up without VS Code features)
+USER root
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+        | tee /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        docker-ce docker-ce-cli containerd.io docker-compose-plugin iptables \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Let node user start dockerd via sudo (for DinD in standalone mode)
+RUN usermod -aG docker node \
+    && echo "node ALL=(root) NOPASSWD: /usr/bin/dockerd" > /etc/sudoers.d/docker-node \
+    && chmod 0440 /etc/sudoers.d/docker-node
+
+# -- Stage 4: Final image -----------------------------------------------------
+FROM dind AS final
 
 # Copy entrypoint scripts
 COPY --chmod=755 scripts/ /usr/local/bin/

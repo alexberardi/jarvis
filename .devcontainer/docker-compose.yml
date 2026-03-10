@@ -20,6 +20,7 @@ services:
       dockerfile: Dockerfile
     command: /usr/local/bin/entrypoint-orchestrator.sh
     user: node
+    privileged: true
     restart: unless-stopped
     stop_grace_period: 30s
     volumes:
@@ -47,6 +48,10 @@ services:
       - WORKSPACE_DIR=${WORKSPACE_DIR:-}
       - GENERACY_CHANNEL=${GENERACY_CHANNEL:-stable}
       - SKIP_PACKAGE_UPDATE=${SKIP_PACKAGE_UPDATE:-false}
+      # Enable Docker-in-Docker for standalone mode (entrypoint starts dockerd)
+      - ENABLE_DIND=true
+      # Use host docker context by default (orchestrator manages worker containers)
+      - DOCKER_CONTEXT=host
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${ORCHESTRATOR_PORT:-3100}/health"]
       interval: 30s
@@ -69,6 +74,7 @@ services:
       dockerfile: Dockerfile
     command: /usr/local/bin/entrypoint-worker.sh
     user: node
+    privileged: true
     restart: unless-stopped
     stop_grace_period: 30s
     deploy:
@@ -92,6 +98,8 @@ services:
       - WORKSPACE_DIR=${WORKSPACE_DIR:-}
       - GENERACY_CHANNEL=${GENERACY_CHANNEL:-stable}
       - SKIP_PACKAGE_UPDATE=${SKIP_PACKAGE_UPDATE:-false}
+      # Enable Docker-in-Docker for standalone mode (entrypoint starts dockerd)
+      - ENABLE_DIND=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9001/health"]
       interval: 30s

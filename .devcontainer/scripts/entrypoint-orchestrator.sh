@@ -8,6 +8,9 @@ log() {
 
 log "Starting orchestrator setup..."
 
+# Start Docker-in-Docker daemon and configure host context
+bash /usr/local/bin/setup-docker-dind.sh
+
 # Configure git credentials
 bash /usr/local/bin/setup-credentials.sh
 
