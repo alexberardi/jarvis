@@ -138,13 +138,13 @@ info "Setting up webhook forwarding..."
 
 # Check if smee is already configured in an existing .env
 SMEE_CHANNEL_URL=""
-ENV_FILE="${DEVCONTAINER_DIR}/project.env"
+ENV_FILE="${DEVCONTAINER_DIR}/.env"
 if [ -f "$ENV_FILE" ]; then
     SMEE_CHANNEL_URL=$(grep '^SMEE_CHANNEL_URL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)
 fi
 
 if [ -n "$SMEE_CHANNEL_URL" ]; then
-    ok "Smee channel (from existing project.env): $SMEE_CHANNEL_URL"
+    ok "Smee channel (from existing .env): $SMEE_CHANNEL_URL"
 else
     if command -v curl >/dev/null 2>&1; then
         ask "Create a new smee.io channel? [Y/n]:"
@@ -165,7 +165,7 @@ else
         if [ -n "$SMEE_CHANNEL_URL" ]; then
             ok "Smee channel: $SMEE_CHANNEL_URL"
         else
-            warn "Skipping smee.io — you can add SMEE_CHANNEL_URL to project.env later"
+            warn "Skipping smee.io — you can add SMEE_CHANNEL_URL to .env later"
         fi
     fi
 fi
@@ -199,14 +199,14 @@ fi
 
 # ── Step 6: Generate .env (Docker Compose variables) ─────────────────────────
 
-info "Generating .devcontainer/project.env..."
+info "Generating .devcontainer/.env..."
 
 write_env=true
 if [ -f "$ENV_FILE" ]; then
-    ask "project.env already exists. Overwrite? [y/N]:"
+    ask ".env already exists. Overwrite? [y/N]:"
     read -r overwrite
     if [ "${overwrite}" != "y" ] && [ "${overwrite}" != "Y" ]; then
-        warn "Keeping existing project.env"
+        warn "Keeping existing .env"
         write_env=false
     fi
 fi
@@ -325,7 +325,7 @@ info "Setup complete!"
 echo ""
 echo "  Generated files:"
 echo "    .generacy/config.yaml       — project configuration (commit this)"
-echo "    .devcontainer/project.env   — Docker Compose settings (commit this)"
+echo "    .devcontainer/.env          — Docker Compose settings (commit this)"
 echo "    .devcontainer/.env.local    — secrets (gitignored, never commit)"
 echo "    .devcontainer/devcontainer.json — updated with project values"
 echo ""
