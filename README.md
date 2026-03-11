@@ -50,7 +50,7 @@ The setup script walks you through configuring the cluster interactively:
 - Detects your project from the git remote (or prompts for the repo URL)
 - Asks for default branch and worker count
 - Creates a [smee.io](https://smee.io) webhook channel for GitHub event forwarding
-- Generates `.devcontainer/project.env` with project settings
+- Generates `.devcontainer/.env` with project settings
 - Prompts for your GitHub token, username, email, and Claude API key
 - Generates `.devcontainer/.env.local` with your credentials (gitignored, never committed)
 - Updates `devcontainer.json` with your project name and workspace path
@@ -106,7 +106,7 @@ Git merge handles conflicts naturally if you've customized any base files.
   Dockerfile              # Multi-stage build with Node, GitHub CLI, Claude Code
   docker-compose.yml      # Orchestrator + workers + Redis
   devcontainer.json       # VS Code Dev Containers config
-  project.env.template    # Reference for project settings
+  .env.template           # Reference for project settings
   .env.local.template     # Reference for user secrets
   scripts/                # Entrypoint and setup scripts
 .generacy/
