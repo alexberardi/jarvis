@@ -35,7 +35,7 @@ services:
       # npm cache persistence (speeds up repeated installs)
       - npm-cache:/home/node/.npm
     env_file:
-      - path: .env
+      - path: project.env
       - path: .env.local
         required: false
     environment:
@@ -80,7 +80,7 @@ services:
       # Shared packages volume (read-only: workers consume packages installed by orchestrator)
       - shared-packages:/shared-packages:ro
     env_file:
-      - path: .env
+      - path: project.env
       - path: .env.local
         required: false
     environment:
