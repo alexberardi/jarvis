@@ -9,14 +9,15 @@
 # from it and skips those prompts.
 #
 # Usage:
-#   ./setup.sh
-#   ./setup.sh --repo-url https://github.com/your-org/your-repo.git
+#   .generacy/setup.sh
+#   .generacy/setup.sh --repo-url https://github.com/your-org/your-repo.git
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEVCONTAINER_DIR="${SCRIPT_DIR}/.devcontainer"
-GENERACY_DIR="${SCRIPT_DIR}/.generacy"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DEVCONTAINER_DIR="${PROJECT_DIR}/.devcontainer/generacy"
+GENERACY_DIR="${SCRIPT_DIR}"
 CONFIG_FILE="${GENERACY_DIR}/config.yaml"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --repo-url) ARG_REPO_URL="$2"; shift 2 ;;
         --help|-h)
-            echo "Usage: ./setup.sh [--repo-url <url>]"
+            echo "Usage: .generacy/setup.sh [--repo-url <url>]"
             echo ""
             echo "Options:"
             echo "  --repo-url    Git URL of the project repo (auto-detected if omitted)"
@@ -199,7 +200,7 @@ fi
 
 # ── Step 6: Generate .env (Docker Compose variables) ─────────────────────────
 
-info "Generating .devcontainer/.env..."
+info "Generating .devcontainer/generacy/.env..."
 
 write_env=true
 if [ -f "$ENV_FILE" ]; then
@@ -324,15 +325,15 @@ echo ""
 info "Setup complete!"
 echo ""
 echo "  Generated files:"
-echo "    .generacy/config.yaml       — project configuration (commit this)"
-echo "    .devcontainer/.env          — Docker Compose settings (commit this)"
-echo "    .devcontainer/.env.local    — secrets (gitignored, never commit)"
-echo "    .devcontainer/devcontainer.json — updated with project values"
+echo "    .generacy/config.yaml                — project configuration (commit this)"
+echo "    .devcontainer/generacy/.env          — Docker Compose settings (commit this)"
+echo "    .devcontainer/generacy/.env.local    — secrets (gitignored, never commit)"
+echo "    .devcontainer/generacy/devcontainer.json — updated with project values"
 echo ""
 echo "  Next steps:"
 echo "    1. Open this project in VS Code"
-echo "    2. VS Code will prompt: 'Reopen in Container' — click it"
-echo "    3. Or run manually: cd .devcontainer && docker compose up -d"
+echo "    2. VS Code will prompt: 'Reopen in Container' — select 'generacy'"
+echo "    3. Or run manually: cd .devcontainer/generacy && docker compose up -d"
 echo ""
 if [ -n "$SMEE_CHANNEL_URL" ]; then
     echo "  Webhook forwarding:"
