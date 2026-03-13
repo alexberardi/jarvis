@@ -18,16 +18,16 @@ Development cluster setup for AI-powered workflow development with [Generacy](ht
 
    ```bash
    # macOS / Linux / WSL
-   ./setup.sh
+   .generacy/setup.sh
 
    # Windows PowerShell
-   .\setup.ps1
+   .generacy\setup.ps1
    ```
 
-4. **Start the cluster** — open in VS Code and click "Reopen in Container", or:
+4. **Start the cluster** — open in VS Code and select the "generacy" dev container, or:
 
    ```bash
-   cd .devcontainer
+   cd .devcontainer/generacy
    docker compose up -d
    ```
 
@@ -50,9 +50,9 @@ The setup script walks you through configuring the cluster interactively:
 - Detects your project from the git remote (or prompts for the repo URL)
 - Asks for default branch and worker count
 - Creates a [smee.io](https://smee.io) webhook channel for GitHub event forwarding
-- Generates `.devcontainer/.env` with project settings
+- Generates `.devcontainer/generacy/.env` with project settings
 - Prompts for your GitHub token, username, email, and Claude API key
-- Generates `.devcontainer/.env.local` with your credentials (gitignored, never committed)
+- Generates `.devcontainer/generacy/.env.local` with your credentials (gitignored, never committed)
 - Updates `devcontainer.json` with your project name and workspace path
 - Ensures `~/.claude.json` exists on your host (required for the Docker volume mount)
 
@@ -103,19 +103,19 @@ Git merge handles conflicts naturally if you've customized any base files.
 
 ```
 .devcontainer/
-  Dockerfile              # Multi-stage build with Node, GitHub CLI, Claude Code
-  docker-compose.yml      # Orchestrator + workers + Redis
-  devcontainer.json       # VS Code Dev Containers config
-  .env.template           # Reference for project settings
-  .env.local.template     # Reference for user secrets
-  scripts/                # Entrypoint and setup scripts
+  generacy/
+    Dockerfile            # Multi-stage build with Node, GitHub CLI, Claude Code
+    docker-compose.yml    # Orchestrator + workers + Redis
+    devcontainer.json     # VS Code Dev Containers config
+    .env.template         # Reference for project settings
+    .env.local.template   # Reference for user secrets
+    scripts/              # Entrypoint and setup scripts
 .generacy/
+  setup.sh                # Setup script (bash)
+  setup.ps1               # Setup script (PowerShell)
+  README.md               # This file
   speckit-feature.yaml    # Feature development workflow
   speckit-bugfix.yaml     # Bugfix workflow
 .agency/
   config.json             # Agency MCP server config
-.claude/
-  autodev.json            # Claude Code automation config
-setup.sh                  # Setup script (bash)
-setup.ps1                 # Setup script (PowerShell)
 ```

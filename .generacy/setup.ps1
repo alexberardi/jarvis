@@ -8,16 +8,17 @@
 # from it and skips those prompts.
 #
 # Usage:
-#   .\setup.ps1
-#   .\setup.ps1 -RepoUrl https://github.com/your-org/your-repo.git
+#   .generacy\setup.ps1
+#   .generacy\setup.ps1 -RepoUrl https://github.com/your-org/your-repo.git
 
 param(
     [string]$RepoUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
-$DevcontainerDir = Join-Path $PSScriptRoot ".devcontainer"
-$GeneracyDir = Join-Path $PSScriptRoot ".generacy"
+$ProjectDir = Split-Path $PSScriptRoot -Parent
+$DevcontainerDir = Join-Path $ProjectDir ".devcontainer" "generacy"
+$GeneracyDir = $PSScriptRoot
 $ConfigFile = Join-Path $GeneracyDir "config.yaml"
 
 # -- Helpers ------------------------------------------------------------------
@@ -184,7 +185,7 @@ defaults:
 
 # -- Step 6: Generate .env (Docker Compose variables) -------------------------
 
-Write-Info "Generating .devcontainer/.env..."
+Write-Info "Generating .devcontainer/generacy/.env..."
 
 $writeEnv = $true
 if (Test-Path $EnvFile) {
@@ -302,15 +303,15 @@ Write-Host ""
 Write-Info "Setup complete!"
 Write-Host ""
 Write-Host "  Generated files:"
-Write-Host "    .generacy/config.yaml       - project configuration (commit this)"
-Write-Host "    .devcontainer/.env          - Docker Compose settings (commit this)"
-Write-Host "    .devcontainer/.env.local    - secrets (gitignored, never commit)"
-Write-Host "    .devcontainer/devcontainer.json - updated with project values"
+Write-Host "    .generacy/config.yaml                - project configuration (commit this)"
+Write-Host "    .devcontainer/generacy/.env          - Docker Compose settings (commit this)"
+Write-Host "    .devcontainer/generacy/.env.local    - secrets (gitignored, never commit)"
+Write-Host "    .devcontainer/generacy/devcontainer.json - updated with project values"
 Write-Host ""
 Write-Host "  Next steps:"
 Write-Host "    1. Open this project in VS Code"
-Write-Host "    2. VS Code will prompt: 'Reopen in Container' -- click it"
-Write-Host "    3. Or run manually: cd .devcontainer; docker compose up -d"
+Write-Host "    2. VS Code will prompt: 'Reopen in Container' -- select 'generacy'"
+Write-Host "    3. Or run manually: cd .devcontainer/generacy; docker compose up -d"
 Write-Host ""
 if ($SmeeChannelUrl) {
     Write-Host "  Webhook forwarding:"

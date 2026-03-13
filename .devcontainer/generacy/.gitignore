@@ -1,2 +1,2 @@
 # User secrets — never commit
-.devcontainer/.env.local
+.env.local
