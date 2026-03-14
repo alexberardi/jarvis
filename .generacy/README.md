@@ -56,6 +56,44 @@ The setup script walks you through configuring the cluster interactively:
 - Updates `devcontainer.json` with your project name and workspace path
 - Ensures `~/.claude.json` exists on your host (required for the Docker volume mount)
 
+## Cluster Configuration
+
+The file `.generacy/cluster.yaml` is the declarative source of truth for cluster settings. The orchestrator and workers read it on startup to determine default values for channel, worker count, and worker state.
+
+```yaml
+channel: stable          # preview | stable
+workers:
+  count: 3               # number of worker containers
+  enabled: true          # global worker enable/disable
+```
+
+**How defaults work**: Values in `.env` override `cluster.yaml`. If `GENERACY_CHANNEL` or `WORKER_COUNT` are set in `.env`, those take precedence. If not, the values from `cluster.yaml` are used.
+
+### Switching Release Channels
+
+Use the channel switching script to move between `stable` (production releases, tracks `main`) and `preview` (latest features, tracks `develop`):
+
+```bash
+# macOS / Linux / WSL
+.generacy/switch-channel.sh preview
+.generacy/switch-channel.sh stable
+
+# Windows PowerShell
+.generacy\switch-channel.ps1 preview
+.generacy\switch-channel.ps1 stable
+```
+
+The script will:
+1. Add/verify the `cluster-base` git remote
+2. Fetch and merge the target branch (`main` for stable, `develop` for preview)
+3. Update `cluster.yaml`, `.env.template`, and `.env` with the new channel
+4. Print next steps (rebuild containers to apply)
+
+**Manual channel switch** (without the script):
+1. Edit `.generacy/cluster.yaml` — set `channel: preview` or `channel: stable`
+2. Edit `.devcontainer/generacy/.env` — set `GENERACY_CHANNEL=preview` or `GENERACY_CHANNEL=stable`
+3. Rebuild: `cd .devcontainer/generacy && docker compose up -d --build`
+
 ## What's Included
 
 - **Orchestrator** — manages worker lifecycle, dispatches label-driven workflows
@@ -111,8 +149,11 @@ Git merge handles conflicts naturally if you've customized any base files.
     .env.local.template   # Reference for user secrets
     scripts/              # Entrypoint and setup scripts
 .generacy/
+  cluster.yaml            # Cluster configuration (channel, workers)
   setup.sh                # Setup script (bash)
   setup.ps1               # Setup script (PowerShell)
+  switch-channel.sh       # Channel switching (bash)
+  switch-channel.ps1      # Channel switching (PowerShell)
   README.md               # This file
   speckit-feature.yaml    # Feature development workflow
   speckit-bugfix.yaml     # Bugfix workflow
