@@ -158,7 +158,9 @@ Nodes/Clients
         ├─▶ jarvis-settings-client (runtime settings)
         ├─▶ jarvis-llm-proxy-api (LLM inference)
         ├─▶ jarvis-whisper-api (speech-to-text)
-        └─▶ jarvis-tts (text-to-speech)
+        ├─▶ jarvis-tts (text-to-speech)
+        ├─▶ jarvis-notifications (push + inbox for deep research)
+        └─▶ jarvis-web-scraper (web content extraction)
 
 jarvis-ocr-service
   ├─▶ jarvis-auth (app-to-app auth)
@@ -183,8 +185,18 @@ jarvis-mcp
   ├─▶ jarvis-logs (log queries)
   └─▶ jarvis-auth (auth headers for protected calls)
 
+jarvis-notifications (7712) ◄─── Push notifications + inbox
+  ├─▶ jarvis-auth (app-to-app auth)
+  ├─▶ jarvis-config-service (service discovery)
+  ├─▶ jarvis-logs (structured logging)
+  ├─▶ jarvis-notifications-relay (optional, Expo push delivery)
+  └─▶ PostgreSQL (device tokens, notification log, inbox items)
+
+jarvis-notifications-relay ◄─── Expo Push API proxy (cloud/local)
+  └─▶ Expo Push API (APNs/FCM delivery)
+
 Data stores (shared infra)
-  ├─ PostgreSQL (auth, command-center, recipes, config-service)
+  ├─ PostgreSQL (auth, command-center, recipes, config-service, notifications)
   ├─ Redis (ocr queue, async jobs)
   ├─ MinIO (object storage)
   └─ Mosquitto (node ↔ tts MQTT)
@@ -200,6 +212,8 @@ Data stores (shared infra)
 | jarvis-ocr-service | 7031 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) |
 | jarvis-recipes-server | 7030 | Recipe CRUD and meal planning |
 | jarvis-node-setup | - | Client-side node code (not a server) |
+| jarvis-notifications | 7712 | Push notifications, inbox, device token management |
+| jarvis-notifications-relay | - | Stateless Expo Push API proxy (cloud/local) |
 
 ## Common Patterns
 
@@ -256,6 +270,7 @@ GPU-dependent services run **locally** to access Metal and Apple Vision framewor
 │  jarvis-settings-server (7708)                         │
 │  jarvis-mcp             (7709)                         │
 │  jarvis-admin           (7710)                         │
+│  jarvis-notifications   (7712)                         │
 │  PostgreSQL, Redis, MinIO                              │
 └────────────────────────────────────────────────────────┘
          ▲ host.docker.internal
@@ -334,7 +349,7 @@ jarvis-config-service (7700) ◄─── Service discovery hub
 
 jarvis-auth (7701) ◄─── Authentication hub
     │
-    ├─── Used by: command-center, whisper-api, ocr-service, tts, logs, settings-server, admin
+    ├─── Used by: command-center, whisper-api, ocr-service, tts, logs, settings-server, admin, notifications
     ├─── Dependencies: PostgreSQL, jarvis-logs (optional)
     └─── Impact if down: No new logins, no app-to-app auth validation
 
@@ -346,9 +361,9 @@ jarvis-logs (7702) ◄─── Centralized logging
 
 jarvis-command-center (7703) ◄─── Voice command orchestrator
     │
-    ├─── Used by: jarvis-node-setup (Pi Zero nodes)
+    ├─── Used by: jarvis-node-setup (Pi Zero nodes), jarvis-node-mobile
     ├─── Dependencies: PostgreSQL, jarvis-llm-proxy-api, jarvis-auth, jarvis-logs
-    ├─── Optional calls: jarvis-whisper-api, jarvis-ocr-service
+    ├─── Optional calls: jarvis-whisper-api, jarvis-ocr-service, jarvis-notifications
     └─── Impact if down: No voice commands processed
 
 jarvis-llm-proxy-api (7704/7705) ◄─── LLM inference
@@ -399,6 +414,19 @@ jarvis-admin (7710) ◄─── Web admin UI
     ├─── Dependencies: jarvis-config-service, jarvis-auth, jarvis-settings-server
     └─── Impact if down: No web UI (services continue)
 
+jarvis-notifications (7712) ◄─── Push notifications + inbox
+    │
+    ├─── Used by: command-center (deep research, alerts), recipes-server, node-mobile
+    ├─── Dependencies: PostgreSQL, jarvis-auth, jarvis-config-service
+    ├─── Optional: jarvis-notifications-relay (Expo push delivery), jarvis-logs
+    └─── Impact if down: No push notifications, no inbox delivery
+
+jarvis-notifications-relay ◄─── Expo Push API proxy
+    │
+    ├─── Used by: jarvis-notifications (push forwarding)
+    ├─── Dependencies: Expo Push API (external)
+    └─── Impact if down: Push notifications not delivered to devices (inbox still works)
+
 jarvis-node-setup ◄─── Pi Zero client
     │
     ├─── Used by: End users (voice nodes)
@@ -425,6 +453,8 @@ jarvis-node-setup ◄─── Pi Zero client
 - `jarvis-ocr-service` - OCR
 - `jarvis-tts` - Text-to-speech
 - `jarvis-recipes-server` - Recipe data
+- `jarvis-notifications` - Push notifications + inbox
+- `jarvis-notifications-relay` - Expo Push proxy (cloud)
 
 **Tier 4 (Management & Tooling):**
 - `jarvis-settings-server` - Settings proxy
@@ -717,6 +747,10 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [x] Migrate all production print() to JarvisLogger
 - [x] Fix all broad `except Exception:` without `as e` (63 production + 13 E2E test instances)
 - [x] Voice-identified persistent memory (speaker ID wiring, user memory table, memory-aware prompts, remember/forget tools, voice enrollment API, memory CRUD API)
+- [x] Push notifications (jarvis-notifications + relay + mobile integration)
+- [x] Deep research tool (web search → scrape → LLM summarize → inbox + push)
+- [x] Web scraper library (jarvis-web-scraper, extracted from recipes html_fetcher.py)
+- [x] Mobile inbox UI (InboxList + InboxDetail screens, Inbox tab)
 
 ### 🚀 Future Enhancements (Feature Parity Roadmap)
 
@@ -772,6 +806,8 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 | jarvis-logs | 7702 | Small | ✅ Good | Clean |
 | jarvis-mcp | 7709 | Small | ✅ Good | Clean |
 | jarvis-config-service | 7700 | Small | ✅ Good (93%) | Clean |
+| jarvis-notifications | 7712 | Small | ✅ Good (77%) | Clean |
+| jarvis-notifications-relay | - | Small | ✅ Good | Clean |
 
 ### Libraries
 
@@ -779,6 +815,7 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 |---------|-------|--------|
 | jarvis-log-client | ✅ Good | Clean |
 | jarvis-config-client | ✅ Good | Clean |
+| jarvis-web-scraper | ✅ Good (27 tests) | Clean |
 
 ### Client Software
 

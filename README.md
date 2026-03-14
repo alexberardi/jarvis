@@ -57,10 +57,15 @@ What makes Jarvis different from other self-hosted alternatives:
       ┌────────────────────────────────┼────────────────────────────────────┐
       │                                │          SERVICES                  │
       │  ┌──────────┐  ┌──────────┐  ┌▼─────────┐  ┌──────────┐           │
-      │  │ TTS      │  │ Recipes  │  │ OCR      │  │ Settings │  ...      │
-      │  │ (Piper)  │  │ + meal   │  │ Tesseract│  │ Server   │           │
+      │  │ TTS      │  │ Recipes  │  │ OCR      │  │ Settings │           │
+      │  │ (Piper)  │  │ + meal   │  │ Tesseract│  │ Server   │  ...     │
       │  │          │  │ planning │  │ EasyOCR  │  │          │           │
       │  └──────────┘  └──────────┘  └──────────┘  └──────────┘           │
+      │  │ Notif.   │  │ Notif.   │                                       │
+      │  │ Service  │  │ Relay    │                                       │
+      │  │ push+    │  │ Expo→    │                                       │
+      │  │ inbox    │  │ APNs/FCM │                                       │
+      │  └──────────┘  └──────────┘                                       │
       └────────────────────────────────────────────────────────────────────┘
                                        │
       ┌────────────────────────────────┼────────────────────────────────────┐
@@ -144,6 +149,8 @@ Add-on services for additional capabilities.
 | [jarvis-mcp](https://github.com/alexberardi/jarvis-mcp) | 7709 | Model Context Protocol server for Claude Code | [![Tests](https://github.com/alexberardi/jarvis-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-mcp/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-mcp/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-mcp/actions/workflows/docker-build-push.yml) |
 | [jarvis-ocr-service](https://github.com/alexberardi/jarvis-ocr-service) | 7031 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) | [![Tests](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/docker-build-push.yml) |
 | [jarvis-recipes-server](https://github.com/alexberardi/jarvis-recipes-server) | 7030 | Recipe CRUD, URL parsing, and meal planning | [![Tests](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/docker-build-push.yml) |
+| [jarvis-notifications](https://github.com/alexberardi/jarvis-notifications) | 7712 | Push notifications, inbox, and deep research delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-notifications/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications/actions/workflows/docker-build-push.yml) |
+| [jarvis-notifications-relay](https://github.com/alexberardi/jarvis-notifications-relay) | - | Stateless Expo Push API proxy for APNs/FCM delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/docker-build-push.yml) |
 
 ### Client Libraries
 
@@ -153,6 +160,7 @@ Add-on services for additional capabilities.
 | [jarvis-log-client](https://github.com/alexberardi/jarvis-log-client) | Structured logging via jarvis-logs | [![Tests](https://github.com/alexberardi/jarvis-log-client/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-log-client/actions/workflows/test.yml) |
 | [jarvis-auth-client](https://github.com/alexberardi/jarvis-auth-client) | Auth helpers for service-to-service calls | [![CI](https://github.com/alexberardi/jarvis-auth-client/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth-client/actions/workflows/ci.yml) |
 | [jarvis-settings-client](https://github.com/alexberardi/jarvis-settings-client) | Runtime settings client | [![CI](https://github.com/alexberardi/jarvis-settings-client/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-settings-client/actions/workflows/ci.yml) |
+| [jarvis-web-scraper](https://github.com/alexberardi/jarvis-web-scraper) | Web scraping and content extraction | [![Tests](https://github.com/alexberardi/jarvis-web-scraper/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-web-scraper/actions/workflows/test.yml) |
 
 ### Client Apps
 
@@ -238,6 +246,7 @@ Jarvis can fine-tune per-node LoRA adapters to improve command recognition for y
 | **Entertainment** | Sports scores and schedules, jokes, stories |
 | **Cooking** | Recipe search, URL import, meal planning, OCR from photos |
 | **Conversation** | General chat with context memory |
+| **Research** | Deep web research with summarization, delivered via push + inbox |
 
 Add your own by implementing the `IJarvisCommand` interface — define parameters, validation, and examples, and Jarvis handles the rest.
 
