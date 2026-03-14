@@ -17,6 +17,10 @@ bash /usr/local/bin/setup-credentials.sh
 # Resolve workspace directory (handles devcontainer detection + clone)
 source /usr/local/bin/resolve-workspace.sh
 
+# Load cluster.yaml defaults (sets GENERACY_CHANNEL, WORKER_COUNT, WORKERS_ENABLED
+# if not already provided via .env or environment)
+source /usr/local/bin/load-cluster-config.sh
+
 # Install generacy/agency packages into shared volume
 SHARED_PACKAGES=/shared-packages
 CHANNEL="${GENERACY_CHANNEL:-stable}"
