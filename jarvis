@@ -54,6 +54,7 @@ SERVICES=(
     "jarvis-mcp|7709|4|docker|/health"
     "jarvis-notifications|7712|3|docker|/health"
     "jarvis-admin|7710|5|npm|/"
+    "jarvis-web|7722|5|npm|/"
 )
 
 # ── Test registry ─────────────────────────────────────────────────────────
@@ -571,16 +572,21 @@ print(header+'.'+payload+'.'+sig)
             jarvis-admin)
                 _inject_env_var "$env_file" "PORT" "7710"
                 ;;
+            jarvis-web)
+                _inject_env_var "$env_file" "PORT" "7722"
+                _inject_env_var "$env_file" "COMMAND_CENTER_URL" "http://localhost:7703"
+                _inject_env_var "$env_file" "AUTH_URL" "http://localhost:7701"
+                ;;
         esac
 
         # --- App identity (all services except admin) ---
         # Config-service needs JARVIS_APP_ID for settings gateway (app-to-app auth to other services)
-        if [[ "$name" != "jarvis-admin" ]]; then
+        if [[ "$name" != "jarvis-admin" && "$name" != "jarvis-web" ]]; then
             _inject_env_var "$env_file" "JARVIS_APP_ID" "$name"
         fi
 
         # --- Auth service URL (env var fallback for module-level auth init) ---
-        if [[ "$name" != "jarvis-auth" && "$name" != "jarvis-config-service" && "$name" != "jarvis-admin" ]]; then
+        if [[ "$name" != "jarvis-auth" && "$name" != "jarvis-config-service" && "$name" != "jarvis-admin" && "$name" != "jarvis-web" ]]; then
             _inject_env_var "$env_file" "JARVIS_AUTH_BASE_URL" "http://${svc_host}:7701"
         fi
 
@@ -1773,6 +1779,7 @@ cmd_quickstart() {
     echo ""
     echo -e "${BOLD}Quickstart complete.${NC}"
     echo -e "  Dashboard: ${CYAN}http://localhost:7710${NC}"
+    echo -e "  Web Chat:  ${CYAN}http://localhost:7722${NC}"
     echo -e "  LLM API:   ${CYAN}http://localhost:7704/health${NC}"
 }
 
