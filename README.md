@@ -150,7 +150,17 @@ Add-on services for additional capabilities.
 | [jarvis-ocr-service](https://github.com/alexberardi/jarvis-ocr-service) | 7031 | OCR with pluggable backends (Tesseract, EasyOCR, Apple Vision) | [![Tests](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-ocr-service/actions/workflows/docker-build-push.yml) |
 | [jarvis-recipes-server](https://github.com/alexberardi/jarvis-recipes-server) | 7030 | Recipe CRUD, URL parsing, and meal planning | [![Tests](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-server/actions/workflows/docker-build-push.yml) |
 | [jarvis-notifications](https://github.com/alexberardi/jarvis-notifications) | 7712 | Push notifications, inbox, and deep research delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-notifications/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications/actions/workflows/docker-build-push.yml) |
-| [jarvis-notifications-relay](https://github.com/alexberardi/jarvis-notifications-relay) | - | Stateless Expo Push API proxy for APNs/FCM delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/docker-build-push.yml) |
+### Cloud
+
+Optional cloud-hosted services and public-facing web apps.
+
+| Service | Port | Description | CI |
+|---------|------|-------------|-----|
+| [jarvis-notifications-relay](https://github.com/alexberardi/jarvis-notifications-relay) | - | Stateless Expo Push API proxy for APNs/FCM delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml) |
+| [jarvis-pantry](https://github.com/alexberardi/jarvis-pantry) | 7721 | Community command store API (browse, submit, review) | [![Tests](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml) |
+| [jarvis-pantry-web](https://github.com/alexberardi/jarvis-pantry-web) | 7720 | Pantry web frontend (Next.js) — catalog browser + Command Forge | [![CI](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml) |
+| [jarvis-docs](https://github.com/alexberardi/jarvis-docs) | - | Project documentation (MkDocs) | |
+| [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk) | - | Core interfaces for building voice commands (pip package) | |
 
 ### Client Libraries
 
