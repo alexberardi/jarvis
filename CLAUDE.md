@@ -214,6 +214,9 @@ Data stores (shared infra)
 | jarvis-node-setup | - | Client-side node code (not a server) |
 | jarvis-notifications | 7712 | Push notifications, inbox, device token management |
 | jarvis-notifications-relay | - | Stateless Expo Push API proxy (cloud/local) |
+| jarvis-pantry | 7720 | Community package store (browse, submit, review, install) |
+| jarvis-command-sdk | - | Shared interfaces (IJarvisCommand, IJarvisAgent, IJarvisDeviceProtocol, IJarvisDeviceManager) |
+| jarvis-web | 7722 | Web chat interface (Next.js) |
 
 ## Common Patterns
 
@@ -271,6 +274,7 @@ GPU-dependent services run **locally** to access Metal and Apple Vision framewor
 │  jarvis-mcp             (7709)                         │
 │  jarvis-admin           (7710)                         │
 │  jarvis-notifications   (7712)                         │
+│  jarvis-web             (7722)                         │
 │  PostgreSQL, Redis, MinIO                              │
 └────────────────────────────────────────────────────────┘
          ▲ host.docker.internal
@@ -412,6 +416,11 @@ jarvis-admin (7710) ◄─── Web admin UI
     │
     ├─── Used by: Administrators (browser)
     ├─── Dependencies: jarvis-config-service, jarvis-auth, jarvis-settings-server
+
+jarvis-web (7722) ◄─── Web chat interface
+    │
+    ├─── Used by: End users (browser)
+    ├─── Dependencies: jarvis-auth (login), jarvis-command-center (chat API)
     └─── Impact if down: No web UI (services continue)
 
 jarvis-notifications (7712) ◄─── Push notifications + inbox
@@ -459,7 +468,8 @@ jarvis-node-setup ◄─── Pi Zero client
 **Tier 4 (Management & Tooling):**
 - `jarvis-settings-server` - Settings proxy
 - `jarvis-mcp` - Claude Code tools
-- `jarvis-admin` - Web UI
+- `jarvis-admin` - Admin Web UI
+- `jarvis-web` - Web chat interface
 
 **Tier 5 (Clients):**
 - `jarvis-node-setup` - Voice nodes
@@ -751,13 +761,18 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [x] Deep research tool (web search → scrape → LLM summarize → inbox + push)
 - [x] Web scraper library (jarvis-web-scraper, extracted from recipes html_fetcher.py)
 - [x] Mobile inbox UI (InboxList + InboxDetail screens, Inbox tab)
+- [x] Pantry multi-type bundles (commands + agents + protocols + managers in one package)
+- [x] SDK interfaces for IJarvisAgent, IJarvisDeviceProtocol, IJarvisDeviceManager
+- [x] HA restructure to convention layout (commands/control_device/, agents/home_assistant/, ha_shared/)
+- [x] Reference bundle: jarvis-home-assistant-integration (published, 34/34 container tests)
+- [x] Container test base image caching (SDK pre-built, submissions take ~3s)
 
 ### 🚀 Future Enhancements (Feature Parity Roadmap)
 
 **Smart Home Integration:**
-- [ ] Home Assistant integration (device control layer)
-- [ ] Device discovery (Matter, Zigbee, Z-Wave via HA)
-- [ ] Direct device control ("turn off the lights", "set thermostat to 72")
+- [x] ~~Home Assistant integration (device control layer)~~ ✅ control_device + get_device_status commands
+- [x] ~~Device discovery (Matter, Zigbee, Z-Wave via HA)~~ ✅ HA agent + device manager
+- [x] ~~Direct device control ("turn off the lights", "set thermostat to 72")~~ ✅ control_device command
 - [ ] Routines/automations ("Good morning" → lights + weather + calendar)
 - [ ] Broadcast commands to device groups
 
@@ -774,11 +789,13 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [ ] Habit-based suggestions
 
 **Command Store (HACS-style):**
-- [ ] Community command repository
-- [ ] User-installable commands (no coding required)
-- [ ] Command discovery/search
-- [ ] Ratings and reviews
+- [x] ~~Community command repository~~ ✅ jarvis-pantry (backend + web)
+- [x] ~~User-installable commands~~ ✅ `jarvis pantry install` CLI
+- [x] ~~Command discovery/search~~ ✅ Browse/search API + web catalog
+- [x] ~~Ratings and reviews~~ ✅ Review system with star ratings
 - [ ] Auto-update mechanism
+- [x] ~~Multi-type package bundles~~ ✅ Commands + agents + device protocols + device managers in one repo
+- [x] ~~Reference bundle~~ ✅ [jarvis-home-assistant-integration](https://github.com/alexberardi/jarvis-home-assistant-integration)
 
 **Visual/Multi-Modal:**
 - [ ] Screen-based responses (for tablet/display nodes)
@@ -787,8 +804,8 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 
 **Quality of Life:**
 - [ ] "Just works" setup wizard
-- [ ] Mobile app for management
-- [ ] Web dashboard for configuration
+- [x] ~~Mobile app for management~~ ✅ jarvis-node-mobile
+- [x] ~~Web dashboard for configuration~~ ✅ jarvis-admin (admin), jarvis-web (chat)
 
 ## Service Inventory
 
@@ -808,6 +825,7 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 | jarvis-config-service | 7700 | Small | ✅ Good (93%) | Clean |
 | jarvis-notifications | 7712 | Small | ✅ Good (77%) | Clean |
 | jarvis-notifications-relay | - | Small | ✅ Good | Clean |
+| jarvis-web | 7722 | Small | - | New (Next.js chat UI) |
 
 ### Libraries
 
