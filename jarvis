@@ -3216,6 +3216,15 @@ case "${1:-}" in
         shift
         cmd_add_service "$@"
         ;;
+    pantry|store)
+        shift
+        cd "${JARVIS_ROOT}/jarvis-node-setup"
+        if [[ -f .venv/bin/python ]]; then
+            .venv/bin/python scripts/command_store.py "$@"
+        else
+            python3 scripts/command_store.py "$@"
+        fi
+        ;;
     *)
         usage
         ;;
