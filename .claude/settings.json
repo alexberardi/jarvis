@@ -3,5 +3,20 @@
     "allow": [
       "WebFetch(domain:alexberardi.github.io)"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ./scripts/check-docs-freshness.sh 2>/dev/null || true",
+            "timeout": 10,
+            "statusMessage": "Checking docs freshness..."
+          }
+        ]
+      }
+    ]
   }
 }
