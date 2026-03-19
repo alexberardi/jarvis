@@ -1,9 +1,9 @@
 {
-  "name": "generacy-cluster",
+  "name": "jarvis",
   "dockerComposeFile": "docker-compose.yml",
   "service": "orchestrator",
   "runServices": ["orchestrator", "redis"],
-  "workspaceFolder": "/workspaces/project",
+  "workspaceFolder": "/workspaces/jarvis",
   "shutdownAction": "none",
   "overrideCommand": false,
   "postStartCommand": "bash /usr/local/bin/setup-docker-dind.sh",
