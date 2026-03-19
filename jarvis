@@ -55,6 +55,7 @@ SERVICES=(
     "jarvis-notifications|7712|3|docker|/health"
     "jarvis-admin|7710|5|npm|/"
     "jarvis-web|7722|5|npm|/"
+    "jarvis-node-setup|7771|5|docker|/health"
 )
 
 # ── Test registry ─────────────────────────────────────────────────────────

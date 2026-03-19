@@ -1,0 +1,44 @@
+# Generacy project configuration
+# Docs: https://github.com/generacy-ai/cluster-base
+
+project:
+  name: "jarvis"
+
+repos:
+  primary: "git@github.com:alexberardi/jarvis"
+  dev:
+    - git@github.com:alexberardi/jarvis-admin
+    - git@github.com:alexberardi/jarvis-auth
+    - git@github.com:alexberardi/jarvis-auth-client
+    - git@github.com:alexberardi/jarvis-command-center
+    - git@github.com:alexberardi/jarvis-command-sdk
+    - git@github.com:alexberardi/jarvis-config-client
+    - git@github.com:alexberardi/jarvis-config-service
+    - git@github.com:alexberardi/jarvis-data-services
+    - git@github.com:alexberardi/jarvis-docs
+    - git@github.com:alexberardi/jarvis-installer
+    - git@github.com:alexberardi/jarvis-llm-proxy-api
+    - git@github.com:alexberardi/jarvis-log-client
+    - git@github.com:alexberardi/jarvis-logs
+    - git@github.com:alexberardi/jarvis-mcp
+    - git@github.com:alexberardi/jarvis-node-mobile
+    - git@github.com:alexberardi/jarvis-node-setup
+    - git@github.com:alexberardi/jarvis-notifications
+    - git@github.com:alexberardi/jarvis-notifications-relay
+    - git@github.com:alexberardi/jarvis-ocr-service
+    - git@github.com:alexberardi/jarvis-pantry
+    - git@github.com:alexberardi/jarvis-pantry-web
+    - git@github.com:alexberardi/jarvis-recipes-mobile
+    - git@github.com:alexberardi/jarvis-recipes-server
+    - git@github.com:alexberardi/jarvis-settings-client
+    - git@github.com:alexberardi/jarvis-settings-server
+    - git@github.com:alexberardi/jarvis-tts
+    - git@github.com:alexberardi/jarvis-web
+    - git@github.com:alexberardi/jarvis-web-scraper
+    - git@github.com:alexberardi/jarvis-whisper-api
+  clone:
+    # Add repos to clone as read-only reference:
+    # - git@github.com:alexberardi/docs
+
+defaults:
+  baseBranch: main
