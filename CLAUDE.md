@@ -766,6 +766,8 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [x] HA restructure to convention layout (commands/control_device/, agents/home_assistant/, ha_shared/)
 - [x] Reference bundle: jarvis-home-assistant-integration (published, 34/34 container tests)
 - [x] Container test base image caching (SDK pre-built, submissions take ~3s)
+- [x] Forge (AI package builder) — split-pane IDE, BYOK (6 models), SDK self-documents via `__forge_hints__`, AST validation, one-click GitHub publish
+- [x] Mobile Store tab — browse/search Pantry, install to nodes via CC → MQTT
 
 ### 🚀 Future Enhancements (Feature Parity Roadmap)
 
@@ -788,7 +790,7 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [ ] Package tracking alerts
 - [ ] Habit-based suggestions
 
-**Command Store (HACS-style):**
+**Package Store (HACS-style):**
 - [x] ~~Community command repository~~ ✅ jarvis-pantry (backend + web)
 - [x] ~~User-installable commands~~ ✅ `jarvis pantry install` CLI
 - [x] ~~Command discovery/search~~ ✅ Browse/search API + web catalog
@@ -796,6 +798,8 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [ ] Auto-update mechanism
 - [x] ~~Multi-type package bundles~~ ✅ Commands + agents + device protocols + device managers in one repo
 - [x] ~~Reference bundle~~ ✅ [jarvis-home-assistant-integration](https://github.com/alexberardi/jarvis-home-assistant-integration)
+- [x] ~~AI Forge~~ ✅ Split-pane IDE, BYOK (6 models), SDK auto-docs, AST validation, one-click publish
+- [x] ~~Mobile Store tab~~ ✅ Browse/install from mobile app via CC → MQTT
 
 **Visual/Multi-Modal:**
 - [ ] Screen-based responses (for tablet/display nodes)

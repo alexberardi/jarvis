@@ -26,6 +26,35 @@ What makes Jarvis different from other self-hosted alternatives:
 - **Speaker identification.** Jarvis knows who's talking. Voice profiles per household member, so each person gets their own context, preferences, and command routing.
 - **Pi Zero voice nodes.** $15 hardware with a mic and speaker becomes a room-scale voice endpoint. Headless provisioning — plug in power, connect to the setup WiFi, and it registers itself.
 - **Extensible command system.** Implement the `IJarvisCommand` interface, drop it in, and Jarvis picks it up. 20+ built-in commands (weather, timers, smart home, sports scores, recipes, music, general knowledge) with more added regularly.
+- **Community package store + AI Forge.** Browse and install community packages from the [Pantry](https://pantry.jarvisautomation.io). Or use the Forge — describe what you want in plain English and an AI generates a complete, validated package you can publish with one click.
+
+## Forge
+
+The Forge is an AI-powered package builder built into the Pantry web UI. It generates complete Jarvis packages — commands, agents, device protocols, device managers, or multi-component bundles — from natural language descriptions.
+
+```
+ You: "A command that fetches cryptocurrency prices by ticker symbol using CoinGecko"
+   │
+   ▼
+ Forge ──► SDK introspects itself (forge.py) ──► builds system prompt
+   │         with interface contracts, manifest schema,
+   │         validation rules, constructor signatures
+   ▼
+ LLM generates: command.py + jarvis_command.yaml + README.md + LICENSE
+   │
+   ▼
+ AST validation ──► static analysis runs on generated code before you see it
+   │
+   ▼
+ Split-pane IDE ──► chat on left, editable code with syntax highlighting on right
+   │
+   ▼
+ One-click publish ──► creates GitHub repo ──► submits to Pantry pipeline
+```
+
+**How it works under the hood:** The SDK decorates every interface class with `__forge_hints__` metadata. At runtime, `forge.py` walks all SDK classes via `inspect` + `get_type_hints`, combines them with manifest schema and validation rules, and produces a structured spec (~550 lines of Markdown). This spec becomes the LLM's system prompt — so it's always in sync with the actual interfaces. When you add a method to `IJarvisCommand`, the Forge automatically knows about it.
+
+**BYOK:** Users provide their own API key. Six models available (Haiku 4.5, Sonnet 4, Opus 4, GPT-4o, ChatGPT-5, Codex) with per-generation cost estimates shown in the UI.
 
 ## Architecture
 
@@ -157,10 +186,10 @@ Optional cloud-hosted services and public-facing web apps.
 | Service | Port | Description | CI |
 |---------|------|-------------|-----|
 | [jarvis-notifications-relay](https://github.com/alexberardi/jarvis-notifications-relay) | - | Stateless Expo Push API proxy for APNs/FCM delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml) |
-| [jarvis-pantry](https://github.com/alexberardi/jarvis-pantry) | 7721 | Community command store API (browse, submit, review) | [![Tests](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml) |
-| [jarvis-pantry-web](https://github.com/alexberardi/jarvis-pantry-web) | 7720 | Pantry web frontend (Next.js) — catalog browser + Command Forge | [![CI](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml) |
+| [jarvis-pantry](https://github.com/alexberardi/jarvis-pantry) | 7721 | Community package store API (browse, submit, review, Forge) | [![Tests](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml) |
+| [jarvis-pantry-web](https://github.com/alexberardi/jarvis-pantry-web) | 7720 | Pantry web frontend (Next.js) — catalog browser + AI Forge | [![CI](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml) |
 | [jarvis-docs](https://github.com/alexberardi/jarvis-docs) | - | Project documentation (MkDocs) | |
-| [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk) | - | Core interfaces for building voice commands (pip package) | |
+| [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk) | - | Core interfaces + Forge spec generator (pip package) | |
 
 ### Client Libraries
 
