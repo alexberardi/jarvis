@@ -1,0 +1,2 @@
+# User secrets — never commit
+.env.local
