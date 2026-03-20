@@ -5,40 +5,38 @@ project:
   name: "jarvis"
 
 repos:
-  primary: "git@github.com:alexberardi/jarvis"
+  primary: "alexberardi/jarvis"
   dev:
-    - git@github.com:alexberardi/jarvis-admin
-    - git@github.com:alexberardi/jarvis-auth
-    - git@github.com:alexberardi/jarvis-auth-client
-    - git@github.com:alexberardi/jarvis-command-center
-    - git@github.com:alexberardi/jarvis-command-sdk
-    - git@github.com:alexberardi/jarvis-config-client
-    - git@github.com:alexberardi/jarvis-config-service
-    - git@github.com:alexberardi/jarvis-data-services
-    - git@github.com:alexberardi/jarvis-docs
-    - git@github.com:alexberardi/jarvis-installer
-    - git@github.com:alexberardi/jarvis-llm-proxy-api
-    - git@github.com:alexberardi/jarvis-log-client
-    - git@github.com:alexberardi/jarvis-logs
-    - git@github.com:alexberardi/jarvis-mcp
-    - git@github.com:alexberardi/jarvis-node-mobile
-    - git@github.com:alexberardi/jarvis-node-setup
-    - git@github.com:alexberardi/jarvis-notifications
-    - git@github.com:alexberardi/jarvis-notifications-relay
-    - git@github.com:alexberardi/jarvis-ocr-service
-    - git@github.com:alexberardi/jarvis-pantry
-    - git@github.com:alexberardi/jarvis-pantry-web
-    - git@github.com:alexberardi/jarvis-recipes-mobile
-    - git@github.com:alexberardi/jarvis-recipes-server
-    - git@github.com:alexberardi/jarvis-settings-client
-    - git@github.com:alexberardi/jarvis-settings-server
-    - git@github.com:alexberardi/jarvis-tts
-    - git@github.com:alexberardi/jarvis-web
-    - git@github.com:alexberardi/jarvis-web-scraper
-    - git@github.com:alexberardi/jarvis-whisper-api
-  clone:
-    # Add repos to clone as read-only reference:
-    # - git@github.com:alexberardi/docs
+    - "https://github.com/alexberardi/jarvis-admin"
+    - "https://github.com/alexberardi/jarvis-auth"
+    - "https://github.com/alexberardi/jarvis-auth-client"
+    - "https://github.com/alexberardi/jarvis-command-center"
+    - "https://github.com/alexberardi/jarvis-command-sdk"
+    - "https://github.com/alexberardi/jarvis-config-client"
+    - "https://github.com/alexberardi/jarvis-config-service"
+    - "https://github.com/alexberardi/jarvis-data-services"
+    - "https://github.com/alexberardi/jarvis-docs"
+    - "https://github.com/alexberardi/jarvis-installer"
+    - "https://github.com/alexberardi/jarvis-llm-proxy-api"
+    - "https://github.com/alexberardi/jarvis-log-client"
+    - "https://github.com/alexberardi/jarvis-logs"
+    - "https://github.com/alexberardi/jarvis-mcp"
+    - "https://github.com/alexberardi/jarvis-node-mobile"
+    - "https://github.com/alexberardi/jarvis-node-setup"
+    - "https://github.com/alexberardi/jarvis-notifications"
+    - "https://github.com/alexberardi/jarvis-notifications-relay"
+    - "https://github.com/alexberardi/jarvis-ocr-service"
+    - "https://github.com/alexberardi/jarvis-pantry"
+    - "https://github.com/alexberardi/jarvis-pantry-web"
+    - "https://github.com/alexberardi/jarvis-recipes-mobile"
+    - "https://github.com/alexberardi/jarvis-recipes-server"
+    - "https://github.com/alexberardi/jarvis-settings-client"
+    - "https://github.com/alexberardi/jarvis-settings-server"
+    - "https://github.com/alexberardi/jarvis-tts"
+    - "https://github.com/alexberardi/jarvis-web"
+    - "https://github.com/alexberardi/jarvis-web-scraper"
+    - "https://github.com/alexberardi/jarvis-whisper-api"
+  clone: []
 
 defaults:
   baseBranch: main
