@@ -191,6 +191,28 @@ Optional cloud-hosted services and public-facing web apps.
 | [jarvis-docs](https://github.com/alexberardi/jarvis-docs) | - | Project documentation (MkDocs) | |
 | [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk) | - | Core interfaces + Forge spec generator (pip package) | |
 
+### Community Packages
+
+Standalone command packages installable via the Pantry. Each was extracted from the built-in command set into its own repo.
+
+| Package | Description |
+|---------|-------------|
+| [jarvis-home-assistant-integration](https://github.com/alexberardi/jarvis-home-assistant-integration) | Smart home device control + status via Home Assistant |
+| [jarvis-cmd-news](https://github.com/alexberardi/jarvis-cmd-news) | RSS news headlines by category |
+| [jarvis-cmd-weather](https://github.com/alexberardi/jarvis-cmd-weather) | Weather conditions and forecasts via OpenWeather API |
+| [jarvis-cmd-sports](https://github.com/alexberardi/jarvis-cmd-sports) | Sports scores, live games, and schedules via ESPN |
+| [jarvis-cmd-web-search](https://github.com/alexberardi/jarvis-cmd-web-search) | Live web search via Bing or DuckDuckGo |
+| [jarvis-cmd-story](https://github.com/alexberardi/jarvis-cmd-story) | Chunked bedtime story generation via LLM |
+| [jarvis-cmd-bluetooth](https://github.com/alexberardi/jarvis-cmd-bluetooth) | Bluetooth device scan, pair, connect, disconnect |
+| [jarvis-cmd-music](https://github.com/alexberardi/jarvis-cmd-music) | Music playback and control via Music Assistant |
+| [jarvis-cmd-email](https://github.com/alexberardi/jarvis-cmd-email) | Email management (Gmail + IMAP) with alert agent |
+| [jarvis-cmd-calendar](https://github.com/alexberardi/jarvis-cmd-calendar) | Calendar events (iCloud + Google) with alert agent |
+| [jarvis-device-kasa](https://github.com/alexberardi/jarvis-device-kasa) | TP-Link Kasa/Tapo LAN device control |
+| [jarvis-device-lifx](https://github.com/alexberardi/jarvis-device-lifx) | LIFX smart lights LAN control |
+| [jarvis-device-govee](https://github.com/alexberardi/jarvis-device-govee) | Govee smart devices (LAN + cloud) |
+| [jarvis-device-apple](https://github.com/alexberardi/jarvis-device-apple) | Apple TV and HomePod control via AirPlay |
+| [jarvis-device-nest](https://github.com/alexberardi/jarvis-device-nest) | Google Nest thermostat and camera via SDM API |
+
 ### Client Libraries
 
 | Library | Description | Tests |

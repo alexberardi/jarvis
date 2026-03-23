@@ -53,8 +53,8 @@ SERVICES=(
     "jarvis-settings-server|7708|4|docker|/health"
     "jarvis-mcp|7709|4|docker|/health"
     "jarvis-notifications|7712|3|docker|/health"
-    "jarvis-admin|7710|5|npm|/"
-    "jarvis-web|7722|5|npm|/"
+    "jarvis-admin|7710|5|docker|/health"
+    "jarvis-web|7722|5|docker|/"
     "jarvis-node-setup|7771|5|docker|/health"
 )
 
@@ -571,12 +571,20 @@ print(header+'.'+payload+'.'+sig)
                 _inject_env_var "$env_file" "RELAY_JWT_SECRET" "$RELAY_JWT_SECRET"
                 ;;
             jarvis-admin)
-                _inject_env_var "$env_file" "PORT" "7710"
+                _inject_env_var "$env_file" "PORT" "7711"
+                _inject_env_var "$env_file" "AUTH_URL" "http://${svc_host}:7701"
+                _inject_env_var "$env_file" "CONFIG_SERVICE_URL" "http://${svc_host}:7700"
+                _inject_env_var "$env_file" "COMMAND_CENTER_URL" "http://${svc_host}:7703"
+                _inject_env_var "$env_file" "COMMAND_CENTER_ADMIN_KEY" "$ADMIN_API_KEY"
+                # LLM_PROXY_URL intentionally omitted — resolved from config-service
+                # since llm-proxy may run on a remote host (e.g. Linux GPU box)
                 ;;
             jarvis-web)
                 _inject_env_var "$env_file" "PORT" "7722"
-                _inject_env_var "$env_file" "COMMAND_CENTER_URL" "http://localhost:7703"
-                _inject_env_var "$env_file" "AUTH_URL" "http://localhost:7701"
+                _inject_env_var "$env_file" "COMMAND_CENTER_URL" "http://${svc_host}:7703"
+                _inject_env_var "$env_file" "AUTH_URL" "http://${svc_host}:7701"
+                _inject_env_var "$env_file" "NOTIFICATIONS_URL" "http://${svc_host}:7712"
+                _inject_env_var "$env_file" "PANTRY_URL" "http://${svc_host}:7721"
                 ;;
         esac
 

@@ -1,9 +1,0 @@
-{
-  "name": "project",
-  "defaultMode": "coding",
-  "modes": {
-    "coding": ["*"],
-    "research": ["*"],
-    "default": ["*"]
-  }
-}
