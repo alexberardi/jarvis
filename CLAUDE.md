@@ -38,7 +38,7 @@ The jarvis-mcp server provides these tools:
 2. **Self-hostable with optional cloud** - Same open-source codebase for both; no data selling, full transparency
 3. **Fully extensible** - Add capabilities by implementing `IJarvisCommand` interface (see `jarvis-node-setup/core/ijarvis_command.py`)
 
-## Codebase Health (Last Updated: 2026-02-11)
+## Codebase Health (Last Updated: 2026-03-23)
 
 | Dimension | Score | Notes |
 |-----------|-------|-------|
@@ -768,6 +768,16 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [x] Container test base image caching (SDK pre-built, submissions take ~3s)
 - [x] Forge (AI package builder) — split-pane IDE, BYOK (6 models), SDK self-documents via `__forge_hints__`, AST validation, one-click GitHub publish
 - [x] Mobile Store tab — browse/search Pantry, install to nodes via CC → MQTT
+- [x] Batch 2 Pantry extraction (bluetooth, music, email+agent, calendar+agent, 5 device families, news+agent)
+- [x] Reminders command (set/list/delete/snooze with recurrence, JarvisStorage persistence)
+- [x] Installable routines (new Pantry component type with placeholder/binding system)
+- [x] JarvisStorage SDK facade (command_data + secrets abstraction for extracted packages)
+- [x] GeocodingHelper SDK (Nominatim + Google Maps backends)
+- [x] DateKeys SDK (standardized relative date constants)
+- [x] Dockerize jarvis-admin (Dockerfile.dev + docker-compose.dev.yaml)
+- [x] Household leave endpoint (self-removal with guards + cleanup)
+- [x] Inline alert announcements in voice listener (TTS + snooze for reminders)
+- [x] `command_store.py validate` (package validation without installing)
 
 ### 🚀 Future Enhancements (Feature Parity Roadmap)
 
@@ -775,7 +785,7 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [x] ~~Home Assistant integration (device control layer)~~ ✅ control_device + get_device_status commands
 - [x] ~~Device discovery (Matter, Zigbee, Z-Wave via HA)~~ ✅ HA agent + device manager
 - [x] ~~Direct device control ("turn off the lights", "set thermostat to 72")~~ ✅ control_device command
-- [ ] Routines/automations ("Good morning" → lights + weather + calendar)
+- [x] ~~Routines/automations ("Good morning" → lights + weather + calendar)~~ ✅ Installable routines with placeholder/binding system
 - [ ] Broadcast commands to device groups
 
 **Multi-Room & Communication:**
@@ -800,6 +810,7 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [x] ~~Reference bundle~~ ✅ [jarvis-home-assistant-integration](https://github.com/alexberardi/jarvis-home-assistant-integration)
 - [x] ~~AI Forge~~ ✅ Split-pane IDE, BYOK (6 models), SDK auto-docs, AST validation, one-click publish
 - [x] ~~Mobile Store tab~~ ✅ Browse/install from mobile app via CC → MQTT
+- [x] ~~Routine packages~~ ✅ New component type with placeholder/binding system
 
 **Visual/Multi-Modal:**
 - [ ] Screen-based responses (for tablet/display nodes)
@@ -830,6 +841,7 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 | jarvis-notifications | 7712 | Small | ✅ Good (77%) | Clean |
 | jarvis-notifications-relay | - | Small | ✅ Good | Clean |
 | jarvis-web | 7722 | Small | - | New (Next.js chat UI) |
+| jarvis-pantry | 7721 | Small | ✅ Good | Community package store + Forge |
 
 ### Libraries
 
