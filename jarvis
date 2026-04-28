@@ -254,6 +254,21 @@ _find_compose_file() {
     fi
 }
 
+# Cache for NVIDIA GPU detection (empty = not checked, 0 = no, 1 = yes)
+_NVIDIA_GPU_CACHED=""
+
+_has_nvidia_gpu() {
+    if [[ -z "$_NVIDIA_GPU_CACHED" ]]; then
+        if [[ "$(uname -s)" != "Darwin" ]] && command -v nvidia-smi >/dev/null 2>&1 \
+           && nvidia-smi --query-gpu=name --format=csv,noheader >/dev/null 2>&1; then
+            _NVIDIA_GPU_CACHED=1
+        else
+            _NVIDIA_GPU_CACHED=0
+        fi
+    fi
+    [[ "$_NVIDIA_GPU_CACHED" == "1" ]]
+}
+
 _get_compose_flags() {
     local dir="$1"
     local compose_file
@@ -261,6 +276,11 @@ _get_compose_flags() {
     [[ -z "$compose_file" ]] && return 1
 
     local flags="-f $compose_file"
+
+    # On Linux + NVIDIA GPU, auto-include GPU overlay if the service has one
+    if _has_nvidia_gpu && [[ -f "$dir/docker-compose.gpu.yaml" ]]; then
+        flags="$flags -f docker-compose.gpu.yaml"
+    fi
 
     # In bridge mode, overlay the jarvis-net network
     if [[ "$NETWORK_MODE" == "bridge" ]] && [[ -f "${JARVIS_ROOT}/.jarvis-net-override.yaml" ]]; then
