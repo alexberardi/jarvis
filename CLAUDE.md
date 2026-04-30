@@ -322,6 +322,33 @@ The `./jarvis` CLI supports three network modes:
 - Local services reach **Docker** infrastructure (PostgreSQL, Redis) via `localhost` (ports are bound to host)
 - `JARVIS_CONFIG_URL_STYLE=dockerized` tells config-service to return `host.docker.internal` URLs for Docker consumers
 
+## Environments & Hosts
+
+### Dev Environment
+
+| Host | Address | Role | SSH |
+|------|---------|------|-----|
+| **Pi Zero node** | `jarvis-dev.local` | Physical voice node (mic + speaker) | `pi@jarvis-dev.local` |
+| **Ubuntu desktop** | `10.0.0.122` | GPU services (LLM proxy, Whisper) | `alex@10.0.0.122` |
+| **Laptop (macOS)** | `10.0.0.103` | Rest of Docker stack + development | local |
+| **Laptop node container** | `localhost:7771` | Dockerized jarvis-node for dev | — |
+
+- LLM proxy and Whisper sometimes run on the laptop to verify macOS/Metal still works
+- Dev is the free-fire zone — do whatever is needed
+
+### Prod Environment
+
+| Host | Address | Role | SSH |
+|------|---------|------|-----|
+| **Prod server** | `10.0.0.107` | Ubuntu server, full Docker stack | `jarvis@10.0.0.107` |
+| **Prod node** | `jarvis-kitchen.local` | Kitchen Pi Zero node | `pi@jarvis-kitchen.local` |
+
+**⚠️ PROD RULES:**
+- **NEVER** write directly to prod containers (`~/.jarvis/compose`) without explicit user instructions
+- Use prod primarily for **reading logs and checking status** unless explicitly told otherwise
+- Prod node (`jarvis-kitchen.local`): may check logs, occasionally patch fixes, but **prefer dev environment**
+- When in doubt, test in dev first
+
 ## Environment Variables (Cross-Service)
 
 | Variable | Used By | Description |
