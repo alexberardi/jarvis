@@ -805,6 +805,7 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 - [x] Household leave endpoint (self-removal with guards + cleanup)
 - [x] Inline alert announcements in voice listener (TTS + snooze for reminders)
 - [x] `command_store.py validate` (package validation without installing)
+- [x] Jarvis package dependencies (jarvis_dependencies manifest field, auto-generated namespaces, transitive inheritance)
 
 ### 🚀 Future Enhancements (Feature Parity Roadmap)
 
