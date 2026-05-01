@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <strong>A fully private, self-hosted voice assistant built from 12+ microservices.</strong><br>
-  Local LLM inference, LoRA adapter training, speech-to-text, text-to-speech, speaker identification, and 20+ extensible voice commands — all running on your own hardware.
+  <strong>A fully private, self-hosted voice assistant built from 15+ microservices.</strong><br>
+  Local LLM inference, LoRA adapter training, speech-to-text, text-to-speech, speaker identification, and 30+ extensible voice commands — all running on your own hardware.
 </p>
 
 <p align="center">
@@ -21,11 +21,11 @@ Jarvis takes a different approach. Every component runs locally: speech recognit
 
 What makes Jarvis different from other self-hosted alternatives:
 
-- **Real microservice architecture.** Not a monolith with plugins — 12+ independent services with their own databases, CI/CD pipelines, Docker images, and test suites. Swap out any piece without touching the rest.
+- **Real microservice architecture.** Not a monolith with plugins — 15+ independent services with their own databases, CI/CD pipelines, Docker images, and test suites. Swap out any piece without touching the rest.
 - **Local LLM inference with per-user fine-tuning.** Run GGUF-quantized models locally with CUDA/Metal/ROCm acceleration, then train LoRA adapters per node to customize how Jarvis understands your specific commands.
 - **Speaker identification.** Jarvis knows who's talking. Voice profiles per household member, so each person gets their own context, preferences, and command routing.
 - **Pi Zero voice nodes.** $15 hardware with a mic and speaker becomes a room-scale voice endpoint. Headless provisioning — plug in power, connect to the setup WiFi, and it registers itself.
-- **Extensible command system.** Implement the `IJarvisCommand` interface, drop it in, and Jarvis picks it up. 20+ built-in commands (weather, timers, smart home, sports scores, recipes, music, general knowledge) with more added regularly.
+- **Extensible command system.** Implement the `IJarvisCommand` interface, drop it in, and Jarvis picks it up. 30+ commands (weather, timers, smart home, sports scores, recipes, music, general knowledge) with more in the Pantry. Build your own with the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit) CLI or the AI Forge.
 - **Community package store + AI Forge.** Browse and install community packages from the [Pantry](https://pantry.jarvisautomation.io). Or use the Forge — describe what you want in plain English and an AI generates a complete, validated package you can publish with one click.
 
 ## Forge
@@ -100,9 +100,9 @@ The Forge is an AI-powered package builder built into the Pantry web UI. It gene
       ┌────────────────────────────────┼────────────────────────────────────┐
       │                                │          CLIENTS                   │
       │  ┌──────────────┐  ┌──────────▼───┐  ┌──────────┐  ┌───────────┐  │
-      │  │ Pi Zero      │  │ Mobile       │  │ Recipes  │  │ Admin     │  │
-      │  │ Voice Nodes  │  │ Voice Node   │  │ Mobile   │  │ Web UI    │  │
-      │  │ (Python)     │  │ (React Native│) │ (RN)     │  │ (React)   │  │
+      │  │ Pi Zero      │  │ Mobile       │  │ Web Chat │  │ Admin     │  │
+      │  │ Voice Nodes  │  │ Voice Node   │  │ (Next.js)│  │ Web UI    │  │
+      │  │ (Python)     │  │ (React Native│) │          │  │ (React)   │  │
       │  └──────────────┘  └──────────────┘  └──────────┘  └───────────┘  │
       └────────────────────────────────────────────────────────────────────┘
 ```
@@ -188,7 +188,8 @@ Optional cloud-hosted services and public-facing web apps.
 | [jarvis-notifications-relay](https://github.com/alexberardi/jarvis-notifications-relay) | - | Stateless Expo Push API proxy for APNs/FCM delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml) |
 | [jarvis-pantry](https://github.com/alexberardi/jarvis-pantry) | 7721 | Community package store API (browse, submit, review, Forge) | [![Tests](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml) |
 | [jarvis-pantry-web](https://github.com/alexberardi/jarvis-pantry-web) | 7720 | Pantry web frontend (Next.js) — catalog browser + AI Forge | [![CI](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml) |
-| [jarvis-docs](https://github.com/alexberardi/jarvis-docs) | - | Project documentation (MkDocs) | |
+| [jarvis-pantry-runner](https://github.com/alexberardi/jarvis-pantry-runner) | - | Container test runner for Pantry submissions (GitHub Actions) | [![CI](https://github.com/alexberardi/jarvis-pantry-runner/actions/workflows/container-test.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry-runner/actions/workflows/container-test.yml) |
+| [jarvis-docs](https://github.com/alexberardi/jarvis-docs) | - | [Developer documentation](https://docs.jarvisautomation.dev) (MkDocs) | |
 | [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk) | - | Core interfaces + Forge spec generator (pip package) | |
 
 ### Community Packages
@@ -199,12 +200,15 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 |---------|-------------|
 | [jarvis-home-assistant-integration](https://github.com/alexberardi/jarvis-home-assistant-integration) | Smart home device control + status via Home Assistant |
 | [jarvis-cmd-news](https://github.com/alexberardi/jarvis-cmd-news) | RSS news headlines by category |
-| [jarvis-cmd-weather](https://github.com/alexberardi/jarvis-cmd-weather) | Weather conditions and forecasts via OpenWeather API |
+| [jarvis-cmd-open-weather](https://github.com/alexberardi/jarvis-cmd-open-weather) | Weather conditions and forecasts via OpenWeather API |
+| [jarvis-cmd-meteo-weather](https://github.com/alexberardi/jarvis-cmd-meteo-weather) | Weather via Open-Meteo (free, no API key) |
 | [jarvis-cmd-sports](https://github.com/alexberardi/jarvis-cmd-sports) | Sports scores, live games, and schedules via ESPN |
 | [jarvis-cmd-web-search](https://github.com/alexberardi/jarvis-cmd-web-search) | Live web search via Bing or DuckDuckGo |
 | [jarvis-cmd-story](https://github.com/alexberardi/jarvis-cmd-story) | Chunked bedtime story generation via LLM |
 | [jarvis-cmd-bluetooth](https://github.com/alexberardi/jarvis-cmd-bluetooth) | Bluetooth device scan, pair, connect, disconnect |
-| [jarvis-cmd-music](https://github.com/alexberardi/jarvis-cmd-music) | Music playback and control via Music Assistant |
+| [jarvis-cmd-music-assistant](https://github.com/alexberardi/jarvis-cmd-music-assistant) | Music playback and control via Music Assistant |
+| [jarvis-cmd-pandora](https://github.com/alexberardi/jarvis-cmd-pandora) | Pandora radio streaming with voice control |
+| [jarvis-cmd-rotten-tomatoes](https://github.com/alexberardi/jarvis-cmd-rotten-tomatoes) | Rotten Tomatoes movie/TV ratings and what's in theaters |
 | [jarvis-cmd-email](https://github.com/alexberardi/jarvis-cmd-email) | Email management (Gmail + IMAP) with alert agent |
 | [jarvis-cmd-calendar](https://github.com/alexberardi/jarvis-cmd-calendar) | Calendar events (iCloud + Google) with alert agent |
 | [jarvis-device-kasa](https://github.com/alexberardi/jarvis-device-kasa) | TP-Link Kasa/Tapo LAN device control |
@@ -212,6 +216,20 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 | [jarvis-device-govee](https://github.com/alexberardi/jarvis-device-govee) | Govee smart devices (LAN + cloud) |
 | [jarvis-device-apple](https://github.com/alexberardi/jarvis-device-apple) | Apple TV and HomePod control via AirPlay |
 | [jarvis-device-nest](https://github.com/alexberardi/jarvis-device-nest) | Google Nest thermostat and camera via SDM API |
+| [jarvis-device-resideo](https://github.com/alexberardi/jarvis-device-resideo) | Resideo/Honeywell Home thermostat control via Home API v2 |
+| [jarvis-device-schlage](https://github.com/alexberardi/jarvis-device-schlage) | Schlage Encode WiFi smart lock control via Allegion cloud |
+| [jarvis-device-simplisafe](https://github.com/alexberardi/jarvis-device-simplisafe) | SimpliSafe home security — arm, disarm, sensor status |
+| [jarvis-device-zwave](https://github.com/alexberardi/jarvis-device-zwave) | Z-Wave device control via Z-Wave JS UI |
+| [jarvis-device-homeconnect](https://github.com/alexberardi/jarvis-device-homeconnect) | Bosch/Siemens appliance control via Home Connect |
+
+### Prompt Providers
+
+Installable LLM prompt providers for additional model support.
+
+| Package | Description |
+|---------|-------------|
+| [jarvis-pp-hermes](https://github.com/alexberardi/jarvis-pp-hermes) | Prompt providers for NousResearch Hermes 3 Llama 3.1 8B |
+| [jarvis-pp-mistral](https://github.com/alexberardi/jarvis-pp-mistral) | Prompt providers for Mistral 7B Instruct and Mixtral 8x7B |
 
 ### Client Libraries
 
@@ -229,14 +247,16 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 |-----|-------------|-----|
 | [jarvis-node-setup](https://github.com/alexberardi/jarvis-node-setup) | Pi Zero voice node (Python) | [![Tests](https://github.com/alexberardi/jarvis-node-setup/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-setup/actions/workflows/test.yml) |
 | [jarvis-node-mobile](https://github.com/alexberardi/jarvis-node-mobile) | Mobile voice node (React Native) | [![CI](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/ci.yml) |
+| [jarvis-web](https://github.com/alexberardi/jarvis-web) | Web chat interface (Next.js) | |
 | [jarvis-recipes-mobile](https://github.com/alexberardi/jarvis-recipes-mobile) | Recipe app (React Native) | [![Build](https://github.com/alexberardi/jarvis-recipes-mobile/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-mobile/actions/workflows/build-and-deploy.yml) |
 
 ### Tools
 
 | Tool | Description | CI |
 |------|-------------|-----|
+| [jarvis-developer-toolkit](https://github.com/alexberardi/jarvis-developer-toolkit) | CLI (`jdt`) for scaffolding, testing, and deploying packages | |
 | [jarvis-installer](https://github.com/alexberardi/jarvis-installer) | Web-based Docker Compose generator | [![Tests](https://github.com/alexberardi/jarvis-installer/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-installer/actions/workflows/test.yml) [![Deploy](https://github.com/alexberardi/jarvis-installer/actions/workflows/deploy.yml/badge.svg)](https://github.com/alexberardi/jarvis-installer/actions/workflows/deploy.yml) |
-| [data-services](https://github.com/alexberardi/data-services) | Shared PostgreSQL, Redis, Loki, Grafana | |
+| [jarvis-data-services](https://github.com/alexberardi/jarvis-data-services) | Shared PostgreSQL, Redis, Loki, Grafana | |
 
 ## LLM Inference
 
@@ -326,6 +346,24 @@ cd jarvis
 
 ## Development
 
+### Building Packages
+
+The fastest way to extend Jarvis is with the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit):
+
+```bash
+pip install git+https://github.com/alexberardi/jarvis-developer-toolkit.git
+
+jdt init my_command --type command    # Scaffold a package
+cd my_command
+# ... implement your logic ...
+jdt test .                            # Validate (same pipeline as Pantry)
+jdt deploy local .                    # Install to your node
+```
+
+`jdt` supports all component types: commands, agents, device protocols, device managers, routines, and prompt providers. See the [Developer Toolkit docs](https://docs.jarvisautomation.dev/extending/toolkit/) for the full guide, including [Claude Code integration](https://docs.jarvisautomation.dev/extending/toolkit/claude-code/).
+
+### Working on Services
+
 Each service is its own repository with its own CI pipeline. Clone the ones you need:
 
 ```bash
@@ -338,7 +376,7 @@ cp .env.example .env
 .venv/bin/uvicorn app.main:app --reload --port 7701
 ```
 
-See each service's README for specific setup instructions.
+See each service's README for specific setup instructions, or browse the [developer docs](https://docs.jarvisautomation.dev).
 
 ## License
 
