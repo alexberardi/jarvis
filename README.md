@@ -205,7 +205,6 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 | [jarvis-cmd-sports](https://github.com/alexberardi/jarvis-cmd-sports) | Sports scores, live games, and schedules via ESPN |
 | [jarvis-cmd-web-search](https://github.com/alexberardi/jarvis-cmd-web-search) | Live web search via Bing or DuckDuckGo |
 | [jarvis-cmd-story](https://github.com/alexberardi/jarvis-cmd-story) | Chunked bedtime story generation via LLM |
-| [jarvis-cmd-bluetooth](https://github.com/alexberardi/jarvis-cmd-bluetooth) | Bluetooth device scan, pair, connect, disconnect |
 | [jarvis-cmd-music-assistant](https://github.com/alexberardi/jarvis-cmd-music-assistant) | Music playback and control via Music Assistant |
 | [jarvis-cmd-pandora](https://github.com/alexberardi/jarvis-cmd-pandora) | Pandora radio streaming with voice control |
 | [jarvis-cmd-rotten-tomatoes](https://github.com/alexberardi/jarvis-cmd-rotten-tomatoes) | Rotten Tomatoes movie/TV ratings and what's in theaters |
