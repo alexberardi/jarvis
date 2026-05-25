@@ -2162,10 +2162,25 @@ for r in data.get('results', []):
             env_written=$((env_written + 1))
             RESTART_SERVICES+=("$svc_name")
         elif [[ "$auth_ok" == "True" ]]; then
-            # Existing auth client — check if .env is missing the key
+            # Existing auth client — check if .env is missing the key OR
+            # if it still has a placeholder. The earlier check only matched
+            # the ``your-XXX-here`` convention, which silently missed:
+            #
+            #   jarvis-logs            JARVIS_APP_KEY=your-jarvis-logs-app-key
+            #   jarvis-notifications   JARVIS_APP_KEY=CHANGE_ME
+            #   jarvis-tts             JARVIS_APP_KEY=CHANGE_ME_get_from_jarvis_auth_admin
+            #
+            # …so all three were skipped by the auto-rotate loop forever
+            # and never got real keys. The May-2026 beta debugging session
+            # surfaced this when node logs were 403'ing at jarvis-logs:
+            # the placeholder couldn't authenticate to jarvis-auth.
+            #
+            # Detect ANY obvious placeholder pattern by listing the known
+            # forms. Real keys are 64-char URL-safe base64 strings so
+            # nothing real will collide with these.
             _inject_env_var "$svc_env" "JARVIS_APP_ID" "$svc_name"
             if ! grep -q "^JARVIS_APP_KEY=.\+" "$svc_env" 2>/dev/null || \
-               grep -q "^JARVIS_APP_KEY=your-.*-here$" "$svc_env" 2>/dev/null; then
+               grep -qE "^JARVIS_APP_KEY=(your-.+|CHANGE_ME.*|<.*>|placeholder.*|TBD.*)$" "$svc_env" 2>/dev/null; then
                 need_key+=("$svc_name")
             fi
         fi
