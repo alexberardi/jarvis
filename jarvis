@@ -84,11 +84,16 @@ TEST_REGISTRY=(
     "jarvis-installer|npm|npm test|"
 )
 
-# macOS overrides: GPU services run locally for Metal/Apple Vision
+# macOS overrides: GPU services run locally for Metal/Apple Vision.
+# Docker on Mac runs inside a Linux VM without Metal passthrough, so
+# anything that wants mps (Kokoro TTS, vLLM, Apple Vision OCR) has to
+# stay native. The corresponding run.sh scripts must support `--setup`
+# so _setup_local_services can install deps before first start.
 if [[ "$(uname -s)" == "Darwin" ]]; then
     for i in "${!SERVICES[@]}"; do
         case "${SERVICES[$i]}" in
             jarvis-llm-proxy-api*) SERVICES[$i]="jarvis-llm-proxy-api|7704|2|local|/health" ;;
+            jarvis-tts*)           SERVICES[$i]="jarvis-tts|7707|3|local|/health" ;;
             jarvis-ocr-service*)   SERVICES[$i]="jarvis-ocr-service|7031|3|local|/health" ;;
         esac
     done
