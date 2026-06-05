@@ -208,7 +208,6 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 | [jarvis-device-govee](https://github.com/alexberardi/jarvis-device-govee) | Govee smart devices (LAN + cloud) |
 | [jarvis-device-apple](https://github.com/alexberardi/jarvis-device-apple) | Apple TV and HomePod control via AirPlay |
 | [jarvis-device-nest](https://github.com/alexberardi/jarvis-device-nest) | Google Nest thermostat and camera via SDM API |
-| [jarvis-device-resideo](https://github.com/alexberardi/jarvis-device-resideo) | Resideo/Honeywell Home thermostat control via Home API v2 |
 | [jarvis-device-schlage](https://github.com/alexberardi/jarvis-device-schlage) | Schlage Encode WiFi smart lock control via Allegion cloud |
 | [jarvis-device-simplisafe](https://github.com/alexberardi/jarvis-device-simplisafe) | SimpliSafe home security — arm, disarm, sensor status |
 | [jarvis-device-zwave](https://github.com/alexberardi/jarvis-device-zwave) | Z-Wave device control via Z-Wave JS UI |
