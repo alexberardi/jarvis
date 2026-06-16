@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <strong>A fully private, self-hosted voice assistant built from 15+ microservices.</strong><br>
-  Local LLM inference, speech-to-text, text-to-speech, speaker identification, and 30+ extensible voice commands — all running on your own hardware.
+  <strong>A self-hosted, extensible voice assistant that runs on your hardware — not someone else's cloud.</strong><br>
+  Speech-to-text, text-to-speech, speaker ID, and 30+ voice commands you can extend in plain English. Bring your own LLM — point it at a cloud API, or run it fully local on your own GPU.
 </p>
 
 <p align="center">
@@ -21,12 +21,12 @@ Jarvis takes a different approach. Every component runs locally: speech recognit
 
 What makes Jarvis different from other self-hosted alternatives:
 
-- **Real microservice architecture.** Not a monolith with plugins — 15+ independent services with their own databases, CI/CD pipelines, Docker images, and test suites. Swap out any piece without touching the rest.
-- **Local LLM inference, multiple backends.** Run GGUF-quantized models locally via llama.cpp, plus vLLM for high-throughput GPU servers, MLX for Apple Silicon, Transformers for raw HuggingFace models, or REST for remote providers. Pick the backend that fits your hardware.
-- **Speaker identification.** Jarvis knows who's talking. Voice profiles per household member, so each person gets their own context, preferences, and command routing.
-- **Pi Zero voice nodes.** A ~$15 Raspberry Pi Zero 2 W with a mic/speaker HAT becomes a room-scale voice endpoint. (The nodes are cheap; local LLM/STT inference runs on a separate host machine — see [Requirements](#requirements).) Headless provisioning — plug in power, connect to the setup WiFi, and it registers itself.
-- **Extensible command system.** Implement the `IJarvisCommand` interface, drop it in, and Jarvis picks it up. 30+ commands (weather, timers, smart home, sports scores, music, movies, general knowledge) with more in the Pantry. Build your own with the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit) CLI or the AI Forge.
-- **Community package store + AI Forge.** Browse and install community packages from the [Pantry](https://pantry.jarvisautomation.io). Or use the Forge — describe what you want in plain English and an AI generates a complete, validated package you can publish with one click.
+- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. 30+ commands ship today (weather, timers, smart home, sports, music, movies, general knowledge), with more in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
+- **Private by default, on your hardware.** Speech recognition (whisper.cpp), text-to-speech (Piper/Kokoro), and the command center all run on your own machine. No subscriptions, no one listening.
+- **Bring your own LLM — no GPU required.** Point the LLM proxy at a cloud API (Claude, GPT, Ollama, …) and run the whole stack on any Docker host, or go **fully local** with llama.cpp / vLLM / MLX on your own GPU for zero cloud dependency. Your call on the privacy-vs-convenience trade.
+- **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
+- **Pi Zero voice nodes.** A ~$15 Raspberry Pi Zero 2 W with a mic/speaker HAT becomes a room-scale voice endpoint, headless-provisioned from the mobile app. (Nodes are cheap; the brain runs on a separate host — see [Requirements](#requirements).)
+- **Modular, not monolithic.** ~13 independent services (each with its own database, CI, Docker image, and tests) plus a catalog of **forkable** command and device packages. Swap or extend any piece without touching the rest — and most `jarvis-cmd-*` / `jarvis-device-*` repos are reference implementations meant to be forked and improved.
 
 ## Forge
 
@@ -55,6 +55,8 @@ The Forge is an AI-powered package builder built into the Pantry web UI. It gene
 **How it works under the hood:** The SDK decorates every interface class with `__forge_hints__` metadata. At runtime, `forge.py` walks all SDK classes via `inspect` + `get_type_hints`, combines them with manifest schema and validation rules, and produces a structured spec (~550 lines of Markdown). This spec becomes the LLM's system prompt — so it's always in sync with the actual interfaces. When you add a method to `IJarvisCommand`, the Forge automatically knows about it.
 
 **BYOK:** Users provide their own API key. Six models available (Haiku 4.5, Sonnet 4, Opus 4, GPT-4o, ChatGPT-5, Codex) with per-generation cost estimates shown in the UI.
+
+**Safety:** every generated package runs through static analysis and an automated safety review, then a full **containerized test run** (the Pantry submission pipeline) before it can be published. As with any package store — think AUR, npm, or PyPI — Jarvis sandboxes and screens, but installing a community package is ultimately your call. You decide what you trust.
 
 ## Architecture
 
@@ -282,19 +284,22 @@ Everything else (weather, calendar, sports, news, music, movies, drive time, …
 
 ## Requirements
 
-Jarvis runs as a Docker stack on a **host machine** (Linux, macOS, or a NAS), with optional **Pi Zero voice nodes** as room endpoints. The nodes are cheap; the host that runs LLM inference and speech-to-text is where the real compute lives.
+Jarvis runs as a Docker stack on a **host machine** (Linux, macOS, or a NAS), with optional **Pi Zero voice nodes** as room endpoints. The one variable that drives your hardware needs is **where the LLM runs** — and that's your choice:
 
-**Host machine (the Jarvis stack):**
+**Two ways to run the brain:**
 
-| Resource | Minimum | Recommended |
-|----------|---------|-------------|
+- **Cloud LLM — no GPU.** Point the LLM proxy at Claude, GPT, Ollama, or any OpenAI-compatible API, and the whole stack runs on a modest Docker host (~8 GB RAM, no GPU). Convenient, but your transcripts go to that provider — so it's the easy path, not the maximally-private one.
+- **Fully local — your GPU.** Run the model yourself via llama.cpp / vLLM / MLX for zero cloud dependency. This is the privacy-max path and wants real compute: an NVIDIA GPU (8+ GB VRAM) or Apple Silicon (Metal). CPU-only works but is slow.
+
+**Host machine:**
+
+| Resource | Cloud-LLM (minimum) | Fully-local (recommended) |
+|----------|---------------------|----------------------------|
 | CPU | 4 cores | 8+ cores |
-| RAM | 8 GB | 16+ GB (for local LLM inference) |
-| Disk | 20 GB + models | 40 GB+ (models are 4–20 GB each) |
-| GPU | none — CPU/Metal works | NVIDIA with 8+ GB VRAM for fast local LLM |
-| Software | Docker v24+ with Compose v2 | — |
-
-Local LLM inference is the heavy part: it runs well on an NVIDIA GPU (8+ GB VRAM) or Apple Silicon (Metal), and will run on CPU but slowly. You can also point the LLM proxy at a remote API (OpenAI / Anthropic / Ollama) if you'd rather not host a model locally.
+| RAM | 8 GB | 16+ GB |
+| Disk | 20 GB | 40 GB+ (models are 4–20 GB each) |
+| GPU | none | NVIDIA 8+ GB VRAM, or Apple Silicon (Metal) |
+| Software | Docker v24+ with Compose v2 | same |
 
 **Voice node (optional, one per room):** a Raspberry Pi Zero 2 W (~$15) with a mic/speaker HAT such as the ReSpeaker 2-Mics — headless, provisioned from the mobile app.
 
@@ -308,7 +313,7 @@ curl -fsSL https://raw.githubusercontent.com/alexberardi/jarvis-admin/main/insta
 
 Then open **http://localhost:7711** — the wizard walks you through hardware detection, service selection, account creation, and downloading a model. See the [full installation guide](https://docs.jarvisautomation.dev/getting-started/installation/) for Docker prerequisites, GPU setup, TrueNAS, and other install options.
 
-> **Note:** Jarvis is split across ~60 repositories, so cloning this repo alone is **not** a full install — use the installer above to run it. To hack on the services from source, see [Development](#development).
+> **Note:** Jarvis spans many repositories (a dozen-ish services plus command/device packages), so cloning this repo alone is **not** a full install — use the installer above to run it. To hack on the services from source, see [Development](#development).
 
 ## Development
 
