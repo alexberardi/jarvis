@@ -274,7 +274,7 @@ Node should store K2 securely for encrypting settings before sending to command-
 ## Testing Checklist
 
 - [x] Simulator running on Ubuntu port 8080
-- [x] Mobile can reach Ubuntu over LAN (tested at 10.0.0.122:8080)
+- [x] Mobile can reach Ubuntu over LAN (tested at <gpu-host>:8080)
 - [x] GET /info returns node info
 - [x] POST /provision accepts credentials
 - [x] GET /status shows state progression

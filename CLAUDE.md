@@ -148,11 +148,13 @@ The `./jarvis` CLI handles platform differences automatically.
 
 ### Dev (free-fire zone)
 
+Real values are in HOSTS.local.md (gitignored, local only).
+
 | Host | Address | Role | SSH |
 |---|---|---|---|
-| Pi Zero node | `jarvis-dev.local` | Physical voice node | `pi@jarvis-dev.local` |
-| Ubuntu desktop | `10.0.0.122` | GPU services (LLM, Whisper) | `alex@10.0.0.122` |
-| Laptop (macOS) | `10.0.0.103` | Rest of Docker stack + dev | local |
+| Pi Zero node | `<dev-node>.local` | Physical voice node | `pi@<dev-node>.local` |
+| Ubuntu desktop | `<gpu-host>` | GPU services (LLM, Whisper) | `<user>@<gpu-host>` |
+| Laptop (macOS) | `<laptop-host>` | Rest of Docker stack + dev | local |
 | Laptop node container | `localhost:7771` | Dockerized jarvis-node | — |
 
 LLM proxy and Whisper sometimes run on the laptop to verify macOS/Metal still works.
@@ -161,8 +163,8 @@ LLM proxy and Whisper sometimes run on the laptop to verify macOS/Metal still wo
 
 | Host | Address | Role | SSH |
 |---|---|---|---|
-| Prod server | `10.0.0.107` | Ubuntu, full Docker stack | `jarvis@10.0.0.107` |
-| Prod kitchen node | `jarvis-kitchen.local` | Kitchen Pi Zero | `pi@jarvis-kitchen.local` |
+| Prod server | `<prod-host>` | Ubuntu, full Docker stack | `<user>@<prod-host>` |
+| Prod kitchen node | `<kitchen-node>.local` | Kitchen Pi Zero | `pi@<kitchen-node>.local` |
 
 **⚠️ PROD RULES:**
 - **NEVER** write directly to prod (`~/.jarvis/compose`) without explicit user instructions.

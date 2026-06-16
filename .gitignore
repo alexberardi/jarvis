@@ -16,3 +16,6 @@ Thumbs.db
 # Jarvis CLI generated files
 .jarvis-net-override.yaml
 tokens.env
+
+# Local infra reference (real hosts/IPs/SSH users)
+HOSTS.local.md

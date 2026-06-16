@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://alexberardi.github.io/jarvis-installer/configurator"><strong>Install Jarvis</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#quick-start">Quick Start</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#architecture">Architecture</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#services">Services</a>
+  <a href="#quick-start"><strong>Install Jarvis</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#requirements">Requirements</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#architecture">Architecture</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#services">Services</a>
 </p>
 
 ---
@@ -24,7 +24,7 @@ What makes Jarvis different from other self-hosted alternatives:
 - **Real microservice architecture.** Not a monolith with plugins — 15+ independent services with their own databases, CI/CD pipelines, Docker images, and test suites. Swap out any piece without touching the rest.
 - **Local LLM inference, multiple backends.** Run GGUF-quantized models locally via llama.cpp, plus vLLM for high-throughput GPU servers, MLX for Apple Silicon, Transformers for raw HuggingFace models, or REST for remote providers. Pick the backend that fits your hardware.
 - **Speaker identification.** Jarvis knows who's talking. Voice profiles per household member, so each person gets their own context, preferences, and command routing.
-- **Pi Zero voice nodes.** $15 hardware with a mic and speaker becomes a room-scale voice endpoint. Headless provisioning — plug in power, connect to the setup WiFi, and it registers itself.
+- **Pi Zero voice nodes.** A ~$15 Raspberry Pi Zero 2 W with a mic/speaker HAT becomes a room-scale voice endpoint. (The nodes are cheap; local LLM/STT inference runs on a separate host machine — see [Requirements](#requirements).) Headless provisioning — plug in power, connect to the setup WiFi, and it registers itself.
 - **Extensible command system.** Implement the `IJarvisCommand` interface, drop it in, and Jarvis picks it up. 30+ commands (weather, timers, smart home, sports scores, music, movies, general knowledge) with more in the Pantry. Build your own with the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit) CLI or the AI Forge.
 - **Community package store + AI Forge.** Browse and install community packages from the [Pantry](https://pantry.jarvisautomation.io). Or use the Forge — describe what you want in plain English and an AI generates a complete, validated package you can publish with one click.
 
@@ -280,18 +280,35 @@ These ship with the node and command-center — no Pantry install required.
 
 Everything else (weather, calendar, sports, news, music, movies, drive time, …) ships as a [Community Package](#community-packages) — installable from the Pantry. Add your own by implementing the `IJarvisCommand` interface and running `jdt deploy` from the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit).
 
+## Requirements
+
+Jarvis runs as a Docker stack on a **host machine** (Linux, macOS, or a NAS), with optional **Pi Zero voice nodes** as room endpoints. The nodes are cheap; the host that runs LLM inference and speech-to-text is where the real compute lives.
+
+**Host machine (the Jarvis stack):**
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| CPU | 4 cores | 8+ cores |
+| RAM | 8 GB | 16+ GB (for local LLM inference) |
+| Disk | 20 GB + models | 40 GB+ (models are 4–20 GB each) |
+| GPU | none — CPU/Metal works | NVIDIA with 8+ GB VRAM for fast local LLM |
+| Software | Docker v24+ with Compose v2 | — |
+
+Local LLM inference is the heavy part: it runs well on an NVIDIA GPU (8+ GB VRAM) or Apple Silicon (Metal), and will run on CPU but slowly. You can also point the LLM proxy at a remote API (OpenAI / Anthropic / Ollama) if you'd rather not host a model locally.
+
+**Voice node (optional, one per room):** a Raspberry Pi Zero 2 W (~$15) with a mic/speaker HAT such as the ReSpeaker 2-Mics — headless, provisioned from the mobile app.
+
 ## Quick Start
 
-Use the [web installer](https://alexberardi.github.io/jarvis-installer/configurator) to generate your Docker Compose stack, or run the CLI:
+The fastest path is the one-line installer. It downloads the `jarvis-admin` setup wizard, which pulls prebuilt images from GHCR — no source checkout required:
 
 ```bash
-git clone https://github.com/alexberardi/jarvis.git
-cd jarvis
-./jarvis init       # generate tokens, configure databases, run migrations
-./jarvis start --all  # start all services in dependency order
+curl -fsSL https://raw.githubusercontent.com/alexberardi/jarvis-admin/main/install.sh | sh
 ```
 
-`./jarvis doctor` runs diagnostics if anything looks off.
+Then open **http://localhost:7711** — the wizard walks you through hardware detection, service selection, account creation, and downloading a model. See the [full installation guide](https://docs.jarvisautomation.dev/getting-started/installation/) for Docker prerequisites, GPU setup, TrueNAS, and other install options.
+
+> **Note:** Jarvis is split across ~60 repositories, so cloning this repo alone is **not** a full install — use the installer above to run it. To hack on the services from source, see [Development](#development).
 
 ## Development
 
@@ -316,7 +333,7 @@ jdt deploy local .                    # Install to your node
 Each service is its own repository with its own CI pipeline. Clone the ones you need:
 
 ```bash
-git clone git@github.com:alexberardi/jarvis-auth.git
+git clone https://github.com/alexberardi/jarvis-auth.git
 cd jarvis-auth
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
@@ -329,4 +346,9 @@ See each service's README for specific setup instructions, or browse the [develo
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+Jarvis is open source under a split license:
+
+- **Server-side services** — command-center, auth, config-service, pantry, the LLM / STT / TTS services, logs, notifications, admin, installer, node software, and the rest of the self-hosted stack — are licensed under the **GNU AGPL-3.0**. You can self-host, modify, and redistribute freely; if you run a modified version as a network service, you must publish your changes.
+- **Apps, SDK, client libraries, and command/device packages** — the mobile apps, `jarvis-command-sdk`, the `*-client` libraries, and all `jarvis-cmd-*` / `jarvis-device-*` packages — are licensed under **Apache-2.0**, so you can build and ship your own commands and integrations without copyleft obligations.
+
+Each repository's `LICENSE` file is authoritative.
