@@ -19,3 +19,10 @@ tokens.env
 
 # Local infra reference (real hosts/IPs/SSH users)
 HOSTS.local.md
+
+# Local-only pre-release audit report (contains redacted secret/PII references)
+RELEASE-AUDIT.md
+PUSH-PLAN.md
+
+# Internal scratch (not for public consumption)
+todo.md

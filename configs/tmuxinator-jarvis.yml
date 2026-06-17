@@ -1,4 +1,5 @@
-# /home/alex/.config/tmuxinator/jarvis.yml
+# tmuxinator project layout for the Jarvis dev stack
+# Install to ~/.config/tmuxinator/jarvis.yml (see scripts/deploy-configs.sh)
 
 name: jarvis
 root: ~/jarvis
