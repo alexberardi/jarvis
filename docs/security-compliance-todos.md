@@ -11,7 +11,9 @@ Target frameworks: HIPAA, SOC2 Type II, HITRUST CSF, FedRAMP, ISO 27001, PCI DSS
 
 **Exists:** JWT auth (HS256), app-to-app auth, HouseholdRole (MEMBER/POWER_USER/ADMIN), is_superuser, multi-tenant household_id isolation, centralized logging (Loki+Grafana), soft deletes, bcrypt passwords.
 
-**Missing:** Audit trails, encryption (transit + rest), RBAC enforcement, rate limiting, data classification, network hardening, log retention >7 days.
+**Current trust model:** Jarvis is designed to run self-hosted on a private LAN (or behind the operator's own reverse proxy, which terminates TLS — so transit encryption is provided at the edge rather than re-implemented per service). The default target is a single household on trusted infrastructure.
+
+**Planned (roadmap toward the multi-tenant / regulated B2B posture above):** Audit trails, application-layer encryption at rest, RBAC enforcement, rate limiting, data classification, network hardening, log retention >7 days. These harden Jarvis for shared/regulated deployments; they are not gaps in the default self-hosted use case.
 
 ---
 
