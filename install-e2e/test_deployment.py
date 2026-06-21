@@ -20,6 +20,7 @@ from conftest import (
     HTTP_SERVICES,
     NON_HTTP_CONTAINERS,
     docker_inspect,
+    wait_for_container_health,
     wait_for_http,
 )
 
@@ -45,16 +46,12 @@ def test_no_crash_loop(container: str) -> None:
 @pytest.mark.parametrize("container", ALL_CONTAINERS)
 def test_healthy_if_healthcheck_defined(container: str) -> None:
     """Any container with a healthcheck must reach 'healthy' (catches the
-    admin/web curl-probe-on-a-Node-image bug)."""
-    status = docker_inspect(container, "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}")
-    assert status is not None
+    admin/web curl-probe-on-a-Node-image bug). Polls the health flip, since
+    docker only runs the first probe after the 30s interval."""
+    status = wait_for_container_health(container, timeout=180)
+    assert status is not None, f"{container} not found (did it fail to create?)"
     if status == "none":
         pytest.skip(f"{container} has no healthcheck")
-    # Give late-arriving services time to flip healthy.
-    if status != "healthy":
-        svc = next((s for s in HTTP_SERVICES if s.container == container), None)
-        if svc and wait_for_http(svc.port, svc.health, timeout=180):
-            status = docker_inspect(container, "{{.State.Health.Status}}")
     assert status == "healthy", f"{container} health is '{status}', expected 'healthy'"
 
 

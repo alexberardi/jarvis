@@ -101,6 +101,30 @@ def docker_inspect(container: str, fmt: str) -> str | None:
     return out.stdout.strip()
 
 
+def container_health(container: str) -> str | None:
+    """'healthy' | 'unhealthy' | 'starting' | 'none' (no healthcheck), or None
+    if the container doesn't exist."""
+    return docker_inspect(
+        container,
+        "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}",
+    )
+
+
+def wait_for_container_health(container: str, timeout: float = 180.0, interval: float = 3.0) -> str | None:
+    """Poll until the container is 'healthy' (or has no healthcheck), else return
+    the last status seen. Healthchecks run on a 30s interval, so a freshly-upped
+    service sits in 'starting' for a bit before flipping — polling avoids a
+    flaky too-eager assertion while still failing on a genuinely broken probe."""
+    deadline = time.time() + timeout
+    last = container_health(container)
+    while time.time() < deadline:
+        if last in ("healthy", "none", None):
+            return last
+        time.sleep(interval)
+        last = container_health(container)
+    return last
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _stack_ready() -> None:
     """Block until the core control plane is healthy, else fail fast with a hint."""
