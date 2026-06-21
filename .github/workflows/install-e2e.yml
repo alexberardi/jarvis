@@ -89,6 +89,17 @@ jobs:
       - name: Prepare host storage
         run: sudo mkdir -p "$STORAGE_PATH" && sudo chmod 777 "$STORAGE_PATH"
 
+      - name: Pull images (with retry)
+        run: |
+          # GHCR pulls of the larger images (~3GB) occasionally i/o-timeout;
+          # retry the pull so a transient blip doesn't fail the whole bring-up.
+          pull() { docker compose -p "$COMPOSE_PROJECT" "$@" pull; }
+          for i in 1 2 3 4; do
+            pull -f "$GEN_FILE" -f "$OVERRIDE_FILE" -f "$NODE_FILE" && break
+            echo "::warning::image pull attempt $i failed; retrying in 20s"
+            sleep 20
+          done
+
       - name: Bring up the core stack
         run: docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" up -d
 
