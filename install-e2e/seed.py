@@ -52,7 +52,7 @@ def create_superuser() -> tuple[str, str]:
     r = requests.post(
         f"{AUTH_URL}/auth/setup", json={"email": EMAIL, "password": PASSWORD}, timeout=30
     )
-    if r.status_code == 200:
+    if r.status_code in (200, 201):
         body = r.json()
         return body["household_id"], body["access_token"]
     # Already set up — log in instead, then discover the household.
