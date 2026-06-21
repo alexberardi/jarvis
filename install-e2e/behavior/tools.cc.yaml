@@ -1,0 +1,183 @@
+# Command-center's REAL BUILT-IN voice-command tool schemas (OpenAI shape).
+#
+# Scope decision (Alex, 2026-06-21): the corpus targets node-setup BUILT-IN
+# commands only — NOT optional jarvis-cmd-* packages (get_weather/open-weather,
+# get_news/news, music/music-assistant are packages a node may not have). A CI
+# behavior signal should reflect a baseline node's tool surface.
+#
+# Unlike jarvis-llm-proxy-api/tests/manual/behavior/tools.yaml (a deliberately
+# FICTIONAL stand-in: set_alarm / get_time / play_music / add_to_list), this is
+# transcribed faithfully from the real built-in command sources (authoritative
+# builder: the SDK's IJarvisCommand.to_openai_tool_schema(), command.py:602-665).
+#
+# Sources (jarvis-node-setup/commands/, verified 2026-06-21):
+#   set_timer            timer_command.py:54,71
+#   reminder             reminder_command.py:98,117
+#   get_current_time     timezone_command.py:113,134
+#   control_device       control_device_command.py:40,63
+#   shopping_list        shopping_list_command.py:126,146
+#   todo_list            todo_list_command.py:150,171
+#   calculate            calculator_command.py:62,81
+#   convert_measurement  measurement_conversion_command.py:158,174
+#
+# Non-standard jarvis extensions (options_source / _refinable) are dropped — CC's
+# ToolBuilder.strip_jarvis_extensions does the same before the native `tools`
+# param, so the fixture mirrors what the model actually sees. Passed verbatim as
+# `client_tools` to /api/v0/conversation/start.
+
+- type: function
+  function:
+    name: set_timer
+    description: >-
+      Set a background countdown timer with an optional label. Convert the
+      spoken duration to seconds (5 minutes = 300, 1 hour = 3600, 1 hour 30
+      minutes = 5400). Use for relative countdowns ("in 10 minutes"), NOT for
+      clock-time alarms.
+    parameters:
+      type: object
+      properties:
+        duration_seconds:
+          type: integer
+          description: Length of the countdown in seconds. 1 min = 60, 1 hr = 3600. Sum compound times.
+        label:
+          type: string
+          description: >-
+            Short name for what the timer is for, e.g. "nap timer" -> "nap",
+            "timer for the pasta" -> "pasta".
+      required: [duration_seconds]
+
+- type: function
+  function:
+    name: reminder
+    description: >-
+      Set, list, delete, or snooze reminders tied to a clock time or date
+      ("remind me to call mom at 5", "wake me up at 7am"). Use for absolute
+      clock-time alerts. NOT for relative countdowns — use set_timer for those.
+    parameters:
+      type: object
+      properties:
+        action:
+          type: string
+          description: set = create a reminder, list = show reminders, delete = cancel, snooze = delay.
+          enum: [set, list, delete, snooze]
+        text:
+          type: string
+          description: What to be reminded about (required for "set").
+        time:
+          type: string
+          description: Explicit clock time in HH:MM 24-hour format, e.g. "07:00" or "18:30".
+        relative_minutes:
+          type: integer
+          description: Minutes from now (e.g. 30 for "in 30 minutes").
+        recurrence:
+          type: string
+          description: Repeat schedule.
+          enum: [daily, weekdays, weekly, biweekly, monthly]
+      required: [action]
+
+- type: function
+  function:
+    name: get_current_time
+    description: >-
+      Get the current time or date, locally or for another city/state/country
+      ("what time is it?", "what time is it in Tokyo?"). NOT for weather.
+    parameters:
+      type: object
+      properties:
+        location:
+          type: string
+          description: City, state, or country (e.g. "Tokyo", "London"). Omit for local time.
+      required: []
+
+# NOTE: control_device is intentionally NOT in this CI corpus. The model routes
+# to it correctly (proven 29/29 in the model-service dry-run), but in the full CC
+# stack device control is a MULTI-TURN Home-Assistant flow: the enabled
+# `get_ha_entities` server tool instructs the model to resolve entity IDs first,
+# and CI has no HA data in the node context, so the flow can't resolve and ends in
+# stop_reason=error. A single-shot routing corpus can't test it without seeding HA
+# node-context data (a possible future multi-turn device test). See the behavior
+# lane's first CI run (2026-06-21): 26/30, the 4 fails were all control_device.
+
+- type: function
+  function:
+    name: shopping_list
+    description: >-
+      Manage the household shopping/grocery list: add items, read it, check items
+      off, remove items, or clear it ("add milk to the shopping list", "what's on
+      the grocery list"). NOT for to-do tasks or time-based reminders.
+    parameters:
+      type: object
+      properties:
+        action:
+          type: string
+          description: add = put items on the list, read = say what's on it, check_off = mark bought, remove = delete, clear = empty.
+          enum: [add, read, check_off, remove, clear]
+        items:
+          type: array
+          description: Item names. Always a list, even for one item (required for add/check_off/remove).
+          items:
+            type: string
+      required: [action]
+
+- type: function
+  function:
+    name: todo_list
+    description: >-
+      Manage the household to-do list: add tasks, read it, mark tasks done/not
+      done, remove tasks, or clear it ("add call the dentist to my to-do list",
+      "what's on my to-do list"). NOT for time-based reminders or shopping.
+    parameters:
+      type: object
+      properties:
+        action:
+          type: string
+          description: add = put tasks on the list, read = say what's on it, complete = mark done, uncomplete = mark not done, remove = delete, clear = empty.
+          enum: [add, read, complete, uncomplete, remove, clear]
+        tasks:
+          type: array
+          description: >-
+            Task phrases. Always a list, even for one task. Each entry is a whole
+            task — do not split a single task on "and".
+          items:
+            type: string
+      required: [action]
+
+- type: function
+  function:
+    name: calculate
+    description: "Perform two-number arithmetic operations: addition, subtraction, multiplication, or division."
+    parameters:
+      type: object
+      properties:
+        num1:
+          type: number
+          description: First number.
+        num2:
+          type: number
+          description: Second number.
+        operation:
+          type: string
+          description: "Operation: must be exactly 'add', 'subtract', 'multiply', or 'divide' (no synonyms)."
+          enum: [add, subtract, multiply, divide]
+      required: [num1, num2, operation]
+
+- type: function
+  function:
+    name: convert_measurement
+    description: "Convert units: distance, volume, weight, temperature. Explicit conversions ONLY."
+    parameters:
+      type: object
+      properties:
+        value:
+          type: number
+          description: Numeric value to convert; defaults to 1 if not specified.
+        from_unit:
+          type: string
+          description: "Source unit name (e.g., 'miles', 'cups', 'pounds', 'celsius')."
+        to_unit:
+          type: string
+          description: "Target unit name (e.g., 'kilometers', 'liters', 'kilograms', 'fahrenheit')."
+        category:
+          type: string
+          description: "Optional hint: 'distance', 'volume', 'weight', or 'temperature'."
+      required: [from_unit, to_unit]

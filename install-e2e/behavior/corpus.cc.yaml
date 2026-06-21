@@ -1,0 +1,207 @@
+# Behavior corpus for command-center's REAL BUILT-IN tool routing (T6b).
+#
+# The "does the feature actually work" signal routed through CC's real
+# ChatGPTOpenAI provider + full stack: a real cheap cloud model (pinned
+# gpt-4.1-nano), given CC's REAL built-in tool schemas (tools.cc.yaml) via the
+# native OpenAI `tools` parameter, must pick the right tool AND fill its
+# arguments for each voice utterance, and must NOT call a tool on small talk.
+#
+# Scope (Alex, 2026-06-21): BUILT-IN node-setup commands only. The optional
+# jarvis-cmd-* packages (weather / news / music) are intentionally excluded — a
+# baseline node may not have them, so they aren't a reliable CI behavior signal.
+#
+# This is a faithful translation of jarvis-llm-proxy-api's provider-agnostic
+# corpus.yaml onto CC's REAL tool names/args (the original asserted against a
+# fictional stand-in toolset). The translation is NOT cosmetic:
+#   set_alarm   -> reminder (action=set)        ; no real set_alarm exists
+#   get_time    -> get_current_time
+#   duration_minutes -> duration_seconds (x60)
+#   add_to_list -> shopping_list / todo_list (items[] / tasks[])
+# Package tools (get_weather/get_news/play_music) are replaced with built-ins
+# (calculate, convert_measurement, more list/reminder utterances).
+#
+# Each entry:
+#   utterance: what the user said
+#   tool:      the CC tool that MUST be called, or null = no tool (direct answer)
+#   args:      optional per-argument matchers. The named arg must be present and
+#              satisfy its matcher. Args not listed are not asserted.
+#
+# Matchers (string comparisons case-insensitive; array args matched on str(value)):
+#   equals: <v>        exact value (numbers compared numerically: 600 == "600")
+#   contains: <substr> str(arg) contains substr
+#   in: [<v>, ...]     str(arg) equals one of these
+#   any_of: [<s>, ...] str(arg) contains at least one of these substrings
+#
+# Assert only reliably-filled args (primary subject + required action/operation),
+# never optional secondary args — gpt-4.1-nano fills those inconsistently and
+# asserting them makes the lane flaky. Keep utterances UNAMBIGUOUS so
+# temperature=0 routing is deterministic.
+
+# --- set_timer (relative countdown) — minutes converted to seconds (x60) ---
+- utterance: "set a 10 minute timer"
+  tool: set_timer
+  args:
+    duration_seconds: {equals: 600}
+
+- utterance: "set a timer for 5 minutes"
+  tool: set_timer
+  args:
+    duration_seconds: {equals: 300}
+
+- utterance: "give me a 20 minute timer for the pasta"
+  tool: set_timer
+  args:
+    duration_seconds: {equals: 1200}
+
+- utterance: "start a timer for one hour"
+  tool: set_timer
+  args:
+    duration_seconds: {equals: 3600}
+
+# --- reminder (absolute clock time / date) — must NOT collapse into set_timer ---
+# The original corpus used a fictional `set_alarm`; CC's real clock-time tool is
+# `reminder` with action=set. We assert tool + action (and the subject for the
+# "remind me to X" forms); the `time` arg is formatted inconsistently by nano so
+# it is not asserted. Disambiguation signal (clock time != countdown) is kept.
+- utterance: "wake me up at 7 in the morning"
+  tool: reminder
+  args:
+    action: {equals: set}
+
+- utterance: "set an alarm for 6:30 am"
+  tool: reminder
+  args:
+    action: {equals: set}
+
+- utterance: "remind me to call mom at 5pm"
+  tool: reminder
+  args:
+    action: {equals: set}
+    text: {contains: "mom"}
+
+- utterance: "remind me to take out the trash at 8pm"
+  tool: reminder
+  args:
+    action: {equals: set}
+    text: {contains: "trash"}
+
+# --- get_current_time --- (real name; must NOT collapse into set_timer)
+- utterance: "what time is it"
+  tool: get_current_time
+
+- utterance: "what time is it in Tokyo right now"
+  tool: get_current_time
+  args:
+    location: {contains: "tokyo"}
+
+# NOTE: control_device is intentionally excluded — in the full CC stack it's a
+# multi-turn Home-Assistant flow (get_ha_entities -> control_device) that can't
+# resolve without HA node-context data, which CI lacks. See tools.cc.yaml. The
+# model's single-shot routing to it is already proven by the model-service
+# dry-run; the slots below test other built-ins single-shot instead.
+
+# --- shopping_list --- (real name; `items` is an array)
+- utterance: "add milk to my shopping list"
+  tool: shopping_list
+  args:
+    action: {equals: add}
+    items: {contains: "milk"}
+
+- utterance: "put eggs on the grocery list"
+  tool: shopping_list
+  args:
+    action: {equals: add}
+    items: {contains: "eggs"}
+
+- utterance: "add bread and butter to the shopping list"
+  tool: shopping_list
+  args:
+    action: {equals: add}
+    items: {any_of: ["bread", "butter"]}
+
+- utterance: "what's on my shopping list"
+  tool: shopping_list
+  args:
+    action: {equals: read}
+
+- utterance: "remove milk from my shopping list"
+  tool: shopping_list
+  args:
+    action: {equals: remove}
+    items: {contains: "milk"}
+
+# --- todo_list --- (real name; `tasks` is an array; near-neighbour of shopping_list)
+- utterance: "add call the dentist to my to-do list"
+  tool: todo_list
+  args:
+    action: {equals: add}
+    tasks: {contains: "dentist"}
+
+- utterance: "add finish the report to my to-do list"
+  tool: todo_list
+  args:
+    action: {equals: add}
+    tasks: {contains: "report"}
+
+- utterance: "add water the plants to my to-do list"
+  tool: todo_list
+  args:
+    action: {equals: add}
+    tasks: {contains: "plants"}
+
+- utterance: "what's on my to-do list"
+  tool: todo_list
+  args:
+    action: {equals: read}
+
+# --- calculate --- (built-in; replaces a package tool; operation enum)
+- utterance: "what's 15 times 12"
+  tool: calculate
+  args:
+    operation: {any_of: ["multiply"]}
+
+- utterance: "what is 100 divided by 4"
+  tool: calculate
+  args:
+    operation: {any_of: ["divide"]}
+
+- utterance: "add 25 and 17"
+  tool: calculate
+  args:
+    operation: {any_of: ["add"]}
+
+- utterance: "subtract 8 from 30"
+  tool: calculate
+  args:
+    operation: {any_of: ["subtract"]}
+
+# --- convert_measurement --- (built-in; replaces a package tool)
+# Phrase as explicit conversion COMMANDS, not "how many X in a Y" questions —
+# the latter read as general knowledge the model answers directly (no tool call).
+- utterance: "convert 2 quarts to cups"
+  tool: convert_measurement
+  args:
+    from_unit: {any_of: ["quart", "cup"]}
+    to_unit: {any_of: ["quart", "cup"]}
+
+- utterance: "convert 5 miles to kilometers"
+  tool: convert_measurement
+  args:
+    from_unit: {contains: "mile"}
+    to_unit: {any_of: ["kilomet", "km"]}
+
+- utterance: "convert 3 pounds to ounces"
+  tool: convert_measurement
+  args:
+    from_unit: {any_of: ["pound", "ounce", "lb", "oz"]}
+    to_unit: {any_of: ["pound", "ounce", "lb", "oz"]}
+
+# --- negatives: small talk must NOT trigger a tool call ---
+- utterance: "hello there"
+  tool: null
+
+- utterance: "thank you so much, that's all for now"
+  tool: null
+
+- utterance: "tell me a joke"
+  tool: null

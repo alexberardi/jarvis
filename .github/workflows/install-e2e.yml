@@ -36,6 +36,7 @@ env:
   COMPOSE_PROJECT: jarvis
   GEN_FILE: install-e2e/docker-compose.gen.yaml
   OVERRIDE_FILE: install-e2e/docker-compose.ci-override.yaml
+  NODE_FILE: install-e2e/docker-compose.node.yaml
 
 jobs:
   e2e:
@@ -88,23 +89,40 @@ jobs:
       - name: Prepare host storage
         run: sudo mkdir -p "$STORAGE_PATH" && sudo chmod 777 "$STORAGE_PATH"
 
-      - name: Bring up the stack
+      - name: Bring up the core stack
         run: docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" up -d
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Run install E2E (Phase 1)
+      - name: Install test deps
+        run: pip install -r install-e2e/requirements.txt
+
+      - name: Phase 1 — deployment validity
+        run: pytest install-e2e/test_deployment.py -v --junitxml=phase1-results.xml
+
+      - name: Seed (superuser, node, llm.interface)
         run: |
-          pip install -r install-e2e/requirements.txt
-          pytest install-e2e -v --junitxml=install-e2e-results.xml
+          sudo mkdir -p /var/lib/jarvis/node /var/lib/jarvis/node-data
+          sudo chmod -R 777 /var/lib/jarvis/node /var/lib/jarvis/node-data
+          python install-e2e/seed.py
+
+      - name: Bring up the node container (Phase 3)
+        run: |
+          docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" -f "$NODE_FILE" up -d jarvis-node
+          echo "JARVIS_E2E_NODE=1" >> "$GITHUB_ENV"
+
+      - name: Phase 2 + 3 — behavior routing + real node MQTT/K2
+        run: pytest install-e2e/test_behavior.py install-e2e/test_node_mqtt_k2.py -v --junitxml=phase23-results.xml
 
       - name: Diagnostics on failure
         if: failure()
         run: |
-          docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" ps || true
-          docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" logs --tail 120 || true
+          C="docker compose -p $COMPOSE_PROJECT -f $GEN_FILE -f $OVERRIDE_FILE -f $NODE_FILE"
+          $C ps || true
+          $C logs --tail 150 || true
+          docker logs jarvis-node --tail 120 2>&1 || true
 
       - name: Upload results
         if: always()
@@ -112,10 +130,11 @@ jobs:
         with:
           name: install-e2e-results
           path: |
-            install-e2e-results.xml
+            phase1-results.xml
+            phase23-results.xml
             ${{ env.GEN_FILE }}
           if-no-files-found: ignore
 
       - name: Tear down
         if: always()
-        run: docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" down -v || true
+        run: docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" -f "$NODE_FILE" down -v || true

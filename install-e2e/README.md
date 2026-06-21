@@ -37,8 +37,11 @@ other service runs the generated config unchanged. Whisper runs its CPU image
 | Phase | Status | What it asserts |
 |---|---|---|
 | **1 — deployment validity** | ✅ built (`test_deployment.py`) | compose is valid; every container runs + is healthy (catches the curl-healthcheck bug); every HTTP port is published + reachable; admin reports `configured:true`; infra up; no crash loops |
-| **2 — CC behavior routing** | ⛔ TODO | seed a user + node, set `llm.interface=ChatGPTOpenAI`, route the externalized voice-command corpus (`jarvis-llm-proxy-api/tests/manual/behavior/`) through CC → cloud model, assert tool selection. Needs `OPENAI_API_KEY`. |
-| **3 — real node + MQTT + K2** | ⛔ TODO | run a real `jarvis-node` container, register it via CC admin API, connect to Mosquitto, drive a **K2 provision round-trip** (`POST /nodes/{id}/k2` → MQTT → node saves K2 → ACK in 15s). Today's harness only *simulates* nodes via seeded rows. |
+| **2 — CC behavior routing** | ✅ built (`test_behavior.py`) | `seed.py` creates a user + node and sets `llm.interface=ChatGPTOpenAI`; routes the vendored voice-command corpus (`behavior/*.cc.yaml`) through CC's real native-tool path → cloud model; asserts tool selection + arg shape. **Skips unless `OPENAI_API_KEY` is set.** |
+| **3 — real node + MQTT + K2** | ✅ built (`test_node_mqtt_k2.py`) | a real `jarvis-node` container (`docker-compose.node.yaml`) registered by `seed.py` connects to Mosquitto, then a full **K2 provision round-trip** (`POST /nodes/{id}/k2` → MQTT → node saves K2 → ACK in 15s); asserts node `needs_k2` flips. No external secret needed. Net-new — the old harness only *simulated* nodes. |
+
+The corpus (`behavior/corpus.cc.yaml`, `behavior/tools.cc.yaml`) is vendored from
+`jarvis-integration-tests/tests/behavior` (the canonical T6b lane) — keep in sync.
 
 ## Running locally
 

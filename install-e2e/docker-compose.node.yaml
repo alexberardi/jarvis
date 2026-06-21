@@ -1,0 +1,35 @@
+# Phase 3 test-only overlay: a REAL jarvis-node container on the stack network.
+# The installer never generates a node (nodes are separate Pi devices), so this
+# is added only for the E2E. It's brought up AFTER seed.py registers the node and
+# writes its config.json (creds aren't known until registration).
+#
+#   docker compose -p jarvis -f docker-compose.gen.yaml -f docker-compose.ci-override.yaml \
+#       -f docker-compose.node.yaml up -d jarvis-node
+
+services:
+  jarvis-node:
+    image: ghcr.io/alexberardi/jarvis-node:latest
+    container_name: jarvis-node
+    environment:
+      CONFIG_PATH: /config/config.json
+      JARVIS_SECRET_DIRECTORY: /data/secrets
+      JARVIS_NODE_DB: /data/jarvis_node.db
+      JARVIS_NODE_MODE: text # text mode starts the MQTT listener + inits K1
+      JARVIS_NODE_PORT: "7771"
+      JARVIS_CONFIG_URL: http://jarvis-config-service:7700
+      # MQTT discovery: config-service has no jarvis-mqtt-broker entry, so the
+      # node falls back to these. mosquitto listens on 1883 inside the network.
+      JARVIS_MQTT_BROKER: jarvis-mosquitto
+      JARVIS_MQTT_PORT: "1883"
+      JARVIS_MQTT_SCHEME: mqtt
+      JARVIS_SKIP_PROVISIONING_CHECK: "true"
+    ports:
+      - "7771:7771"
+    volumes:
+      - ${JARVIS_NODE_CONFIG_DIR:-/var/lib/jarvis/node}:/config
+      - ${JARVIS_NODE_DATA_DIR:-/var/lib/jarvis/node-data}:/data
+    networks:
+      - jarvis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
