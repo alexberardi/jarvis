@@ -1,0 +1,121 @@
+name: install-e2e
+
+# Stands up the EXACT artifact the installer ships (generated compose-export),
+# on a clean ubuntu-latest, and asserts the whole install actually works —
+# instead of finding out by hand on someone's machine.
+#
+# Phase 1 (now): generate -> validate -> up -> assert health + admin configured
+#                + ports/volumes/networking. Catches the class of bugs that hit
+#                the Bazzite box (undefined volume, missing admin port, curl
+#                healthcheck on a Node image, admin can't reach auth).
+# Phase 2 (next): CC routes a voice-command corpus through the real ChatGPTOpenAI
+#                provider -> cloud model (needs OPENAI_API_KEY).
+# Phase 3 (next): real jarvis-node container joins Mosquitto + completes K2.
+#
+# Not on pull_request (needs the OpenAI secret for Phase 2; public-repo hygiene).
+
+on:
+  workflow_dispatch:
+    inputs:
+      modules:
+        description: "Recommended modules to enable (comma-separated)"
+        default: "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin"
+  schedule:
+    - cron: "37 6 * * *" # nightly, after the llm-proxy behavior lane
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: install-e2e
+  cancel-in-progress: true
+
+env:
+  STORAGE_PATH: /var/lib/jarvis
+  COMPOSE_PROJECT: jarvis
+  GEN_FILE: install-e2e/docker-compose.gen.yaml
+  OVERRIDE_FILE: install-e2e/docker-compose.ci-override.yaml
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Checkout umbrella (harness)
+        uses: actions/checkout@v4
+
+      - name: Checkout jarvis-installer (generator)
+        uses: actions/checkout@v4
+        with:
+          repository: alexberardi/jarvis-installer
+          path: jarvis-installer
+
+      - name: Free up disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android "${AGENT_TOOLSDIRECTORY:-}" || true
+          docker system prune -af || true
+          df -h /
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: jarvis-installer/package-lock.json
+
+      - name: Generate the real install artifact (compose-export)
+        working-directory: jarvis-installer
+        run: |
+          npm ci
+          npx tsx scripts/gen-export-compose.mts \
+            --out "$GITHUB_WORKSPACE/$GEN_FILE" \
+            --storage "$STORAGE_PATH" \
+            --gpu none \
+            --modules "${{ github.event.inputs.modules || 'jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin' }}"
+
+      - name: Validate generated compose
+        run: docker compose -f "$GEN_FILE" -f "$OVERRIDE_FILE" config -q && echo "compose valid"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare host storage
+        run: sudo mkdir -p "$STORAGE_PATH" && sudo chmod 777 "$STORAGE_PATH"
+
+      - name: Bring up the stack
+        run: docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" up -d
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run install E2E (Phase 1)
+        run: |
+          pip install -r install-e2e/requirements.txt
+          pytest install-e2e -v --junitxml=install-e2e-results.xml
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" ps || true
+          docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" logs --tail 120 || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-e2e-results
+          path: |
+            install-e2e-results.xml
+            ${{ env.GEN_FILE }}
+          if-no-files-found: ignore
+
+      - name: Tear down
+        if: always()
+        run: docker compose -p "$COMPOSE_PROJECT" -f "$GEN_FILE" -f "$OVERRIDE_FILE" down -v || true

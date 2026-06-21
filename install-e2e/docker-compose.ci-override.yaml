@@ -1,0 +1,35 @@
+# CI-only overlay, layered on top of the installer's GENERATED compose-export
+# file (docker-compose.gen.yaml). Everything else runs the real generated
+# artifact unchanged — these are the only services that can't run as-generated
+# on a GPU-less GitHub runner with no baked LLM weights.
+#
+# Usage:
+#   docker compose -f docker-compose.gen.yaml -f docker-compose.ci-override.yaml up -d
+#
+# `environment` here MERGES with the generated map (same map format), so we only
+# override the model-backend keys and leave app creds / discovery / DB untouched.
+
+services:
+  # The proxy normally loads a local GGUF model on GPU. CI has neither, so point
+  # the `live` model at a cheap cloud model via the REST backend — the same path
+  # the behavior lane proved (jarvis-llm-proxy-api PR #4-#6). /health stays green
+  # without a real key; the Phase-2 routing tests skip unless OPENAI_API_KEY is set.
+  jarvis-llm-proxy-api:
+    environment:
+      JARVIS_MODEL_BACKEND: "REST"
+      JARVIS_REST_PROVIDER: "openai"
+      JARVIS_REST_REQUEST_FORMAT: "openai"
+      JARVIS_REST_AUTH_TYPE: "bearer"
+      JARVIS_REST_AUTH_TOKEN: "${OPENAI_API_KEY:-sk-ci-placeholder}"
+      JARVIS_REST_MODEL_URL: "https://api.openai.com/v1/chat/completions"
+      JARVIS_REST_MODEL_NAME: "gpt-4.1-nano-2025-04-14"
+
+  llm-proxy-worker:
+    environment:
+      JARVIS_MODEL_BACKEND: "REST"
+      JARVIS_REST_PROVIDER: "openai"
+      JARVIS_REST_REQUEST_FORMAT: "openai"
+      JARVIS_REST_AUTH_TYPE: "bearer"
+      JARVIS_REST_AUTH_TOKEN: "${OPENAI_API_KEY:-sk-ci-placeholder}"
+      JARVIS_REST_MODEL_URL: "https://api.openai.com/v1/chat/completions"
+      JARVIS_REST_MODEL_NAME: "gpt-4.1-nano-2025-04-14"
