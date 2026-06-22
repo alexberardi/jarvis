@@ -43,12 +43,32 @@ warnings: list[str] = []
 images: set[str] = set()
 
 
-def generate(gpu: str, track: str, modules: str, out: str) -> None:
+def generate(gpu: str, track: str, modules: str, out: str, mode: str = "export") -> None:
     subprocess.run(
         ["npx", "tsx", "scripts/gen-export-compose.mts",
-         "--out", out, "--gpu", gpu, "--release", track, "--modules", modules],
+         "--mode", mode, "--out", out, "--gpu", gpu, "--release", track, "--modules", modules],
         cwd=INSTALLER_DIR, check=True, capture_output=True, text=True,
     )
+
+
+def validate_standard(label: str, gpu: str, track: str, modules: str) -> None:
+    """The .env bundle path: generate compose + .env + init-db.sh and assert
+    `docker compose --env-file .env config` resolves (every ${VAR} has a value,
+    structure is valid) — the standard generator is a separate, registry-driven
+    artifact, so it gets its own interpolation check across the matrix."""
+    d = tempfile.mkdtemp(prefix="std-")
+    out = os.path.join(d, "docker-compose.yml")
+    try:
+        generate(gpu, track, modules, out, mode="standard")
+    except subprocess.CalledProcessError as e:
+        errors.append(f"[{label} .env] generation failed: {e.stderr[:300]}")
+        return
+    r = subprocess.run(
+        ["docker", "compose", "--env-file", os.path.join(d, ".env"), "-f", out, "config"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        errors.append(f"[{label} .env] config rejected it (interpolation/structure): {r.stderr.strip()[:300]}")
 
 
 def compose_config_ok(path: str) -> str | None:
@@ -139,7 +159,8 @@ def main() -> None:
             continue
         with open(out) as f:
             check_invariants(label, f.read())
-        print(f"  ok: {label}")
+        validate_standard(label, gpu, track, modules)
+        print(f"  ok: {label} (export + .env)")
 
     print(f"\n== verifying {len(images)} referenced images exist on ghcr ==")
     check_images()

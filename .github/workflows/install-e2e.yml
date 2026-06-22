@@ -139,6 +139,12 @@ jobs:
       - name: Phase 2 + 3 — behavior routing + real node MQTT/K2
         run: pytest install-e2e/test_behavior.py install-e2e/test_node_mqtt_k2.py -v --junitxml=phase23-results.xml
 
+      - name: Phase 4 — idempotency + persistence
+        run: pytest install-e2e/test_persistence.py -v --junitxml=phase4-results.xml
+        env:
+          JARVIS_E2E_COMPOSE_ARGS: "-f ${{ env.GEN_FILE }} -f ${{ env.OVERRIDE_FILE }} -f ${{ env.NODE_FILE }}"
+          JARVIS_E2E_PERSISTENCE: "1"
+
       - name: Diagnostics on failure
         if: failure()
         run: |
@@ -155,6 +161,7 @@ jobs:
           path: |
             phase1-results.xml
             phase23-results.xml
+            phase4-results.xml
             ${{ env.GEN_FILE }}
           if-no-files-found: ignore
 
