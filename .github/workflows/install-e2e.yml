@@ -22,6 +22,10 @@ on:
         default: "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin"
   schedule:
     - cron: "37 6 * * *" # nightly, after the llm-proxy behavior lane
+  pull_request:
+    paths:
+      - "install-e2e/**"
+      - ".github/workflows/install-e2e.yml"
 
 permissions:
   contents: read
@@ -85,6 +89,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Phase 0 — matrix validity + image existence
+        # No GPU/runtime needed: generates every gpu × track × module-set combo,
+        # asserts `docker compose config` + invariants, and verifies every ghcr
+        # image tag actually exists (catches the breadth the CPU runtime can't).
+        run: python3 install-e2e/validate_matrix.py
+        env:
+          INSTALLER_DIR: jarvis-installer
 
       - name: Prepare host storage
         run: sudo mkdir -p "$STORAGE_PATH" && sudo chmod 777 "$STORAGE_PATH"
