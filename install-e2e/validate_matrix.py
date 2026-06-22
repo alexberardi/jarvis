@@ -39,6 +39,7 @@ MODULE_SETS = {
 
 IMAGE_RE = re.compile(r"image:\s*(ghcr\.io/\S+)")
 errors: list[str] = []
+warnings: list[str] = []
 images: set[str] = set()
 
 
@@ -100,14 +101,24 @@ def _service_block(text: str, sid: str) -> str | None:
 
 
 def check_images() -> None:
+    # A missing STABLE image breaks a normal (latest) install → fatal. A missing
+    # DEV image (:dev / :dev-*) only breaks the dev release track, which depends
+    # on every repo's main build staying green — a separate reliability domain —
+    # so surface it loudly but don't fail the suite on it.
     for img in sorted(images):
         r = subprocess.run(
             ["docker", "manifest", "inspect", img], capture_output=True, text=True
         )
-        if r.returncode != 0:
-            errors.append(f"[image] {img} does NOT exist / not pullable: {r.stderr.strip()[:160]}")
-        else:
+        if r.returncode == 0:
             print(f"  image ok: {img}")
+            continue
+        tag = img.rsplit(":", 1)[-1]
+        is_dev = tag == "dev" or tag.startswith("dev-")
+        msg = f"{img} does NOT exist / not pullable: {r.stderr.strip()[:160]}"
+        if is_dev:
+            warnings.append(f"[dev-image] {msg}")
+        else:
+            errors.append(f"[image] {msg}")
 
 
 def main() -> None:
@@ -133,12 +144,16 @@ def main() -> None:
     print(f"\n== verifying {len(images)} referenced images exist on ghcr ==")
     check_images()
 
+    for w in warnings:
+        print(f"::warning::matrix: {w}")
+
     if errors:
         print(f"\n::error::matrix validation found {len(errors)} problem(s):")
         for e in errors:
             print(f"  ✗ {e}")
         sys.exit(1)
-    print("\n✅ matrix validation passed: all configs valid, invariants held, images exist")
+    extra = f" ({len(warnings)} dev-track image warning(s))" if warnings else ""
+    print(f"\n✅ matrix validation passed: all configs valid, invariants held, stable images exist{extra}")
 
 
 if __name__ == "__main__":
