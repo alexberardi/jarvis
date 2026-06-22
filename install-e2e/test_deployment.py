@@ -98,3 +98,28 @@ def test_config_service_has_registry() -> None:
 def test_infra_containers_present() -> None:
     for c in NON_HTTP_CONTAINERS:
         assert docker_inspect(c, "{{.State.Status}}") == "running", f"{c} not running"
+
+
+def test_external_discovery_is_phone_reachable() -> None:
+    """An off-docker client (the mobile app) must get a reachable URL for auth
+    via ?style=external — NOT the internal container coord (jarvis-auth:8000)
+    that broke mobile login. Internal (default) style stays container coords so
+    container-to-container discovery is unaffected."""
+    base = requests.get("http://localhost:7700/services", timeout=10)
+    assert base.status_code == 200
+    internal = {s["name"]: s for s in base.json()["services"]}
+    auth = internal.get("jarvis-auth")
+    assert auth, "jarvis-auth not registered in config-service"
+    # internal/default style: container coords, unchanged
+    assert "jarvis-auth:8000" in auth["url"], f"internal auth url changed: {auth['url']}"
+
+    ext = requests.get("http://localhost:7700/services?style=external", timeout=10)
+    assert ext.status_code == 200, "config-service lacks ?style=external (needs >= v0.1.5)"
+    auth_ext = {s["name"]: s for s in ext.json()["services"]}["jarvis-auth"]
+    # external style: published port, NOT the unreachable container name
+    assert "jarvis-auth" not in auth_ext["url"], (
+        f"external auth url is still a container coord (mobile can't reach it): {auth_ext['url']}"
+    )
+    assert ":7701" in auth_ext["url"], (
+        f"external auth url not on the published port 7701: {auth_ext['url']}"
+    )
