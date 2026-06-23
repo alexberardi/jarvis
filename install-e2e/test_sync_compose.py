@@ -128,6 +128,25 @@ def test_sync_compose_migrate_entrypoint(sync_compose: dict, svc_id: str) -> Non
     )
 
 
+@pytest.mark.parametrize("svc_id", MIGRATE_SET_IDS)
+def test_sync_compose_migrate_has_command(sync_compose: dict, svc_id: str) -> None:
+    """Each migrate-set service in the ADMIN SYNC compose must ALSO carry a
+    non-empty command. Overriding entrypoint clears the image CMD, so a migrate
+    service with no command execs "" and exits right after migrating — the exact
+    migrate-exit bug. Asserting only the entrypoint (above) is NOT enough; that's
+    how the broken admin generator passed this lane. SYNC-path mirror of the
+    installer's migrate-entrypoint INVARIANT."""
+    block = sync_compose.get(svc_id)
+    if block is None:
+        pytest.skip(f"{svc_id} not enabled in the sync compose")
+    cmd = block.get("command")
+    assert cmd, (
+        f"{svc_id}: admin SYNC compose gives it the migrate entrypoint but NO "
+        f'command — it execs "" and exits after migrating (restart-loop, no '
+        f"server). This is what a Sync would do to the running stack."
+    )
+
+
 @pytest.mark.parametrize("svc_id", DEFERRED_IDS)
 def test_sync_compose_deferred_have_no_migrate(sync_compose: dict, svc_id: str) -> None:
     """Deferred services (logs/tts) must NOT get a migrate entrypoint — their
