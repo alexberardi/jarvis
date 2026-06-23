@@ -90,10 +90,24 @@ def test_admin_reports_configured() -> None:
 
 def test_config_service_has_registry() -> None:
     """config-service should have seeded the service registry that every other
-    service queries for discovery at startup."""
+    service queries for discovery at startup.
+
+    `/services` is OPEN-READ, so it must return exactly 200 with a JSON list of
+    registered services. We deliberately do NOT tolerate 401/403/500 here: a
+    stale schema (the config-service migration-005 incident — missing
+    services.external_host) makes this endpoint 500 fleet-wide, and the old loose
+    `200/401/403` check would have swallowed that. A 500 must fail."""
     r = requests.get("http://localhost:7700/services", timeout=10)
-    assert r.status_code in (200, 401, 403), f"unexpected {r.status_code}"
-    # 200 = open; 401/403 = up but auth-gated (still proves it's serving).
+    assert r.status_code == 200, (
+        f"config-service /services returned {r.status_code}, expected 200 "
+        f"(open-read). A 500 here is the stale-schema fleet-outage symptom: "
+        f"{r.text[:300]}"
+    )
+    body = r.json()
+    services = body["services"] if isinstance(body, dict) else body
+    assert isinstance(services, list), (
+        f"/services body is not a JSON list of registered services: {str(body)[:200]}"
+    )
 
 
 def test_infra_containers_present() -> None:
