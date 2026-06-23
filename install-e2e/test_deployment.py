@@ -11,6 +11,7 @@ The stack is brought up by the workflow from the REAL generated compose-export
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 import requests
@@ -98,6 +99,46 @@ def test_config_service_has_registry() -> None:
 def test_infra_containers_present() -> None:
     for c in NON_HTTP_CONTAINERS:
         assert docker_inspect(c, "{{.State.Status}}") == "running", f"{c} not running"
+
+
+def test_self_heal_reregister_adds_external_coords() -> None:
+    """The upgrade / Sync self-heal path: a service registered with ONLY
+    container coords (a pre-fix install) is unreachable via ?style=external; a
+    re-register WITH external coords (exactly what admin Sync / registerServices
+    sends) upserts them so it becomes phone-reachable — no reinstall needed.
+
+    Uses a throwaway service name so it doesn't disturb the real registry.
+    """
+    # /v1/services/register validates X-Jarvis-Admin-Token against the
+    # JARVIS_AUTH_ADMIN_TOKEN config-service holds (gen placeholder: "c"*64).
+    token = os.environ.get("JARVIS_AUTH_ADMIN_TOKEN", "c" * 64)
+    headers = {"X-Jarvis-Admin-Token": token, "Content-Type": "application/json"}
+    name = "e2e-upgrade-probe"
+
+    def register(extra: dict) -> None:
+        body = {"services": [{"name": name, "host": "e2e-probe-host", "port": 9999, **extra}]}
+        r = requests.post(
+            "http://localhost:7700/v1/services/register", headers=headers, json=body, timeout=15
+        )
+        assert r.status_code == 200, f"register failed: {r.status_code} {r.text[:200]}"
+
+    def external_url() -> str:
+        r = requests.get("http://localhost:7700/services?style=external", timeout=10)
+        assert r.status_code == 200
+        svc = {s["name"]: s for s in r.json()["services"]}.get(name)
+        assert svc, f"{name} not registered"
+        return svc["url"]
+
+    # 1. pre-fix state: container-only coords → external falls back to the
+    #    unreachable container host (what broke mobile before the fix)
+    register({})
+    assert external_url() == "http://e2e-probe-host:9999"
+
+    # 2. self-heal: re-register WITH external coords (admin Sync's payload)
+    register({"external_host": "localhost", "external_port": 7701})
+
+    # 3. ?style=external now serves the reachable published coord — upsert worked
+    assert external_url() == "http://localhost:7701"
 
 
 def test_external_discovery_is_phone_reachable() -> None:
