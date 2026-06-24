@@ -4,7 +4,8 @@
 
 <p align="center">
   <strong>A self-hosted, extensible voice assistant that runs on your hardware — not someone else's cloud.</strong><br>
-  Speech-to-text, text-to-speech, speaker ID, and 30+ voice commands you can extend in plain English. Bring your own LLM — point it at a cloud API, or run it fully local on your own GPU.
+  Speaker recognition, local LLM, and a full command ecosystem: weather, music (Spotify/Pandora), smart home, calendar, email, drive time, movies, and more — 20+ voice commands built in, with more in the [Pantry](https://pantry.jarvisautomation.io) community store. Bring your own LLM or run it fully local. Nothing leaves your network unless you want it to.<br>
+  The Forge generates, validates, and sandbox-tests complete voice packages from a text description — then publishes to the community store in one click.
 </p>
 
 <p align="center">
@@ -15,13 +16,13 @@
 
 ## Why Jarvis?
 
-Most voice assistants send your voice to the cloud, process it on someone else's hardware, and send back a response. You're renting access to your own assistant — and paying with your data.
+Most voice assistants send your voice to the cloud, process it on someone else's hardware, and send back a response. You're renting access to your own assistant — and paying with your data. Self-hosted alternatives exist — Home Assistant has a voice pipeline, Rhasspy has been around for years — but none of them do speaker recognition, none have an AI-assisted package builder, and none give you this complete a feature set out of the box.
 
 Jarvis takes a different approach. Every component runs locally: speech recognition via whisper.cpp, LLM inference via llama.cpp/vLLM/MLX, text-to-speech via Piper or Kokoro, and a command center that routes everything. No internet required. No subscriptions. No one listening.
 
 What makes Jarvis different from other self-hosted alternatives:
 
-- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. 30+ commands ship today (weather, timers, smart home, sports, music, movies, general knowledge), with more in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
+- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. ~20 commands ship today (weather, timers, smart home, sports, music, movies, general knowledge), with more in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
 - **Private by default, on your hardware.** Speech recognition (whisper.cpp), text-to-speech (Piper/Kokoro), and the command center all run on your own machine. No subscriptions, no one listening.
 - **Bring your own LLM — no GPU required.** Point the LLM proxy at a cloud API (Claude, GPT, Ollama, …) and run the whole stack on any Docker host, or go **fully local** with llama.cpp / vLLM / MLX on your own GPU for zero cloud dependency. Your call on the privacy-vs-convenience trade.
 - **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
