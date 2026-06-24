@@ -17,8 +17,14 @@ services:
       JARVIS_NODE_MODE: text # text mode starts the MQTT listener + inits K1
       JARVIS_NODE_PORT: "7771"
       JARVIS_CONFIG_URL: http://jarvis-config-service:7700
-      # MQTT discovery: config-service has no jarvis-mqtt-broker entry, so the
-      # node falls back to these. mosquitto listens on 1883 inside the network.
+      # The installer seed now registers jarvis-mqtt-broker as `localhost`, so the
+      # node DISCOVERS it (discovery wins over the env fallback below). dockerized
+      # style makes config-service rewrite localhost → host.docker.internal, which
+      # this container reaches via the extra_hosts host-gateway + the published
+      # 1884 port — exercising the real broker-resolution path. (A real remote Pi
+      # would use remote style → server IP; not testable on a single runner.)
+      JARVIS_CONFIG_URL_STYLE: dockerized
+      # Env fallback (only used if discovery returns nothing):
       JARVIS_MQTT_BROKER: jarvis-mosquitto
       JARVIS_MQTT_PORT: "1883"
       JARVIS_MQTT_SCHEME: mqtt
