@@ -1,0 +1,16 @@
+[Unit]
+Description=engineering persona — read-only technical triage of roadmap issues (annotate-only, no ticket creation)
+After=openclaw-gateway.service
+Requires=openclaw-gateway.service
+
+[Service]
+Type=oneshot
+Environment=HOME=/home/pi
+Environment=PATH=/usr/bin:/home/pi/.local/bin:/usr/local/bin:/bin
+EnvironmentFile=/home/pi/.openclaw/secrets/github.env
+EnvironmentFile=/home/pi/.openclaw/secrets/coding.env
+TimeoutStartSec=1200
+# Fresh session per run — gotcha #16
+ExecStart=/bin/bash -c '/usr/bin/openclaw agent --agent engineering --session-id "cron-$(date +%%Y%%m%%d-%%H%%M%%S)" --message "$(cat /home/pi/.openclaw/triage-prompt.md)" --timeout 900'
+StandardOutput=journal
+StandardError=journal

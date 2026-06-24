@@ -1,0 +1,12 @@
+[Unit]
+Description=Run product persona interrupt-handler hourly
+
+[Timer]
+# Hourly at :25 (was 10-min during debug; dropped 2026-05-18). Staggered 20 min after qa-executor.
+OnCalendar=*-*-* 03/4:25:00
+Persistent=true
+RandomizedDelaySec=30
+Unit=product-runner.service
+
+[Install]
+WantedBy=timers.target

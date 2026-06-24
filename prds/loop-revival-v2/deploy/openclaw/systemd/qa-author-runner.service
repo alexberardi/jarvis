@@ -1,0 +1,17 @@
+[Unit]
+Description=qa-author persona — scans jarvis-* for missing integration coverage, opens draft PRs on jarvis-integration-tests
+After=openclaw-gateway.service
+Requires=openclaw-gateway.service
+
+[Service]
+Type=oneshot
+Environment=HOME=/home/pi
+Environment=PATH=/usr/bin:/home/pi/.local/bin:/usr/local/bin:/bin
+EnvironmentFile=/home/pi/.openclaw/secrets/github.env
+EnvironmentFile=/home/pi/.openclaw/secrets/coding.env
+# Authoring + clone + pip + pytest is heavy; give it a wide budget.
+TimeoutStartSec=2100
+# Fresh session per run — see gotcha #16 (stale cron-session conclusions).
+ExecStart=/bin/bash -c '/usr/bin/openclaw agent --agent qa-author --session-id "cron-$(date +%%Y%%m%%d-%%H%%M%%S)" --message "$(cat /home/pi/.openclaw/qa-author-prompt.md)" --timeout 1800'
+StandardOutput=journal
+StandardError=journal

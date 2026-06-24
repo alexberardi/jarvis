@@ -1,9 +1,8 @@
 [Unit]
-Description=Run coding-agent daily (last pipeline stage; only acts on status:ready-for-code)
+Description=Run coding-agent ~every 15 min (backstop; webhook fires on status:ready-for-code)
 
 [Timer]
-# Daily at 05:50 — after engineering 05:10 + qa 05:30. Daily NOT hourly (the #42 runaway lesson).
-OnCalendar=*-*-* *:13/15:00
+OnCalendar=*-*-* 02/3:05:00
 Persistent=true
 RandomizedDelaySec=90
 Unit=coding-agent-runner.service

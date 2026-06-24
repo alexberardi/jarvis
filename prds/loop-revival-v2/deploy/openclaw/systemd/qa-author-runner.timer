@@ -1,0 +1,15 @@
+[Unit]
+Description=Run qa-author persona (TEMP hourly during bake-in; revert to daily later)
+
+[Timer]
+# TEMP hourly at :55 while Alex iterates on quality (2026-06-22). Slot :55 is
+# free (others at :05/:15/:25/:35/:45) — staggered for Pi-5 capacity (gotcha #19).
+# The WIP=1 gate keeps hourly cheap: runs early-exit while a qa-author/* PR is
+# open. REVERT to daily (OnCalendar=*-*-* 04:50:00) once happy with output.
+OnCalendar=*-*-* 01/6:55:00
+Persistent=true
+RandomizedDelaySec=60
+Unit=qa-author-runner.service
+
+[Install]
+WantedBy=timers.target

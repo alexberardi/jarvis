@@ -1,0 +1,14 @@
+[Unit]
+Description=Marketing persona — needs:marketing interrupt handler (10-min poll)
+After=openclaw-gateway.service
+Requires=openclaw-gateway.service
+
+[Service]
+Type=oneshot
+Environment=HOME=/home/pi
+Environment=PATH=/usr/bin:/home/pi/.local/bin:/usr/local/bin:/bin
+EnvironmentFile=/home/pi/.openclaw/secrets/github.env
+TimeoutStartSec=900
+ExecStart=/bin/bash -c '/usr/bin/openclaw agent --agent marketing --session-id "cron-$(date +%%Y%%m%%d-%%H%%M%%S)" --message "$(cat /home/pi/.openclaw/marketing-prompt.md)" --timeout 600'
+StandardOutput=journal
+StandardError=journal

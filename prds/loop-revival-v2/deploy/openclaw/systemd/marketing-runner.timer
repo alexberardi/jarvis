@@ -1,0 +1,12 @@
+[Unit]
+Description=Run marketing persona interrupt-handler hourly
+
+[Timer]
+# Hourly at :45 (was 10-min during debug; dropped 2026-05-18). Staggered 20 min after product.
+OnCalendar=*-*-* 02/4:45:00
+Persistent=true
+RandomizedDelaySec=30
+Unit=marketing-runner.service
+
+[Install]
+WantedBy=timers.target

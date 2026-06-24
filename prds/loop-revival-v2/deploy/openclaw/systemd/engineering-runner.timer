@@ -1,0 +1,11 @@
+[Unit]
+Description=Run engineering triage ~every 15 min (event-chain drives real-time; this is the backstop)
+
+[Timer]
+OnCalendar=*-*-* 00/3:05:00
+Persistent=true
+RandomizedDelaySec=90
+Unit=engineering-runner.service
+
+[Install]
+WantedBy=timers.target

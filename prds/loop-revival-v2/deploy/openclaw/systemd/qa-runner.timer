@@ -1,9 +1,8 @@
 [Unit]
-Description=Run qa per-feature test-plan author daily (after engineering 05:10, before coding-agent 05:50)
+Description=Run qa test-plan author ~every 15 min (backstop; webhook fires qa on needs:qa)
 
 [Timer]
-# Daily at 05:30 — second stage of the pipeline. Daily NOT hourly (the #42 runaway lesson).
-OnCalendar=*-*-* *:08/15:00
+OnCalendar=*-*-* 01/3:05:00
 Persistent=true
 RandomizedDelaySec=90
 Unit=qa-runner.service

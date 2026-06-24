@@ -1,0 +1,11 @@
+[Unit]
+Description=Run qa-executor every 10 min — CI poll (cross-repo results live on code PRs)
+
+[Timer]
+OnCalendar=*-*-* *:00/30:00
+Persistent=true
+RandomizedDelaySec=30
+Unit=qa-executor-runner.service
+
+[Install]
+WantedBy=timers.target

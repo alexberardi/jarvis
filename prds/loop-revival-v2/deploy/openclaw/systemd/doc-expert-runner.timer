@@ -1,0 +1,12 @@
+[Unit]
+Description=Run doc-expert persona hourly (PR-merge scan → jarvis-docs draft PRs)
+
+[Timer]
+# Hourly at :15. Slot between qa-executor (:05) and product (:25).
+OnCalendar=*-*-* 00/4:20:00
+Persistent=true
+RandomizedDelaySec=30
+Unit=doc-expert-runner.service
+
+[Install]
+WantedBy=timers.target

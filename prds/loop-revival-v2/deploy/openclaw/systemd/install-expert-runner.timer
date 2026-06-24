@@ -1,0 +1,12 @@
+[Unit]
+Description=Run install-expert persona hourly (scan PRs for install-pattern drift)
+
+[Timer]
+# Hourly at :35. Slot between product (:25) and marketing (:45).
+OnCalendar=*-*-* 01/4:35:00
+Persistent=true
+RandomizedDelaySec=30
+Unit=install-expert-runner.service
+
+[Install]
+WantedBy=timers.target

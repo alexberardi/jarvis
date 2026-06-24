@@ -1,0 +1,16 @@
+[Unit]
+Description=install-expert persona — hourly scan of open+merged PRs for install-pattern drift (comments + roadmap tickets only)
+After=openclaw-gateway.service
+Requires=openclaw-gateway.service
+
+[Service]
+Type=oneshot
+Environment=HOME=/home/pi
+Environment=PATH=/usr/bin:/home/pi/.local/bin:/usr/local/bin:/bin
+EnvironmentFile=/home/pi/.openclaw/secrets/github.env
+EnvironmentFile=/home/pi/.openclaw/secrets/coding.env
+TimeoutStartSec=900
+# Fresh session per run — see gotcha #16
+ExecStart=/bin/bash -c '/usr/bin/openclaw agent --agent install-expert --session-id "cron-$(date +%%Y%%m%%d-%%H%%M%%S)" --message "$(cat /home/pi/.openclaw/install-expert-prompt.md)" --timeout 600'
+StandardOutput=journal
+StandardError=journal
