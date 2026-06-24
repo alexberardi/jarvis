@@ -1,0 +1,17 @@
+[Unit]
+Description=coding-agent persona — implements ready features as a coordinated set of N linked draft PRs
+After=openclaw-gateway.service
+Requires=openclaw-gateway.service
+
+[Service]
+Type=oneshot
+Environment=HOME=/home/pi
+Environment=PATH=/usr/bin:/home/pi/.local/bin:/usr/local/bin:/bin
+EnvironmentFile=/home/pi/.openclaw/secrets/github.env
+EnvironmentFile=/home/pi/.openclaw/secrets/coding.env
+# A multi-repo branch set is heavy (clone + TDD + push + N PRs); the agent caps itself at ~35 min.
+TimeoutStartSec=2400
+# Fresh session per run — gotcha #16
+ExecStart=/bin/bash -c '/usr/bin/openclaw agent --agent coding-agent --session-id "cron-$(date +%%Y%%m%%d-%%H%%M%%S)" --message "$(cat /home/pi/.openclaw/coding-prompt.md)" --timeout 2100'
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh the /home/pi/code/jarvis mirror (git pull --ff-only) before the dev-loop pipeline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=/home/pi
+Environment=PATH=/usr/bin:/home/pi/.local/bin:/usr/local/bin:/bin
+ExecStart=/home/pi/.openclaw/bin/refresh-mirror.sh
+StandardOutput=journal
+StandardError=journal

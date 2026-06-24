@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh the jarvis code mirror daily at 05:00 (just before engineering 05:10)
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:00:00
+Persistent=true
+RandomizedDelaySec=60
+Unit=jarvis-mirror-refresh.service
+
+[Install]
+WantedBy=timers.target
