@@ -30,6 +30,13 @@ on:
     paths:
       - "install-e2e/**"
       - ".github/workflows/install-e2e.yml"
+  # Fired by each service repo's trigger-install-e2e.yml on push to main, so a
+  # service commit that breaks the install is caught immediately (not just
+  # nightly). The payload carries the originating service + sha; dispatched runs
+  # use the `dev` release track so they test that service's freshly-built :dev
+  # image, not the old :latest.
+  repository_dispatch:
+    types: [service-commit]
 
 permissions:
   contents: read
@@ -90,10 +97,18 @@ jobs:
         working-directory: jarvis-installer
         run: |
           npm ci
+          # A service-commit dispatch just published that service's :dev image —
+          # test the dev track so we validate the NEW code, not the old :latest.
+          REL=stable
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            REL=dev
+            echo "::notice::install-e2e triggered by ${{ github.event.client_payload.service || 'unknown' }}@${{ github.event.client_payload.sha || '?' }} → dev track"
+          fi
           npx tsx scripts/gen-export-compose.mts \
             --out "$GITHUB_WORKSPACE/$GEN_FILE" \
             --storage "$STORAGE_PATH" \
             --gpu none \
+            --release "$REL" \
             --modules "${{ github.event.inputs.modules || 'jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin' }}"
 
       - name: Validate generated compose
