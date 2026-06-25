@@ -63,6 +63,7 @@ PROMPT_FILE = {
     "qa": "qa-prompt.md",
     "coding-agent": "coding-prompt.md",
     "qa-executor": "qa-executor-prompt.md",
+    "qa-author": "qa-author-prompt.md",
 }
 
 LABEL_ROUTES = {
@@ -73,6 +74,7 @@ LABEL_ROUTES = {
     "needs:qa":              ("qa",           "handoff"),
     "needs:coding-agent":    ("coding-agent", "interrupt"),
     "needs:qa-executor":     ("qa-executor",  "interrupt"),
+    "needs:qa-author":       ("qa-author",    "author-case"),
 }
 
 COMMENT_ROUTES = {
@@ -109,6 +111,12 @@ def build_message(mode: str, persona: str, issue_n: int, label: str | None = Non
     if mode == "poll-ci":
         return (pre + "coding-agent opened the PR set + posted `coding-agent-feature-ready:v1`. Poll each PR for "
                 "`cross-repo-test-results:v1` and mirror onto the umbrella (qa-execution-report + gating_cases pass/fail). " + contract)
+    if mode == "author-case":
+        return (pre + "labeled `needs:qa-author` — engineering needs a CASE test authored or a stale CASE fixed for "
+                "this feature. Run your Step 0 interrupt path: read the specific ask (which CASE id, what behavior) from "
+                "engineering's note / the qa-test-plan `proposed_cases`, author or fix it in jarvis-integration-tests "
+                "(WIP=1, dedup), open the draft PR, and post a `🔔 qa-author:` comment with the CASE id + PR link asking "
+                "engineering to clear `needs:qa-author` and re-arm once it merges. You hold no roadmap labels. " + contract)
     return (pre + f"labeled `{label}` (interrupt). Handle it per your Step 0 — terminal-state first, then act and clear "
             f"the `{label}` label as your contract directs. " + contract)
 
