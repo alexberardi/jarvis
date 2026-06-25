@@ -26,6 +26,7 @@ What makes Jarvis different from other self-hosted alternatives:
 - **Private by default, on your hardware.** Speech recognition (whisper.cpp), text-to-speech (Piper/Kokoro), and the command center all run on your own machine. No subscriptions, no one listening.
 - **Bring your own LLM — no GPU required.** Point the LLM proxy at a cloud API (Claude, GPT, Ollama, …) and run the whole stack on any Docker host, or go **fully local** with llama.cpp / vLLM / MLX on your own GPU for zero cloud dependency. Your call on the privacy-vs-convenience trade.
 - **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
+- **Multi-household by default.** Self-host once and share with anyone — friends and family add your server URL in the mobile app and create an account. No extra hardware required. Each household gets their own isolated voice profiles, devices, and routines.
 - **Pi Zero voice nodes.** A ~$15 Raspberry Pi Zero 2 W with a mic/speaker HAT becomes a room-scale voice endpoint, headless-provisioned from the mobile app. (Nodes are cheap; the brain runs on a separate host — see [Requirements](#requirements).)
 - **Modular, not monolithic.** ~13 independent services (each with its own database, CI, Docker image, and tests) plus a catalog of **forkable** command and device packages. Swap or extend any piece without touching the rest — and most `jarvis-cmd-*` / `jarvis-device-*` repos are reference implementations meant to be forked and improved.
 
