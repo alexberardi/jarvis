@@ -104,7 +104,24 @@ const state = {
   remoteLlmUrl: "",
   remoteWhisperUrl: "",
   platform: "linux",
-  hardware: null,
+  // GPU-less CI runner: this MUST be a concrete `gpuType: "none"`, not `null`.
+  // The admin generator treats absent hardware as a legacy install and defaults
+  // to nvidia (`const gpuType = detected ?? "nvidia"` in compose-generator.ts),
+  // which emits a `deploy.resources.reservations.devices` nvidia block on the
+  // GPU-required services (llm-proxy + worker). The env-only CI override can't
+  // strip a deploy block, so the sync bring-up dies with "could not select
+  // device driver nvidia" on a GPU-less runner. "none" makes generateCompose
+  // omit the block — mirroring the installer lane's `--gpu none`.
+  hardware: {
+    platform: "linux",
+    arch: "x86_64",
+    totalMemoryGb: 16,
+    gpuName: null,
+    gpuVramMb: null,
+    gpuType: "none",
+    recommendedBackends: ["REST"],
+    recommendedBackend: "REST",
+  },
   releaseTrack: "stable",
   relayEnabled: false,
   relayUrl: "",
