@@ -307,9 +307,11 @@ Jarvis runs as a Docker stack on a **host machine** (Linux, macOS, or a NAS), wi
 
 The fastest path is the one-line installer. It downloads the `jarvis-admin` setup wizard, which pulls prebuilt images from GHCR — no source checkout required:
 
+<!-- jarvis:install-cmd:start — version pin auto-updated by the release docs bot; edit the command here, not the copies in jarvis-docs -->
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alexberardi/jarvis-admin/main/install.sh | sh
 ```
+<!-- jarvis:install-cmd:end -->
 
 Then open **http://localhost:7711** — the wizard walks you through hardware detection, service selection, account creation, and downloading a model. See the [full installation guide](https://docs.jarvisautomation.dev/getting-started/installation/) for Docker prerequisites, GPU setup, TrueNAS, and other install options.
 
