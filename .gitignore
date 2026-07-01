@@ -26,6 +26,11 @@ PUSH-PLAN.md
 
 # Internal scratch (not for public consumption)
 todo.md
+prds/
+stock_quote/
+
+# Maintainer personal dev-env dotfiles (nvim/tmux)
+configs/
 
 # install-e2e generated artifacts (built in CI from the installer / admin)
 install-e2e/docker-compose.gen.yaml

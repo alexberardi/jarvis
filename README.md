@@ -4,8 +4,7 @@
 
 <p align="center">
   <strong>A self-hosted, extensible voice assistant that runs on your hardware — not someone else's cloud.</strong><br>
-  Speaker recognition, local LLM, and a full command ecosystem: weather, music (Spotify/Pandora), smart home, calendar, email, drive time, movies, and more — 20+ voice commands built in, with more in the [Pantry](https://pantry.jarvisautomation.io) community store. Bring your own LLM or run it fully local. Nothing leaves your network unless you want it to.<br>
-  The Forge generates, validates, and sandbox-tests complete voice packages from a text description — then publishes to the community store in one click.
+  Wake word, speech-to-text, text-to-speech, and speaker ID all run locally. 30+ voice commands built in and extensible in plain English — plus an <strong>AI Forge</strong> that generates, sandbox-tests, and publishes a complete new command from a one-sentence description. Bring your own LLM: point it at a cloud API for zero setup, or run it fully local on your own GPU for zero cloud dependency.
 </p>
 
 <p align="center">
@@ -16,17 +15,16 @@
 
 ## Why Jarvis?
 
-Most voice assistants send your voice to the cloud, process it on someone else's hardware, and send back a response. You're renting access to your own assistant — and paying with your data. Self-hosted alternatives exist — Home Assistant has a voice pipeline, Rhasspy has been around for years — but none of them do speaker recognition, none have an AI-assisted package builder, and none give you this complete a feature set out of the box.
+Most voice assistants send your voice to the cloud, process it on someone else's hardware, and send back a response. You're renting access to your own assistant — and paying with your data.
 
 Jarvis takes a different approach. Every component runs locally: speech recognition via whisper.cpp, LLM inference via llama.cpp/vLLM/MLX, text-to-speech via Piper or Kokoro, and a command center that routes everything. No internet required. No subscriptions. No one listening.
 
 What makes Jarvis different from other self-hosted alternatives:
 
-- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. ~20 commands ship today (weather, timers, smart home, sports, music, movies, general knowledge), with more in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
+- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. 30+ commands ship today (weather, timers, smart home, sports, music, movies, general knowledge), with more in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
 - **Private by default, on your hardware.** Speech recognition (whisper.cpp), text-to-speech (Piper/Kokoro), and the command center all run on your own machine. No subscriptions, no one listening.
 - **Bring your own LLM — no GPU required.** Point the LLM proxy at a cloud API (Claude, GPT, Ollama, …) and run the whole stack on any Docker host, or go **fully local** with llama.cpp / vLLM / MLX on your own GPU for zero cloud dependency. Your call on the privacy-vs-convenience trade.
 - **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
-- **Multi-household by default.** Self-host once and share with anyone — friends and family add your server URL in the mobile app and create an account. No extra hardware required. Each household gets their own isolated voice profiles, devices, and routines.
 - **Pi Zero voice nodes.** A ~$15 Raspberry Pi Zero 2 W with a mic/speaker HAT becomes a room-scale voice endpoint, headless-provisioned from the mobile app. (Nodes are cheap; the brain runs on a separate host — see [Requirements](#requirements).)
 - **Modular, not monolithic.** ~13 independent services (each with its own database, CI, Docker image, and tests) plus a catalog of **forkable** command and device packages. Swap or extend any piece without touching the rest — and most `jarvis-cmd-*` / `jarvis-device-*` repos are reference implementations meant to be forked and improved.
 
@@ -199,15 +197,15 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 | [jarvis-cmd-meteo-weather](https://github.com/alexberardi/jarvis-cmd-meteo-weather) | Weather via Open-Meteo (free, no API key) |
 | [jarvis-cmd-sports](https://github.com/alexberardi/jarvis-cmd-sports) | Sports scores, live games, and schedules via ESPN |
 | [jarvis-cmd-web-search](https://github.com/alexberardi/jarvis-cmd-web-search) | Live web search via Bing or DuckDuckGo |
-| [jarvis-cmd-story](https://github.com/alexberardi/jarvis-cmd-story) | Chunked bedtime story generation via LLM |
 | [jarvis-cmd-music-assistant](https://github.com/alexberardi/jarvis-cmd-music-assistant) | Music playback and control via Music Assistant |
+| [jarvis-cmd-audacy](https://github.com/alexberardi/jarvis-cmd-audacy) | Live Audacy radio (sports, news, talk, music) streamed on the node |
 | [jarvis-cmd-pandora](https://github.com/alexberardi/jarvis-cmd-pandora) | Pandora radio streaming with voice control |
 | [jarvis-cmd-spotify](https://github.com/alexberardi/jarvis-cmd-spotify) | Spotify playback and control on a Jarvis node |
 | [jarvis-cmd-rotten-tomatoes](https://github.com/alexberardi/jarvis-cmd-rotten-tomatoes) | Rotten Tomatoes movie/TV ratings and what's in theaters |
 | [jarvis-cmd-entertainment-knowledge](https://github.com/alexberardi/jarvis-cmd-entertainment-knowledge) | TMDB-powered movie & TV lookup with rich inbox cards |
 | [jarvis-cmd-email](https://github.com/alexberardi/jarvis-cmd-email) | Email management (Gmail + IMAP) with alert agent |
 | [jarvis-cmd-calendar](https://github.com/alexberardi/jarvis-cmd-calendar) | Calendar events (iCloud + Google) with alert agent |
-| [jarvis-cmd-drive-time](https://github.com/alexberardi/jarvis-cmd-drive-time) | Drive time, distance, and traffic via Google Maps + leave-by alert agent |
+| [jarvis-cmd-medication](https://github.com/alexberardi/jarvis-cmd-medication) | Household medication tracking with dose reminders and voice mark-off |
 | [jarvis-device-hue](https://github.com/alexberardi/jarvis-device-hue) | Philips Hue smart lights via the local Bridge API |
 | [jarvis-device-govee](https://github.com/alexberardi/jarvis-device-govee) | Govee smart devices (LAN + cloud) |
 | [jarvis-device-apple](https://github.com/alexberardi/jarvis-device-apple) | Apple TV and HomePod control via AirPlay |
