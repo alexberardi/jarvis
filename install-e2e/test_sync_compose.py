@@ -41,11 +41,13 @@ MIGRATE_SET_IDS: list[str] = [
     "jarvis-llm-proxy-api",
     "jarvis-whisper-api",
     "jarvis-notifications",
+    "jarvis-tts",
 ]
 
-# DB-backed but intentionally DEFERRED — their images don't ship alembic yet, so
-# the sync generator must NOT wrap them in a migrate entrypoint.
-DEFERRED_IDS: list[str] = ["jarvis-logs", "jarvis-tts"]
+# DB-backed but intentionally DEFERRED — its image doesn't ship alembic yet, so
+# the sync generator must NOT wrap it in a migrate entrypoint. (jarvis-tts now
+# ships alembic + has DATABASE_URL wired, so it moved to MIGRATE_SET_IDS above.)
+DEFERRED_IDS: list[str] = ["jarvis-logs"]
 
 _HERE = Path(__file__).resolve().parent
 _REPO_ROOT = _HERE.parent

@@ -73,8 +73,8 @@ ALL_CONTAINERS: list[str] = [s.container for s in HTTP_SERVICES] + NON_HTTP_CONT
 # FAILS here.
 #
 # Kept in sync with the installer registry's `migrate: true` set and the admin
-# compose-generator's MIGRATE_SET unit test. jarvis-logs and jarvis-tts are
-# intentionally DEFERRED (their images don't ship alembic yet) and are NOT here.
+# compose-generator's MIGRATE_SET unit test. Only jarvis-logs is intentionally
+# DEFERRED (its image doesn't ship alembic yet) and is NOT here.
 MIGRATE_SET: list[Service] = [
     s for s in HTTP_SERVICES
     if s.container in {
@@ -84,6 +84,7 @@ MIGRATE_SET: list[Service] = [
         "jarvis-llm-proxy-api",
         "jarvis-whisper-api",
         "jarvis-notifications",
+        "jarvis-tts",
     }
 ]
 
