@@ -81,10 +81,19 @@ jobs:
         env:
           VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
         run: |
-          # PRs never provision (spend); they get the spike job instead.
+          # PRs don't provision (spend) by default — they get the spike job.
+          # Exception: the `gpu-live` label (write-access-only to apply) opts a
+          # PR into a live cuda-lane run, for iterating on this harness with
+          # real hardware before merge.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "lanes=[]" >> "$GITHUB_OUTPUT"
+            if [ "${{ contains(github.event.pull_request.labels.*.name, 'gpu-live') }}" = "true" ]; then
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              echo 'lanes=["cuda"]' >> "$GITHUB_OUTPUT"
+              echo "gpu-live label present → live cuda lane on this PR"
+            else
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo "lanes=[]" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
           if [ -z "$VAST_API_KEY" ]; then
