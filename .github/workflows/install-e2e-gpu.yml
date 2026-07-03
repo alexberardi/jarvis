@@ -42,6 +42,13 @@ on:
         default: false
   schedule:
     - cron: "23 7 * * *" # nightly, after install-e2e (06:37) so a common breakage reads top-down
+  # PRs touching the GPU harness run ONLY the read-only marketplace spike
+  # (inventory + prices per lane — no instance is ever created, no spend).
+  # The paid lanes are hard-gated off pull_request in the plan job below.
+  pull_request:
+    paths:
+      - "install-e2e/gpu/**"
+      - ".github/workflows/install-e2e-gpu.yml"
 
 permissions:
   contents: read
@@ -74,6 +81,12 @@ jobs:
         env:
           VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
         run: |
+          # PRs never provision (spend); they get the spike job instead.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "lanes=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ -z "$VAST_API_KEY" ]; then
             echo "::warning::VAST_API_KEY not set — GPU lanes no-op (add the secret + run the availability spike to enable)"
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -85,6 +98,36 @@ jobs:
           echo "enabled=true" >> "$GITHUB_OUTPUT"
           echo "lanes=$JSON" >> "$GITHUB_OUTPUT"
           echo "running lanes: $JSON"
+
+  # Read-only marketplace check: offer counts + prices per lane, straight into
+  # the job summary. Runs on PRs (same-repo PRs get secrets) so the AMD×VM
+  # inventory question is answerable before anything is merged or rented.
+  spike:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install vastai
+      - name: Marketplace availability spike (read-only)
+        run: |
+          if [ -z "$VAST_API_KEY" ]; then
+            echo "::warning::VAST_API_KEY not set — spike skipped" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          set +e
+          python install-e2e/gpu/spike_availability.py | tee spike.out
+          RC=$?
+          set -e
+          { echo '```'; cat spike.out; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ $RC -ne 0 ]; then
+            echo "::warning::at least one lane has NO VM inventory right now — see summary (informational; does not fail the PR)"
+          fi
 
   gpu-lane:
     needs: plan
