@@ -355,10 +355,19 @@ jobs:
           for PROJ in jarvis jarvis-sync; do
             echo "── $PROJ ──"
             docker compose -p $PROJ ps 2>/dev/null || true
-            docker compose -p $PROJ logs --tail 120 2>/dev/null || true
           done
-          docker logs jarvis-llm-proxy-api --tail 200 2>&1 || true
-          docker logs jarvis-whisper-api --tail 100 2>&1 || true
+          # The model service crashes at container START — the interesting log
+          # lines are at the HEAD (the tail is health-check noise) and in any
+          # traceback anywhere in the stream.
+          echo "── llm-proxy log HEAD ──"
+          docker logs jarvis-llm-proxy-api 2>&1 | head -150 || true
+          echo "── llm-proxy tracebacks/errors ──"
+          docker logs jarvis-llm-proxy-api 2>&1 | grep -B3 -A30 -iE 'traceback|error|exception|killed' | head -150 || true
+          echo "── llm-proxy in-container processes + 7705 ──"
+          docker exec jarvis-llm-proxy-api ps aux 2>&1 | head -20 || true
+          docker exec jarvis-llm-proxy-api python -c "import urllib.request;print(urllib.request.urlopen('http://localhost:7705/health',timeout=5).status)" 2>&1 || true
+          echo "── whisper log head ──"
+          docker logs jarvis-whisper-api 2>&1 | head -60 || true
 
       - name: Upload results
         if: always()
