@@ -16,7 +16,13 @@ services:
   jarvis-llm-proxy-api:
     environment:
       JARVIS_MODEL_NAME: ".models/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+      # Phase G's GPU-used proof greps llama.cpp's ggml init lines
+      # (ggml_cuda_init / offloaded N/M layers) from the container logs —
+      # llama-cpp-python suppresses them unless verbose (proven live: chat
+      # PASSED while the marker tests found silence).
+      JARVIS_VERBOSE: "true"
 
   llm-proxy-worker:
     environment:
       JARVIS_MODEL_NAME: ".models/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+      JARVIS_VERBOSE: "true"
