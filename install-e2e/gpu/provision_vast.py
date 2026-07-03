@@ -396,7 +396,11 @@ def destroy(instance_id: int) -> None:
     for attempt in (1, 2):
         out = vastai("destroy", "instance", str(instance_id), raw=False, confirm=True)
         log(f"destroy {instance_id} (attempt {attempt}) stdout: {redact(out.strip()) or '(empty)'}")
-        deadline = time.time() + 60
+        # Observed live: slow hosts take >60s to actually reap a destroyed
+        # contract (two false "SURVIVED" alarms whose instances were gone by
+        # clean-gate time). 3 min per attempt keeps the check honest without
+        # crying wolf.
+        deadline = time.time() + 180
         while time.time() < deadline:
             if not instance_alive(instance_id):
                 log(f"instance {instance_id} confirmed destroyed")
