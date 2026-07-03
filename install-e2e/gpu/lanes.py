@@ -48,7 +48,10 @@ LANES: dict[str, Lane] = {
         max_dph=0.60,
         disk_gb=100,
         device_markers=("ggml_cuda_init: found", "CUDA devices"),
-        vm_image="docker.io/vastai/kvm:cuda-12.4.1-auto",
+        # ubuntu_cli is the canonical/most-cached VM template — cuda-12.4.1-auto
+        # was cold on every host tried (8 boots stuck pulling it across 3 runs).
+        # bootstrap_remote.sh fails fast (exit 42) if the guest lacks the driver.
+        vm_image="docker.io/vastai/kvm:ubuntu_cli",
     ),
     "vulkan": Lane(
         key="vulkan",
