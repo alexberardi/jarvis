@@ -48,10 +48,13 @@ The GitHub runner stays the brain; the VM is a disposable docker host:
 4. Dispatch `install-e2e-gpu` with `lanes: cuda` once and watch it, then let
    the nightly schedule take over. Without the secret, lanes no-op green.
 
-If an AMD lane has no VM inventory, don't enable it — fallbacks: an hourly
-dedicated 7900 XTX host behind the same narrow provisioner interface
-(search/create/wait/destroy is all the workflow uses), or a self-hosted runner
-on a real RDNA box.
+**AMD status (spike 2026-07-02): Vast had ZERO rentable AMD offers
+marketplace-wide** (`gpu_arch=amd` → 0, bare `gpu_name in [RX_7900_XTX, RX_7900_XT]`
+→ 0), so the nightly runs `cuda` only and the nightly spike keeps watching.
+When AMD supply appears, widen the schedule default in the workflow's plan
+job. Fallbacks if it never does: an hourly dedicated 7900 XTX host behind the
+same narrow provisioner interface (search/create/wait/destroy is all the
+workflow uses), or a self-hosted runner on a real RDNA box.
 
 ## Failure triage
 

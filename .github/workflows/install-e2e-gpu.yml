@@ -29,8 +29,8 @@ on:
   workflow_dispatch:
     inputs:
       lanes:
-        description: "Comma-separated lanes to run (cuda,vulkan,rocm)"
-        default: "cuda,vulkan,rocm"
+        description: "Comma-separated lanes to run (cuda,vulkan,rocm). NOTE: Vast has had zero AMD marketplace inventory (spike 2026-07-02) — vulkan/rocm fail provisioning (harmlessly, ~$0) until supply appears or a fallback provider lands."
+        default: "cuda"
       release:
         description: "Release track to install"
         type: choice
@@ -93,17 +93,21 @@ jobs:
             echo "lanes=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          LANES="${{ github.event.inputs.lanes || 'cuda,vulkan,rocm' }}"
+          # Nightly default is cuda-only: the 2026-07-02 spike found ZERO AMD
+          # inventory on Vast (gpu_arch=amd → 0 offers marketplace-wide). The
+          # nightly spike job below keeps watching — widen this when it turns.
+          LANES="${{ github.event.inputs.lanes || 'cuda' }}"
           JSON=$(echo "$LANES" | tr ',' '\n' | sed 's/ //g' | grep -E '^(cuda|vulkan|rocm)$' | jq -Rcs 'split("\n") | map(select(length>0))')
           echo "enabled=true" >> "$GITHUB_OUTPUT"
           echo "lanes=$JSON" >> "$GITHUB_OUTPUT"
           echo "running lanes: $JSON"
 
   # Read-only marketplace check: offer counts + prices per lane, straight into
-  # the job summary. Runs on PRs (same-repo PRs get secrets) so the AMD×VM
-  # inventory question is answerable before anything is merged or rented.
+  # the job summary. Runs on PRs (same-repo PRs get secrets) AND nightly — the
+  # AMD lanes are dormant purely for lack of Vast supply, so the nightly spike
+  # is the signal to widen the lane list when AMD inventory appears.
   spike:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
