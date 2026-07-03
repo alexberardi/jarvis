@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -33,6 +34,11 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lanes import LANES  # noqa: E402
 
+# All instances are labeled with this prefix (janitor matches on it). Each
+# provision call appends lane + run id so concurrent matrix lanes can find
+# their own instance by label — the ground truth when create's stdout is
+# unparseable (observed live: `create instance` can exit 0 with EMPTY stdout
+# while the instance IS created — parse-and-pray leaks rented GPUs).
 LABEL = "jarvis-gpu-e2e"
 # Vast KVM VM template image (VM offers only accept docker.io/vastai/kvm:*).
 # Overridable via --vm-image / VAST_VM_IMAGE — the spike validates the exact
@@ -87,6 +93,22 @@ def search_offers(lane_key: str) -> list[dict]:
     return offers
 
 
+def find_instance_by_label(label: str) -> dict | None:
+    """Authoritative lookup: the label we passed to create is the one thing we
+    control end-to-end, regardless of what create printed."""
+    for inst in vastai("show", "instances") or []:
+        if inst.get("label") == label:
+            return inst
+    return None
+
+
+def parse_created_id(create_output: str) -> int | None:
+    """Best-effort: create historically prints `{'success': True,
+    'new_contract': 12345}` (python-repr, NOT json) or nothing at all."""
+    m = re.search(r"new_contract['\"\s:=]+(\d+)", create_output)
+    return int(m.group(1)) if m else None
+
+
 def ssh_ready(host: str, port: int, user: str, key_path: str | None) -> bool:
     cmd = [
         "ssh",
@@ -137,24 +159,39 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str, ssh_user: str,
         )
 
     pubkey = open(ssh_pubkey).read().strip()
+    run_label = f"{LABEL}-{lane_key}-{os.environ.get('GITHUB_RUN_ID', 'local')}"
     last_err: Exception | None = None
     for offer in offers[:CREATE_ATTEMPTS]:
         offer_id = offer["id"]
         dph = offer.get("dph_total")
         gpu = offer.get("gpu_name")
         log(f"trying offer {offer_id}: {gpu} @ ${dph}/hr")
+        instance_id: int | None = None
         try:
-            res = vastai(
+            out = vastai(
                 "create", "instance", str(offer_id),
                 "--image", vm_image,
                 "--disk", str(lane.disk_gb),
-                "--label", LABEL,
+                "--label", run_label,
                 "--ssh", "--direct",
+                raw=False,
             )
-            instance_id = int(res["new_contract"])
+            log(f"create output: {out.strip() or '(empty)'}")
+            instance_id = parse_created_id(out)
         except Exception as e:  # noqa: BLE001 — offer races are expected; try next
-            log(f"offer {offer_id} failed: {e}")
+            log(f"create on offer {offer_id} failed: {e}")
             last_err = e
+        if instance_id is None:
+            # stdout was useless — the label is the source of truth. Give the
+            # API a moment to show it, then look it up.
+            time.sleep(10)
+            inst = find_instance_by_label(run_label)
+            if inst:
+                instance_id = int(inst["id"])
+                log(f"create output unparseable but instance {instance_id} "
+                    f"exists with label {run_label}")
+        if instance_id is None:
+            log(f"offer {offer_id}: no instance materialized; next offer")
             continue
 
         log(f"created instance {instance_id}; attaching SSH key")
@@ -173,6 +210,7 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str, ssh_user: str,
         result = {
             "instance_id": instance_id,
             "lane": lane_key,
+            "label": run_label,
             "gpu_name": gpu,
             "dph_total": dph,
             "ssh_user": ssh_user,
@@ -197,7 +235,7 @@ def janitor(max_age_hours: float) -> None:
     now = time.time()
     reaped = 0
     for inst in instances:
-        if inst.get("label") != LABEL:
+        if not str(inst.get("label") or "").startswith(LABEL):
             continue
         start = inst.get("start_date") or 0
         age_h = (now - float(start)) / 3600 if start else float("inf")

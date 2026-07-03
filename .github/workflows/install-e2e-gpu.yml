@@ -127,6 +127,18 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install vastai
+      - name: Janitor — list + reap ALL labeled instances
+        # Safety net while iterating on the harness: a create whose output we
+        # failed to parse can leak a rented instance the end-of-run janitor's
+        # age threshold won't catch. Reap everything labeled, and show what
+        # existed. MUST NOT run while a gpu-live lane is provisioning in this
+        # same event — it would reap the lane's own fresh instance.
+        if: "!contains(github.event.pull_request.labels.*.name, 'gpu-live')"
+        run: |
+          if [ -n "$VAST_API_KEY" ]; then
+            vastai show instances --api-key "$VAST_API_KEY" || true
+            python install-e2e/gpu/provision_vast.py janitor --max-age-hours 0
+          fi
       - name: Marketplace availability spike (read-only)
         run: |
           if [ -z "$VAST_API_KEY" ]; then
@@ -201,7 +213,10 @@ jobs:
           ssh-keygen -t ed25519 -N "" -f ~/.ssh/gpu_e2e -C "install-e2e-gpu-${{ github.run_id }}"
 
       - name: Janitor — reap leaked instances (start)
-        run: python install-e2e/gpu/provision_vast.py janitor --max-age-hours 3
+        # 15 min: catches instances leaked by a PREVIOUS run (the concurrency
+        # group serializes runs, so anything labeled and older than minutes is
+        # a leak) without reaping sibling matrix lanes' fresh instances.
+        run: python install-e2e/gpu/provision_vast.py janitor --max-age-hours 0.25
 
       - name: Provision Vast.ai VM
         id: provision
