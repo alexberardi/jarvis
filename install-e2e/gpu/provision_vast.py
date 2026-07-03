@@ -45,8 +45,12 @@ LABEL = "jarvis-gpu-e2e"
 # --vm-image overrides for experimentation.
 VM_IMAGE_OVERRIDE = os.environ.get("VAST_VM_IMAGE", "")
 DEFAULT_SSH_USER = os.environ.get("VAST_SSH_USER", "root")
-CREATE_ATTEMPTS = 5  # cheapest-first offers to try before giving up
-SSH_READY_TIMEOUT_S = 15 * 60
+CREATE_ATTEMPTS = 3  # cheapest-first offers to try before giving up
+# Observed live: hosts take 6-12+ min to pull the multi-GB KVM image before
+# the VM even boots ("created"→"running"), and sshd/cloud-init can lag behind
+# "running" by minutes more. Budget the two phases separately.
+RUNNING_TIMEOUT_S = 18 * 60
+SSH_AFTER_RUNNING_TIMEOUT_S = 8 * 60
 
 
 def log(msg: str) -> None:
@@ -65,7 +69,7 @@ def vastai(*args: str, raw: bool = True) -> Any:
     # The vastai CLI is loose with exit codes and often reports API errors on
     # stderr while exiting 0 — always surface stderr so failures aren't silent.
     if proc.stderr.strip():
-        log(f"vastai stderr: {proc.stderr.strip()[:800]}")
+        log(f"vastai stderr: {redact(proc.stderr.strip()[:800])}")
     if proc.returncode != 0:
         redacted = " ".join(a for a in cmd if a != api_key)
         raise RuntimeError(
@@ -139,7 +143,19 @@ def parse_created_id(create_output: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def ssh_ready(host: str, port: int, user: str, key_path: str | None) -> bool:
+def redact(text: str) -> str:
+    """create's output includes a per-instance `instance_api_key` — never let
+    a credential (even an instance-scoped, dies-with-the-instance one) reach
+    the public Actions log."""
+    return re.sub(
+        r"(instance_api_key['\"]?\s*[:=]\s*['\"]?)[0-9a-fA-F]+", r"\1<redacted>", text
+    )
+
+
+def ssh_probe(host: str, port: int, user: str, key_path: str | None) -> tuple[bool, str]:
+    """One SSH attempt; returns (ok, stderr) so failures are diagnosable
+    (Connection refused = sshd not up yet; Permission denied = key problem;
+    timeout = wrong host/port or firewall)."""
     cmd = [
         "ssh",
         "-p", str(port),
@@ -150,30 +166,58 @@ def ssh_ready(host: str, port: int, user: str, key_path: str | None) -> bool:
     if key_path:
         cmd += ["-i", key_path]
     cmd += [f"{user}@{host}", "true"]
-    return subprocess.run(cmd, capture_output=True, timeout=30).returncode == 0
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    return proc.returncode == 0, (proc.stderr or "").strip()
 
 
 def wait_ssh(instance_id: int, user: str, key_path: str | None) -> dict:
-    """Poll the instance until it is running AND accepts SSH; return conn info."""
-    deadline = time.time() + SSH_READY_TIMEOUT_S
+    """Two phases (budgeted separately — see the constants): wait for the VM
+    to reach `running`, then wait for sshd to accept our key."""
+    running_deadline = time.time() + RUNNING_TIMEOUT_S
     last_status = ""
-    while time.time() < deadline:
-        info = vastai("show", "instance", str(instance_id))
-        status = (info or {}).get("actual_status") or "?"
+    info: dict = {}
+    while True:
+        if time.time() > running_deadline:
+            raise TimeoutError(
+                f"instance {instance_id} stuck in '{last_status}' after "
+                f"{RUNNING_TIMEOUT_S}s (host still pulling the VM image?) — "
+                "PROVISIONING failure, not a test failure"
+            )
+        info = vastai("show", "instance", str(instance_id)) or {}
+        status = info.get("actual_status") or "?"
         if status != last_status:
             log(f"instance {instance_id}: {status}")
             last_status = status
-        host = (info or {}).get("ssh_host")
-        port = (info or {}).get("ssh_port")
-        if status == "running" and host and port:
-            if ssh_ready(host, int(port), user, key_path):
-                log(f"instance {instance_id} SSH-ready at {user}@{host}:{port}")
-                return {"ssh_host": host, "ssh_port": int(port)}
-            log("running but SSH not ready yet")
+        if status == "running" and info.get("ssh_host") and info.get("ssh_port"):
+            break
+        time.sleep(20)
+
+    host, port = info["ssh_host"], int(info["ssh_port"])
+    log(
+        f"instance {instance_id} running; probing SSH {user}@{host}:{port} "
+        f"(public_ipaddr={info.get('public_ipaddr')}, "
+        f"direct_port_start={info.get('direct_port_start')})"
+    )
+    ssh_deadline = time.time() + SSH_AFTER_RUNNING_TIMEOUT_S
+    last_err = ""
+    while time.time() < ssh_deadline:
+        # Re-read: the direct ssh_host/ssh_port can change as the VM finishes
+        # provisioning (proxy → direct).
+        info = vastai("show", "instance", str(instance_id)) or info
+        host = info.get("ssh_host") or host
+        port = int(info.get("ssh_port") or port)
+        ok, err = ssh_probe(host, port, user, key_path)
+        if ok:
+            log(f"instance {instance_id} SSH-ready at {user}@{host}:{port}")
+            return {"ssh_host": host, "ssh_port": port}
+        if err and err != last_err:
+            log(f"ssh not ready ({user}@{host}:{port}): {err.splitlines()[-1][:200]}")
+            last_err = err
         time.sleep(20)
     raise TimeoutError(
-        f"instance {instance_id} not SSH-ready within {SSH_READY_TIMEOUT_S}s "
-        "(classify as PROVISIONING failure, not a test failure)"
+        f"instance {instance_id} running but SSH never accepted "
+        f"({user}@{host}:{port}, last error: {last_err.splitlines()[-1][:200] if last_err else 'none'}) "
+        "— PROVISIONING failure, not a test failure"
     )
 
 
@@ -209,7 +253,7 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
                 "--ssh", "--direct",
                 raw=False,
             )
-            log(f"create output: {out.strip() or '(empty)'}")
+            log(f"create output: {redact(out.strip()) or '(empty)'}")
             instance_id = parse_created_id(out)
         except Exception as e:  # noqa: BLE001 — offer races are expected; try next
             log(f"create on offer {offer_id} failed: {e}")

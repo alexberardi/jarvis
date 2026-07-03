@@ -158,7 +158,9 @@ jobs:
     needs: plan
     if: needs.plan.outputs.enabled == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # VM provisioning alone can eat 3 offers × ~26 min (hosts pull the multi-GB
+    # KVM image before boot) before the stack phases even start.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
