@@ -242,6 +242,7 @@ def wait_ssh(instance_id: int, user: str, key_path: str | None) -> dict:
     )
     ssh_deadline = time.time() + SSH_AFTER_RUNNING_TIMEOUT_S
     last_err = ""
+    seen: set = set()
     while time.time() < ssh_deadline:
         # The proxy record (ssh_host/ssh_port, also what ssh-url returns) has
         # refused connections for entire windows on live VMs, so probe EVERY

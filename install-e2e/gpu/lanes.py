@@ -48,10 +48,11 @@ LANES: dict[str, Lane] = {
         max_dph=0.60,
         disk_gb=100,
         device_markers=("ggml_cuda_init: found", "CUDA devices"),
-        # ubuntu_cli is the canonical/most-cached VM template — cuda-12.4.1-auto
-        # was cold on every host tried (8 boots stuck pulling it across 3 runs).
-        # bootstrap_remote.sh fails fast (exit 42) if the guest lacks the driver.
-        vm_image="docker.io/vastai/kvm:ubuntu_cli",
+        # Must be a cuda-* template: ubuntu_cli guests ship NO nvidia driver
+        # (proven live — bootstrap exit 42). Boot stalls seen earlier with this
+        # tag were the broken cheap hosts, which the fail-fast offer strategy
+        # now skips past.
+        vm_image="docker.io/vastai/kvm:cuda-12.4.1-auto",
     ),
     "vulkan": Lane(
         key="vulkan",
