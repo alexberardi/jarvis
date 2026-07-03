@@ -44,8 +44,11 @@ on:
     - cron: "23 7 * * *" # nightly, after install-e2e (06:37) so a common breakage reads top-down
   # PRs touching the GPU harness run ONLY the read-only marketplace spike
   # (inventory + prices per lane — no instance is ever created, no spend).
-  # The paid lanes are hard-gated off pull_request in the plan job below.
+  # The paid lanes are hard-gated off pull_request in the plan job below —
+  # EXCEPT when the gpu-live label is applied; `labeled` is in the trigger
+  # types so applying the label immediately starts a live run.
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - "install-e2e/gpu/**"
       - ".github/workflows/install-e2e-gpu.yml"
