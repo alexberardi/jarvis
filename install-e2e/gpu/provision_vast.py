@@ -88,7 +88,12 @@ def offer_query(lane_key: str) -> str:
     return (
         f"gpu_name in [{names}] "
         f"num_gpus=1 rentable=true verified=true vms_enabled=true "
-        f"reliability>0.98 inet_down>=200 "
+        # direct_port_count: VMs need a DIRECT ssh port — observed live that a
+        # VM on a proxy-only host reaches `running` with direct_port_start=-1
+        # and the ssh proxy never accepts (Connection refused, forever).
+        # inet_down>=500: hosts must pull the multi-GB KVM image before boot;
+        # slow pipes blow the running-timeout.
+        f"direct_port_count>=1 reliability>0.98 inet_down>=500 "
         f"disk_space>={lane.disk_gb} dph_total<={lane.max_dph}"
     )
 
@@ -125,6 +130,19 @@ def delete_account_ssh_key(key_id: int) -> None:
         log(f"deleted account ssh-key {key_id}")
     except Exception as e:  # noqa: BLE001 — hygiene only; never fail teardown on it
         log(f"delete ssh-key {key_id} failed: {e}")
+
+
+def ssh_url(instance_id: int) -> tuple[str, str, int] | None:
+    """`vastai ssh-url` returns the CLI's canonical ssh://user@host:port —
+    it knows the proxy-vs-direct rules better than we do."""
+    try:
+        out = vastai("ssh-url", str(instance_id), raw=False).strip()
+        m = re.search(r"ssh://([^@]+)@([^:]+):(\d+)", out)
+        if m:
+            return m.group(1), m.group(2), int(m.group(3))
+    except Exception as e:  # noqa: BLE001
+        log(f"ssh-url failed: {e}")
+    return None
 
 
 def find_instance_by_label(label: str) -> dict | None:
@@ -201,11 +219,16 @@ def wait_ssh(instance_id: int, user: str, key_path: str | None) -> dict:
     ssh_deadline = time.time() + SSH_AFTER_RUNNING_TIMEOUT_S
     last_err = ""
     while time.time() < ssh_deadline:
-        # Re-read: the direct ssh_host/ssh_port can change as the VM finishes
-        # provisioning (proxy → direct).
-        info = vastai("show", "instance", str(instance_id)) or info
-        host = info.get("ssh_host") or host
-        port = int(info.get("ssh_port") or port)
+        # Prefer the CLI's canonical ssh-url (it applies the proxy-vs-direct
+        # rules); fall back to the instance record, re-read each probe since
+        # host/port can flip as the VM finishes provisioning.
+        url = ssh_url(instance_id)
+        if url:
+            _, host, port = url
+        else:
+            info = vastai("show", "instance", str(instance_id)) or info
+            host = info.get("ssh_host") or host
+            port = int(info.get("ssh_port") or port)
         ok, err = ssh_probe(host, port, user, key_path)
         if ok:
             log(f"instance {instance_id} SSH-ready at {user}@{host}:{port}")
