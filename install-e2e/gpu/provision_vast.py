@@ -45,12 +45,18 @@ LABEL = "jarvis-gpu-e2e"
 # --vm-image overrides for experimentation.
 VM_IMAGE_OVERRIDE = os.environ.get("VAST_VM_IMAGE", "")
 DEFAULT_SSH_USER = os.environ.get("VAST_SSH_USER", "root")
-CREATE_ATTEMPTS = 3  # cheapest-first offers to try before giving up
-# Observed live: hosts take 6-12+ min to pull the multi-GB KVM image before
-# the VM even boots ("created"→"running"), and sshd/cloud-init can lag behind
-# "running" by minutes more. Budget the two phases separately.
-RUNNING_TIMEOUT_S = 18 * 60
-SSH_AFTER_RUNNING_TIMEOUT_S = 8 * 60
+CREATE_ATTEMPTS = 6  # offers to try before giving up
+# Strategy learned across runs 4-7 (11 boot attempts): broken/cold hosts stall
+# in loading/created FOREVER, while every host that ever worked reached
+# "running" in <7 min. So: short per-offer budgets, more offers, and an
+# overall wall-clock cap — fail fast through the junk to find a warm host.
+RUNNING_TIMEOUT_S = 10 * 60
+SSH_AFTER_RUNNING_TIMEOUT_S = 6 * 60
+PROVISION_DEADLINE_S = 60 * 60
+# The cheapest offers are adversely selected (they're cheap because nobody can
+# use them). Empirically the CN-hosted 3090s never finished a single image
+# pull — try them last, not first.
+DEPRIORITIZED_GEO_SUFFIXES = (", CN", ", HK")
 
 
 def log(msg: str) -> None:
@@ -102,8 +108,21 @@ def search_offers(lane_key: str) -> list[dict]:
     query = offer_query(lane_key)
     log(f"searching offers: {query}")
     offers = vastai("search", "offers", query, "--order", "dph_total") or []
-    log(f"{len(offers)} qualifying offer(s)")
-    return offers
+    # One offer per machine (a broken host is broken for all its offers), and
+    # deprioritized geos go to the back of the cheapest-first order.
+    seen_machines: set = set()
+    preferred, deprioritized = [], []
+    for o in offers:
+        mid = o.get("machine_id")
+        if mid in seen_machines:
+            continue
+        seen_machines.add(mid)
+        geo = str(o.get("geolocation") or "")
+        (deprioritized if geo.endswith(DEPRIORITIZED_GEO_SUFFIXES) else preferred).append(o)
+    ordered = preferred + deprioritized
+    log(f"{len(offers)} qualifying offer(s) → {len(ordered)} distinct machines "
+        f"({len(deprioritized)} deprioritized by geo)")
+    return ordered
 
 
 def register_account_ssh_key(pubkey: str) -> int | None:
@@ -260,8 +279,12 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
     pubkey = open(ssh_pubkey).read().strip()
     ssh_key_id = register_account_ssh_key(pubkey)
     run_label = f"{LABEL}-{lane_key}-{os.environ.get('GITHUB_RUN_ID', 'local')}"
+    provision_deadline = time.time() + PROVISION_DEADLINE_S
     last_err: Exception | None = None
     for offer in offers[:CREATE_ATTEMPTS]:
+        if time.time() > provision_deadline:
+            log("overall provisioning deadline reached; giving up")
+            break
         offer_id = offer["id"]
         dph = offer.get("dph_total")
         gpu = offer.get("gpu_name")
