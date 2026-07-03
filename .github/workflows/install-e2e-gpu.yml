@@ -263,12 +263,17 @@ jobs:
         working-directory: jarvis-installer
         run: |
           npm ci
+          # gpu-live PR runs track dev (bleeding edge — where fixes land first;
+          # this lane exists to iterate on the harness + validate fixes).
+          # Schedule/dispatch default to stable: what users actually install.
+          REL="${{ github.event.inputs.release || 'stable' }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then REL=dev; fi
           npx tsx scripts/gen-export-compose.mts \
             --out "$GITHUB_WORKSPACE/$GEN_FILE" \
             --storage "$STORAGE_PATH" \
             --gpu "${{ steps.lane.outputs.gpu }}" \
             --whisper-backend "${{ steps.lane.outputs.whisper }}" \
-            --release "${{ github.event.inputs.release || 'stable' }}"
+            --release "$REL"
 
       - name: Validate generated compose
         run: docker compose -f "$GEN_FILE" -f "$GPU_OVERRIDE_FILE" config -q && echo "compose valid"
@@ -326,6 +331,9 @@ jobs:
 
       - name: Bring up the SYNC stack on the VM
         run: |
+          # Keep the sync stack on the same release track as the export stack:
+          # its images interpolate ${JARVIS_IMAGE_TAG:-latest}.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then export JARVIS_IMAGE_TAG=dev; fi
           # shellcheck disable=SC2086 # C is a deliberately word-split command
           C="docker compose --env-file install-e2e/.env -p jarvis-sync -f $SYNC_FILE -f $GPU_OVERRIDE_FILE"
           $C config -q && echo "sync compose valid"
