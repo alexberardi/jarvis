@@ -1,0 +1,22 @@
+# GPU-lane overlay on the installer's GENERATED compose (docker-compose.gen.yaml).
+#
+# Deliberately tiny, and deliberately NOT the CPU lane's ci-override: that file
+# swaps llm-proxy to the REST/OpenAI backend because GitHub runners have no
+# GPU. Here the rented VM HAS the GPU — the whole point is exercising the real
+# local GGUF backend on it. The only thing the generated artifact lacks is a
+# model file, so we point model.main at the small test model that
+# bootstrap_remote.sh downloaded into <storage>/models (bind-mounted at
+# /app/.models). JARVIS_MODEL_NAME is the env fallback for the model.main.name
+# setting; live + background both resolve to it on a fresh install.
+#
+# Same file works for the export stack AND the admin SYNC stack (service names
+# match; `environment` maps merge).
+
+services:
+  jarvis-llm-proxy-api:
+    environment:
+      JARVIS_MODEL_NAME: ".models/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+
+  llm-proxy-worker:
+    environment:
+      JARVIS_MODEL_NAME: ".models/qwen2.5-0.5b-instruct-q4_k_m.gguf"
