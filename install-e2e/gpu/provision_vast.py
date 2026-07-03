@@ -40,10 +40,10 @@ from lanes import LANES  # noqa: E402
 # unparseable (observed live: `create instance` can exit 0 with EMPTY stdout
 # while the instance IS created — parse-and-pray leaks rented GPUs).
 LABEL = "jarvis-gpu-e2e"
-# Vast KVM VM template image (VM offers only accept docker.io/vastai/kvm:*).
-# Overridable via --vm-image / VAST_VM_IMAGE — the spike validates the exact
-# tag before the nightly is enabled.
-DEFAULT_VM_IMAGE = os.environ.get("VAST_VM_IMAGE", "vastai/kvm:ubuntu_22.04-ssh")
+# Per-lane VM template images live in lanes.py (fully-qualified
+# docker.io/vastai/kvm:* tags — VM offers accept nothing else). VAST_VM_IMAGE /
+# --vm-image overrides for experimentation.
+VM_IMAGE_OVERRIDE = os.environ.get("VAST_VM_IMAGE", "")
 DEFAULT_SSH_USER = os.environ.get("VAST_SSH_USER", "root")
 CREATE_ATTEMPTS = 5  # cheapest-first offers to try before giving up
 SSH_READY_TIMEOUT_S = 15 * 60
@@ -62,6 +62,10 @@ def vastai(*args: str, raw: bool = True) -> Any:
     if api_key:
         cmd += ["--api-key", api_key]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    # The vastai CLI is loose with exit codes and often reports API errors on
+    # stderr while exiting 0 — always surface stderr so failures aren't silent.
+    if proc.stderr.strip():
+        log(f"vastai stderr: {proc.stderr.strip()[:800]}")
     if proc.returncode != 0:
         redacted = " ".join(a for a in cmd if a != api_key)
         raise RuntimeError(
@@ -147,9 +151,11 @@ def wait_ssh(instance_id: int, user: str, key_path: str | None) -> dict:
     )
 
 
-def provision(lane_key: str, ssh_pubkey: str, vm_image: str, ssh_user: str,
+def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: str,
               out_path: str, ssh_key_path: str | None) -> dict:
     lane = LANES[lane_key]
+    vm_image = vm_image or VM_IMAGE_OVERRIDE or lane.vm_image
+    log(f"VM template image: {vm_image}")
     offers = search_offers(lane_key)
     if not offers:
         raise SystemExit(
@@ -257,7 +263,7 @@ def main() -> None:
     pp.add_argument("--lane", required=True, choices=sorted(LANES))
     pp.add_argument("--ssh-pubkey", required=True)
     pp.add_argument("--ssh-key", help="private key path for the SSH-ready probe")
-    pp.add_argument("--vm-image", default=DEFAULT_VM_IMAGE)
+    pp.add_argument("--vm-image", default=None, help="override the lane's VM template image")
     pp.add_argument("--ssh-user", default=DEFAULT_SSH_USER)
     pp.add_argument("--out", default="provision.json")
 

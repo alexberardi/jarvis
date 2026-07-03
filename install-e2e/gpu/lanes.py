@@ -28,6 +28,10 @@ class Lane:
     # ggml backend-init lines (llama.cpp + whisper.cpp share ggml, so the same
     # markers prove the device for both). ANY match passes.
     device_markers: tuple[str, ...]
+    # Vast KVM VM template image — MUST be a fully-qualified docker.io/vastai/kvm
+    # tag (real tags: hub.docker.com/r/vastai/kvm/tags). The cuda-*-auto images
+    # ship the NVIDIA driver; AMD lanes get the plain CLI image.
+    vm_image: str
 
 
 # Offload proof, common to all lanes: llama.cpp logs "offloaded N/M layers to
@@ -44,6 +48,7 @@ LANES: dict[str, Lane] = {
         max_dph=0.60,
         disk_gb=100,
         device_markers=("ggml_cuda_init: found", "CUDA devices"),
+        vm_image="docker.io/vastai/kvm:cuda-12.4.1-auto",
     ),
     "vulkan": Lane(
         key="vulkan",
@@ -56,6 +61,7 @@ LANES: dict[str, Lane] = {
         max_dph=0.45,
         disk_gb=100,
         device_markers=("ggml_vulkan: Found", "Vulkan devices"),
+        vm_image="docker.io/vastai/kvm:ubuntu_cli",
     ),
     "rocm": Lane(
         key="rocm",
@@ -66,6 +72,7 @@ LANES: dict[str, Lane] = {
         disk_gb=100,
         # HIP builds log through the CUDA codepath: "found N ROCm devices".
         device_markers=("ROCm devices",),
+        vm_image="docker.io/vastai/kvm:ubuntu_cli",
     ),
 }
 
