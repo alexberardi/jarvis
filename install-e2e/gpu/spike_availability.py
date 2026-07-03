@@ -24,6 +24,38 @@ from lanes import LANES  # noqa: E402
 from provision_vast import offer_query, vastai  # noqa: E402
 
 
+def _count(query: str) -> int | str:
+    try:
+        return len(vastai("search", "offers", query) or [])
+    except Exception as e:  # noqa: BLE001 — a bad field name must not kill the spike
+        return f"query error: {e}"
+
+
+def diagnose_dry_lane(key: str, query: str) -> None:
+    """A lane found nothing — relax filters one at a time to show which one
+    (or a wrong gpu_name) is responsible."""
+    print("  -- diagnosis: relaxing filters --")
+    relaxations = [
+        ("without verified", query.replace("verified=true ", "")),
+        ("without reliability", query.replace("reliability>0.98 ", "")),
+        ("without price cap", query.split(" dph_total")[0]),
+        ("bare gpu_name only", query.split(" num_gpus")[0]),
+    ]
+    for label, q in relaxations:
+        print(f"  {label}: {_count(q)}")
+    # Name discovery: what AMD-ish gpu_names does the marketplace actually use?
+    try:
+        offers = vastai(
+            "search", "offers", "gpu_arch=amd rentable=true", "--order", "dph_total"
+        ) or []
+        names = sorted({o.get("gpu_name", "?") for o in offers})
+        print(f"  gpu_arch=amd rentable offers: {len(offers)}; gpu_names seen: {names[:20]}")
+        vm = [o for o in offers if o.get("vms_enabled")]
+        print(f"  of those with vms_enabled: {len(vm)}")
+    except Exception as e:  # noqa: BLE001
+        print(f"  gpu_arch=amd discovery failed: {e}")
+
+
 def main() -> None:
     if not os.environ.get("VAST_API_KEY"):
         raise SystemExit("VAST_API_KEY is not set")
@@ -49,6 +81,7 @@ def main() -> None:
             )
         if not offers:
             print(f"  !! NO VM OFFERS — lane '{key}' cannot run on Vast right now")
+            diagnose_dry_lane(key, query)
             exit_code = 1
 
     if exit_code:
