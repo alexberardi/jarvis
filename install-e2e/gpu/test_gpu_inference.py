@@ -31,6 +31,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import wave
 from functools import lru_cache
 
@@ -54,6 +55,13 @@ EXPECT_AUTH = os.environ.get("JARVIS_E2E_EXPECT_AUTH", "1") != "0"
 LLM_URL = "http://localhost:7704"
 WHISPER_URL = "http://localhost:7706"
 TTS_URL = "http://localhost:7707"
+
+# The container goes docker-healthy long before the model service inside it
+# is serving: it binds :7705 only after its heavy CUDA imports + model load
+# (observed live: Phase G raced it at ~50s container age and got connection
+# refused). Everything below polls with deadlines instead of snapshotting.
+LLM_READY_TIMEOUT_S = int(os.environ.get("JARVIS_E2E_LLM_READY_TIMEOUT", "480"))
+MARKER_TIMEOUT_S = 300
 
 pytestmark = pytest.mark.skipif(
     LANE is None, reason="JARVIS_E2E_LANE not set to a known lane (cuda|vulkan|rocm)"
@@ -85,12 +93,21 @@ def container_logs(name: str) -> str:
     return proc.stdout + proc.stderr
 
 
-# ── LLM: real completion through the local GGUF on the GPU ──────────────────
+def wait_for_markers(name: str, markers: tuple[str, ...], timeout_s: int = MARKER_TIMEOUT_S) -> str:
+    """Poll a container's logs until ANY marker appears (model load happens on
+    a background/late-binding startup path — a single snapshot races it)."""
+    deadline = time.time() + timeout_s
+    logs = ""
+    while time.time() < deadline:
+        logs = container_logs(name)
+        if any(m in logs for m in markers):
+            return logs
+        time.sleep(10)
+    return logs
 
 
-@needs_auth
-def test_chat_completion_real_local_model():
-    r = requests.post(
+def chat_completion(timeout: int = 300):
+    return requests.post(
         f"{LLM_URL}/v1/chat/completions",
         headers=app_headers(),
         json={
@@ -99,23 +116,41 @@ def test_chat_completion_real_local_model():
             "max_tokens": 40,
             "temperature": 0,
         },
-        timeout=300,  # first call may include warmup on a cold backend
+        timeout=timeout,
     )
-    assert r.status_code == 200, f"chat completion failed: {r.status_code} {r.text[:500]}"
+
+
+# ── LLM: real completion through the local GGUF on the GPU ──────────────────
+
+
+@needs_auth
+def test_chat_completion_real_local_model():
+    deadline = time.time() + LLM_READY_TIMEOUT_S
+    r = None
+    while True:
+        r = chat_completion()
+        if r.status_code == 200 or time.time() > deadline:
+            break
+        time.sleep(15)  # model service still importing/loading — retry
+    assert r.status_code == 200, (
+        f"chat completion failed after {LLM_READY_TIMEOUT_S}s of retries: "
+        f"{r.status_code} {r.text[:500]}"
+    )
     content = r.json()["choices"][0]["message"]["content"]
     assert content and content.strip(), f"empty completion: {r.json()}"
 
 
 def test_llm_backend_initialized_gpu_device():
-    logs = container_logs("jarvis-llm-proxy-api")
+    logs = wait_for_markers("jarvis-llm-proxy-api", LANE.device_markers)
     assert any(m in logs for m in LANE.device_markers), (
-        f"lane '{LANE.key}': none of {LANE.device_markers} in llm-proxy logs — "
-        "the backend did not initialize the GPU (silent CPU fallback?)"
+        f"lane '{LANE.key}': none of {LANE.device_markers} in llm-proxy logs "
+        f"after {MARKER_TIMEOUT_S}s — the backend did not initialize the GPU "
+        "(silent CPU fallback?)"
     )
 
 
 def test_llm_layers_offloaded_to_gpu():
-    logs = container_logs("jarvis-llm-proxy-api")
+    logs = wait_for_markers("jarvis-llm-proxy-api", ("layers to GPU",))
     matches = [int(m.group(1)) for m in re.finditer(OFFLOAD_PATTERN, logs)]
     assert matches, "no 'offloaded N/M layers to GPU' line in llm-proxy logs"
     assert max(matches) > 0, (
@@ -160,10 +195,11 @@ def test_tts_speaks_and_whisper_transcribes_roundtrip():
 def test_whisper_backend_initialized_gpu_device():
     if WHISPER_BACKEND == "cpu":
         pytest.skip("lane deploys the CPU whisper image (no GPU variant selected)")
-    logs = container_logs("jarvis-whisper-api")
     # whisper.cpp shares ggml with llama.cpp, so the same device-init markers
-    # apply. The model loads at service startup, so markers exist pre-request.
+    # apply.
+    logs = wait_for_markers("jarvis-whisper-api", LANE.device_markers)
     assert any(m in logs for m in LANE.device_markers), (
         f"whisper backend '{WHISPER_BACKEND}': none of {LANE.device_markers} "
-        "in whisper logs — GPU not initialized (silent CPU fallback?)"
+        f"in whisper logs after {MARKER_TIMEOUT_S}s — GPU not initialized "
+        "(silent CPU fallback?)"
     )
