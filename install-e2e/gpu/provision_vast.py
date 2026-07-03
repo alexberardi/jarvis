@@ -51,7 +51,10 @@ CREATE_ATTEMPTS = 6  # offers to try before giving up
 # "running" in <7 min. So: short per-offer budgets, more offers, and an
 # overall wall-clock cap — fail fast through the junk to find a warm host.
 RUNNING_TIMEOUT_S = 10 * 60
-SSH_AFTER_RUNNING_TIMEOUT_S = 6 * 60
+# "running" means KVM started — the guest OS + cloud-init are still booting
+# inside; observed refusals past 6 min. The overall PROVISION_DEADLINE_S is
+# the real cap.
+SSH_AFTER_RUNNING_TIMEOUT_S = 12 * 60
 PROVISION_DEADLINE_S = 60 * 60
 # The cheapest offers are adversely selected (they're cheap because nobody can
 # use them). Empirically the CN-hosted 3090s never finished a single image
@@ -229,36 +232,50 @@ def wait_ssh(instance_id: int, user: str, key_path: str | None) -> dict:
             break
         time.sleep(20)
 
-    host, port = info["ssh_host"], int(info["ssh_port"])
     log(
-        f"instance {instance_id} running; probing SSH {user}@{host}:{port} "
-        f"(public_ipaddr={info.get('public_ipaddr')}, "
-        f"direct_port_start={info.get('direct_port_start')})"
+        f"instance {instance_id} running; port fields: "
+        f"ssh={info.get('ssh_host')}:{info.get('ssh_port')} "
+        f"public_ipaddr={info.get('public_ipaddr')} "
+        f"direct_port_start={info.get('direct_port_start')} "
+        f"machine_dir_ssh_port={info.get('machine_dir_ssh_port')} "
+        f"ports={json.dumps(info.get('ports'))[:400]}"
     )
     ssh_deadline = time.time() + SSH_AFTER_RUNNING_TIMEOUT_S
     last_err = ""
     while time.time() < ssh_deadline:
-        # Prefer the CLI's canonical ssh-url (it applies the proxy-vs-direct
-        # rules); fall back to the instance record, re-read each probe since
-        # host/port can flip as the VM finishes provisioning.
+        # The proxy record (ssh_host/ssh_port, also what ssh-url returns) has
+        # refused connections for entire windows on live VMs, so probe EVERY
+        # plausible endpoint each round and take the first that answers.
+        info = vastai("show", "instance", str(instance_id)) or info
+        candidates: list[tuple[str, int]] = []
         url = ssh_url(instance_id)
         if url:
-            _, host, port = url
-        else:
-            info = vastai("show", "instance", str(instance_id)) or info
-            host = info.get("ssh_host") or host
-            port = int(info.get("ssh_port") or port)
-        ok, err = ssh_probe(host, port, user, key_path)
-        if ok:
-            log(f"instance {instance_id} SSH-ready at {user}@{host}:{port}")
-            return {"ssh_host": host, "ssh_port": port}
-        if err and err != last_err:
-            log(f"ssh not ready ({user}@{host}:{port}): {err.splitlines()[-1][:200]}")
-            last_err = err
+            candidates.append((url[1], url[2]))
+        pub = info.get("public_ipaddr")
+        port_map = info.get("ports") or {}
+        for binding in port_map.get("22/tcp") or []:
+            if pub and binding.get("HostPort"):
+                candidates.append((pub, int(binding["HostPort"])))
+        if pub and info.get("machine_dir_ssh_port"):
+            candidates.append((pub, int(info["machine_dir_ssh_port"])))
+        if info.get("ssh_host") and info.get("ssh_port"):
+            candidates.append((str(info["ssh_host"]), int(info["ssh_port"])))
+        seen: set = set()
+        for host, port in candidates:
+            if (host, port) in seen:
+                continue
+            seen.add((host, port))
+            ok, err = ssh_probe(host, port, user, key_path)
+            if ok:
+                log(f"instance {instance_id} SSH-ready at {user}@{host}:{port}")
+                return {"ssh_host": host, "ssh_port": port}
+            if err and err != last_err:
+                log(f"ssh not ready ({user}@{host}:{port}): {err.splitlines()[-1][:200]}")
+                last_err = err
         time.sleep(20)
     raise TimeoutError(
-        f"instance {instance_id} running but SSH never accepted "
-        f"({user}@{host}:{port}, last error: {last_err.splitlines()[-1][:200] if last_err else 'none'}) "
+        f"instance {instance_id} running but SSH never accepted on any of "
+        f"{sorted(seen)} (last error: {last_err.splitlines()[-1][:200] if last_err else 'none'}) "
         "— PROVISIONING failure, not a test failure"
     )
 
