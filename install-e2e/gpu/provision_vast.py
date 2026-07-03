@@ -347,9 +347,9 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
         except Exception as e:  # noqa: BLE001 — don't leak a half-up instance
             log(f"instance {instance_id} never became usable ({e}); destroying")
             try:
-                vastai("destroy", "instance", str(instance_id), raw=False)
+                destroy(instance_id)  # verified — raises if it survives
             except Exception as de:  # noqa: BLE001
-                log(f"destroy of {instance_id} ALSO failed ({de}) — janitor will reap")
+                log(f"destroy of {instance_id} FAILED ({de}) — clean-gate will flag it")
             last_err = e
             continue
 
@@ -371,29 +371,95 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
     raise SystemExit(f"PROVISIONING: all {CREATE_ATTEMPTS} offer attempts failed: {last_err}")
 
 
+def instance_alive(instance_id: int) -> bool:
+    try:
+        info = vastai("show", "instance", str(instance_id))
+    except Exception:  # noqa: BLE001 — a lookup blip must not report "gone"
+        return True
+    # A destroyed contract comes back empty/None or without an id.
+    return bool(info) and info.get("id") is not None
+
+
 def destroy(instance_id: int) -> None:
-    log(f"destroying instance {instance_id}")
-    vastai("destroy", "instance", str(instance_id), raw=False)
+    """VERIFIED destroy. Learned the hard way (29 leaked instances, account
+    drained): `vastai destroy instance` can exit 0 with empty stderr while
+    destroying NOTHING — its stdout carries the real result. Never trust the
+    exit code; confirm the instance is actually gone, retry once, and raise
+    loudly if it survives so no green step ever hides a billing leak."""
+    for attempt in (1, 2):
+        out = vastai("destroy", "instance", str(instance_id), raw=False)
+        log(f"destroy {instance_id} (attempt {attempt}) stdout: {redact(out.strip()) or '(empty)'}")
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            if not instance_alive(instance_id):
+                log(f"instance {instance_id} confirmed destroyed")
+                return
+            time.sleep(5)
+        log(f"instance {instance_id} STILL ALIVE after destroy attempt {attempt}")
+    raise RuntimeError(
+        f"instance {instance_id} SURVIVED two destroy attempts — it is still "
+        "billing. Destroy it manually at https://cloud.vast.ai/instances/"
+    )
+
+
+def list_labeled_instances() -> list[dict]:
+    return [
+        inst for inst in (vastai("show", "instances") or [])
+        if str(inst.get("label") or "").startswith(LABEL)
+    ]
 
 
 def janitor(max_age_hours: float) -> None:
-    """Destroy any labeled instance older than max_age_hours (leak guard)."""
-    instances = vastai("show", "instances") or []
+    """Destroy any labeled instance older than max_age_hours (leak guard).
+    Exits NONZERO if anything it tried to reap is still alive — a leaked
+    instance bills forever; silence must never look like success."""
     now = time.time()
-    reaped = 0
-    for inst in instances:
-        if not str(inst.get("label") or "").startswith(LABEL):
-            continue
+    reaped, survivors = 0, 0
+    for inst in list_labeled_instances():
         start = inst.get("start_date") or 0
         age_h = (now - float(start)) / 3600 if start else float("inf")
         if age_h > max_age_hours:
-            log(f"janitor: reaping {inst['id']} (age {age_h:.1f}h)")
+            log(f"janitor: reaping {inst['id']} (age {age_h:.1f}h, "
+                f"status {inst.get('actual_status')})")
             try:
                 destroy(int(inst["id"]))
                 reaped += 1
-            except Exception as e:  # noqa: BLE001 — best-effort; next run retries
-                log(f"janitor: destroy {inst['id']} failed: {e}")
-    log(f"janitor: {reaped} instance(s) reaped")
+            except Exception as e:  # noqa: BLE001 — keep reaping the rest first
+                log(f"janitor: {e}")
+                survivors += 1
+    log(f"janitor: {reaped} reaped, {survivors} SURVIVED")
+    if survivors:
+        raise SystemExit(
+            f"janitor: {survivors} labeled instance(s) could not be destroyed "
+            "and are still billing — destroy manually at "
+            "https://cloud.vast.ai/instances/"
+        )
+
+
+def clean_gate() -> None:
+    """End-of-run gate: FAIL if any instance created by THIS workflow run
+    (label carries GITHUB_RUN_ID; sibling matrix lanes share it, so the gate
+    runs per-lane but a sibling's still-active instance is filtered by lane)
+    is still alive. The teardown steps individually verify, but this is the
+    single backstop that makes 'this run left nothing billing' an asserted
+    fact instead of an assumption."""
+    run_id = os.environ.get("GITHUB_RUN_ID", "local")
+    lane = os.environ.get("LANE", "")
+    marker = f"{LABEL}-{lane}-{run_id}" if lane else f"-{run_id}"
+    leaked = []
+    for inst in list_labeled_instances():
+        label = str(inst.get("label") or "")
+        if not (label.endswith(f"-{run_id}") and (not lane or label == marker)):
+            continue
+        leaked.append(f"{inst['id']} (label {label}, "
+                      f"status {inst.get('actual_status')})")
+    if leaked:
+        raise SystemExit(
+            "CLEAN GATE FAILED — this run's instance(s) still alive and billing:\n  "
+            + "\n  ".join(leaked)
+            + "\nDestroy manually at https://cloud.vast.ai/instances/"
+        )
+    log(f"clean gate: no live instances for {marker}")
 
 
 def main() -> None:
@@ -414,6 +480,8 @@ def main() -> None:
 
     jp = sub.add_parser("janitor", help="reap labeled instances older than --max-age-hours")
     jp.add_argument("--max-age-hours", type=float, default=3.0)
+
+    sub.add_parser("clean-gate", help="fail if this run (GITHUB_RUN_ID + LANE) left instances alive")
 
     sp = sub.add_parser("search", help="print qualifying offers for a lane (JSON)")
     sp.add_argument("--lane", required=True, choices=sorted(LANES))
@@ -439,6 +507,8 @@ def main() -> None:
             delete_account_ssh_key(int(ssh_key_id))
     elif args.cmd == "janitor":
         janitor(args.max_age_hours)
+    elif args.cmd == "clean-gate":
+        clean_gate()
     elif args.cmd == "search":
         print(json.dumps(search_offers(args.lane), indent=2))
 

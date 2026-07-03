@@ -403,3 +403,13 @@ jobs:
       - name: Janitor — reap leaked instances (end)
         if: always()
         run: python install-e2e/gpu/provision_vast.py janitor --max-age-hours 3 || true
+
+      - name: CLEAN GATE — this run left nothing billing
+        # The single non-negotiable backstop. Destroys are individually
+        # verified now, but this step makes the job RED if this run's
+        # instance somehow survives — a leaked instance bills forever, so a
+        # green job must MEAN a clean account. (The 2026-07-03 incident: 29
+        # leaked instances behind green "Destroy" steps — vastai destroy
+        # exits 0 without destroying; only its stdout tells the truth.)
+        if: always()
+        run: python install-e2e/gpu/provision_vast.py clean-gate
