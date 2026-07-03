@@ -176,6 +176,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: alexberardi/jarvis-installer
+          # TODO(alexberardi/jarvis-installer#11): --whisper-backend lives on
+          # this branch; flip ref back to main once #11 merges (a merged+
+          # deleted branch would break this checkout).
+          ref: feat/gen-export-whisper-backend
           path: jarvis-installer
 
       - name: Checkout jarvis-admin (SYNC / reconcile generator)
