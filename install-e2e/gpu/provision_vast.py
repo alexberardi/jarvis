@@ -97,6 +97,32 @@ def search_offers(lane_key: str) -> list[dict]:
     return offers
 
 
+def register_account_ssh_key(pubkey: str) -> int | None:
+    """VM creates hard-require an ACCOUNT-level SSH key ([no_ssh_key_for_vm])
+    — post-create `attach ssh` is too late. Register the run's ephemeral key
+    and return its id so teardown can delete it."""
+    try:
+        out = vastai("create", "ssh-key", pubkey, raw=False)
+        log(f"registered account ssh-key: {out.strip() or '(no output)'}")
+    except Exception as e:  # noqa: BLE001 — may already exist; the lookup decides
+        log(f"create ssh-key: {e}")
+    try:
+        for key in vastai("show", "ssh-keys") or []:
+            if (key.get("public_key") or "").strip() == pubkey:
+                return int(key["id"])
+    except Exception as e:  # noqa: BLE001
+        log(f"show ssh-keys failed: {e}")
+    return None
+
+
+def delete_account_ssh_key(key_id: int) -> None:
+    try:
+        vastai("delete", "ssh-key", str(key_id), raw=False)
+        log(f"deleted account ssh-key {key_id}")
+    except Exception as e:  # noqa: BLE001 — hygiene only; never fail teardown on it
+        log(f"delete ssh-key {key_id} failed: {e}")
+
+
 def find_instance_by_label(label: str) -> dict | None:
     """Authoritative lookup: the label we passed to create is the one thing we
     control end-to-end, regardless of what create printed."""
@@ -165,6 +191,7 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
         )
 
     pubkey = open(ssh_pubkey).read().strip()
+    ssh_key_id = register_account_ssh_key(pubkey)
     run_label = f"{LABEL}-{lane_key}-{os.environ.get('GITHUB_RUN_ID', 'local')}"
     last_err: Exception | None = None
     for offer in offers[:CREATE_ATTEMPTS]:
@@ -202,7 +229,12 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
 
         log(f"created instance {instance_id}; attaching SSH key")
         try:
-            vastai("attach", "ssh", str(instance_id), pubkey, raw=False)
+            # Belt-and-braces: the account key above is what VMs actually use;
+            # attach is instance-level and may be a no-op for VM templates.
+            try:
+                vastai("attach", "ssh", str(instance_id), pubkey, raw=False)
+            except Exception as e:  # noqa: BLE001
+                log(f"attach ssh (non-fatal): {e}")
             conn = wait_ssh(instance_id, ssh_user, ssh_key_path)
         except Exception as e:  # noqa: BLE001 — don't leak a half-up instance
             log(f"instance {instance_id} never became usable ({e}); destroying")
@@ -220,6 +252,7 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
             "gpu_name": gpu,
             "dph_total": dph,
             "ssh_user": ssh_user,
+            "ssh_key_id": ssh_key_id,
             **conn,
         }
         with open(out_path, "w") as f:
@@ -286,11 +319,16 @@ def main() -> None:
                   args.out, args.ssh_key)
     elif args.cmd == "destroy":
         instance_id = args.instance_id
+        ssh_key_id = None
         if instance_id is None:
             if not args.from_file:
                 raise SystemExit("destroy: need --instance-id or --from")
-            instance_id = int(json.load(open(args.from_file))["instance_id"])
+            info = json.load(open(args.from_file))
+            instance_id = int(info["instance_id"])
+            ssh_key_id = info.get("ssh_key_id")
         destroy(instance_id)
+        if ssh_key_id:
+            delete_account_ssh_key(int(ssh_key_id))
     elif args.cmd == "janitor":
         janitor(args.max_age_hours)
     elif args.cmd == "search":
