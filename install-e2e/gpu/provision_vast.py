@@ -66,15 +66,22 @@ def log(msg: str) -> None:
     print(f"[provision-vast] {msg}", file=sys.stderr, flush=True)
 
 
-def vastai(*args: str, raw: bool = True) -> Any:
-    """Run the vastai CLI; parse --raw JSON output."""
+def vastai(*args: str, raw: bool = True, confirm: bool = False) -> Any:
+    """Run the vastai CLI; parse --raw JSON output.
+
+    confirm=True feeds 'y' on stdin: destructive subcommands (destroy) prompt
+    interactively — in CI the prompt silently defaults to No while the CLI
+    still exits 0, which is how 29 instances once leaked behind green steps."""
     cmd = ["vastai", *args]
     if raw:
         cmd.append("--raw")
     api_key = os.environ.get("VAST_API_KEY", "")
     if api_key:
         cmd += ["--api-key", api_key]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=180,
+        input="y\n" if confirm else None,
+    )
     # The vastai CLI is loose with exit codes and often reports API errors on
     # stderr while exiting 0 — always surface stderr so failures aren't silent.
     if proc.stderr.strip():
@@ -148,7 +155,7 @@ def register_account_ssh_key(pubkey: str) -> int | None:
 
 def delete_account_ssh_key(key_id: int) -> None:
     try:
-        vastai("delete", "ssh-key", str(key_id), raw=False)
+        vastai("delete", "ssh-key", str(key_id), raw=False, confirm=True)
         log(f"deleted account ssh-key {key_id}")
     except Exception as e:  # noqa: BLE001 — hygiene only; never fail teardown on it
         log(f"delete ssh-key {key_id} failed: {e}")
@@ -387,7 +394,7 @@ def destroy(instance_id: int) -> None:
     exit code; confirm the instance is actually gone, retry once, and raise
     loudly if it survives so no green step ever hides a billing leak."""
     for attempt in (1, 2):
-        out = vastai("destroy", "instance", str(instance_id), raw=False)
+        out = vastai("destroy", "instance", str(instance_id), raw=False, confirm=True)
         log(f"destroy {instance_id} (attempt {attempt}) stdout: {redact(out.strip()) or '(empty)'}")
         deadline = time.time() + 60
         while time.time() < deadline:
