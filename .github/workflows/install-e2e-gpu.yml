@@ -1,0 +1,442 @@
+name: install-e2e-gpu
+
+# Nightly proof that the install pattern actually WORKS on real GPUs — not
+# just that the GPU compose parses and the image tags exist (validate_matrix
+# covers that breadth statically in the CPU workflow).
+#
+# Per lane (cuda / vulkan / rocm), on a rented Vast.ai KVM VM:
+#   1. provision VM (GPU passthrough, docker compose capable) + bootstrap
+#   2. generate the installer's export compose with the lane's --gpu /
+#      --whisper-backend, bring it up REMOTELY via DOCKER_HOST=ssh://
+#   3. reuse the existing phases unchanged over SSH port tunnels:
+#      test_deployment (health) + test_migrations (keystone)
+#   4. Phase G (install-e2e/gpu/test_gpu_inference.py): real chat completion
+#      on the local GGUF, tts→whisper round trip, and ggml backend-init log
+#      markers proving the GPU was used (catches silent CPU fallback)
+#   5. regenerate the ADMIN SYNC/reconcile compose with --gpu (the OTHER
+#      generator — where the 2026-06 outage bug lived), bring THAT up, re-run
+#      the migrations keystone + GPU log markers against it
+#   6. destroy the instance (always) — janitor reaps leaks at start and end
+#
+# COST: entirely gated on the VAST_API_KEY secret — without it every lane
+# no-ops green (same pattern as the behavior lane's OPENAI_API_KEY gate).
+# Guardrails: per-lane $/hr caps in the offer query, job timeout, janitor.
+# Estimated ~$0.60-0.80/night across all three lanes.
+#
+# Apple Silicon / Metal stays manual (no rentable Mac GPUs worth the trouble).
+
+on:
+  workflow_dispatch:
+    inputs:
+      lanes:
+        description: "Comma-separated lanes to run (cuda,vulkan,rocm). NOTE: Vast has had zero AMD marketplace inventory (spike 2026-07-02) — vulkan/rocm fail provisioning (harmlessly, ~$0) until supply appears or a fallback provider lands."
+        default: "cuda"
+      release:
+        description: "Release track to install"
+        type: choice
+        options: [stable, dev]
+        default: stable
+      keep_instance:
+        description: "Skip instance destroy for debugging (janitor reaps in 3h)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "23 7 * * *" # nightly, after install-e2e (06:37) so a common breakage reads top-down
+  # PRs touching the GPU harness run ONLY the read-only marketplace spike
+  # (inventory + prices per lane — no instance is ever created, no spend).
+  # The paid lanes are hard-gated off pull_request in the plan job below —
+  # EXCEPT when the gpu-live label is applied; `labeled` is in the trigger
+  # types so applying the label immediately starts a live run.
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "install-e2e/gpu/**"
+      - ".github/workflows/install-e2e-gpu.yml"
+
+permissions:
+  contents: read
+  packages: read
+
+# One GPU run at a time; never cancel mid-run (a cancelled run can strand a
+# rented instance — the janitor covers it, but don't make it routine).
+concurrency:
+  group: install-e2e-gpu
+  cancel-in-progress: false
+
+env:
+  STORAGE_PATH: /var/lib/jarvis
+  # P0.4 (installer#18) locks the broker on fresh installs; the harness's
+  # jarvis-node:latest predates broker creds, so CI uses the documented
+  # adoption knob. Drop this once the node ships MQTT creds support and
+  # seed.py provisions them (tracked with the node-release ordering in
+  # jarvis#6).
+  MQTT_ALLOW_ANON: "true"
+  GEN_FILE: install-e2e/docker-compose.gen.yaml
+  GPU_OVERRIDE_FILE: install-e2e/gpu/docker-compose.gpu-ci-override.yaml
+  SYNC_FILE: install-e2e/docker-compose.sync.yaml
+  # Small ungated chatml GGUF — must match JARVIS_MODEL_NAME in the override.
+  TEST_MODEL_URL: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+  # Ports the pytest phases expect on localhost (conftest HTTP_SERVICES).
+  TUNNEL_PORTS: "7700 7701 7702 7703 7704 7706 7707 7708 7711 7712 7722"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+      lanes: ${{ steps.gate.outputs.lanes }}
+    steps:
+      - id: gate
+        env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+        run: |
+          # PRs don't provision (spend) by default — they get the spike job.
+          # Exception: the `gpu-live` label (write-access-only to apply) opts a
+          # PR into a live cuda-lane run, for iterating on this harness with
+          # real hardware before merge.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if [ "${{ contains(github.event.pull_request.labels.*.name, 'gpu-live') }}" = "true" ]; then
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              echo 'lanes=["cuda"]' >> "$GITHUB_OUTPUT"
+              echo "gpu-live label present → live cuda lane on this PR"
+            else
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo "lanes=[]" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+          if [ -z "$VAST_API_KEY" ]; then
+            echo "::warning::VAST_API_KEY not set — GPU lanes no-op (add the secret + run the availability spike to enable)"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "lanes=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Nightly default is cuda-only: the 2026-07-02 spike found ZERO AMD
+          # inventory on Vast (gpu_arch=amd → 0 offers marketplace-wide). The
+          # nightly spike job below keeps watching — widen this when it turns.
+          LANES="${{ github.event.inputs.lanes || 'cuda' }}"
+          JSON=$(echo "$LANES" | tr ',' '\n' | sed 's/ //g' | grep -E '^(cuda|vulkan|rocm)$' | jq -Rcs 'split("\n") | map(select(length>0))')
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "lanes=$JSON" >> "$GITHUB_OUTPUT"
+          echo "running lanes: $JSON"
+
+  # Read-only marketplace check: offer counts + prices per lane, straight into
+  # the job summary. Runs on PRs (same-repo PRs get secrets) AND nightly — the
+  # AMD lanes are dormant purely for lack of Vast supply, so the nightly spike
+  # is the signal to widen the lane list when AMD inventory appears.
+  spike:
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install vastai
+      - name: Janitor — list + reap ALL labeled instances
+        # Safety net while iterating on the harness: a create whose output we
+        # failed to parse can leak a rented instance the end-of-run janitor's
+        # age threshold won't catch. Reap everything labeled, and show what
+        # existed. MUST NOT run while a gpu-live lane is provisioning in this
+        # same event — it would reap the lane's own fresh instance.
+        if: "!contains(github.event.pull_request.labels.*.name, 'gpu-live')"
+        run: |
+          if [ -n "$VAST_API_KEY" ]; then
+            vastai show instances --api-key "$VAST_API_KEY" || true
+            python install-e2e/gpu/provision_vast.py janitor --max-age-hours 0
+          fi
+      - name: Marketplace availability spike (read-only)
+        run: |
+          if [ -z "$VAST_API_KEY" ]; then
+            echo "::warning::VAST_API_KEY not set — spike skipped" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          set +e
+          python install-e2e/gpu/spike_availability.py | tee spike.out
+          RC=$?
+          set -e
+          { echo '```'; cat spike.out; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ $RC -ne 0 ]; then
+            echo "::warning::at least one lane has NO VM inventory right now — see summary (informational; does not fail the PR)"
+          fi
+
+  gpu-lane:
+    needs: plan
+    if: needs.plan.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    # VM provisioning alone can eat 3 offers × ~26 min (hosts pull the multi-GB
+    # KVM image before boot) before the stack phases even start.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: ${{ fromJSON(needs.plan.outputs.lanes) }}
+    env:
+      VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+      LANE: ${{ matrix.lane }}
+    steps:
+      - name: Checkout umbrella (harness)
+        uses: actions/checkout@v4
+
+      - name: Checkout jarvis-installer (generator)
+        uses: actions/checkout@v4
+        with:
+          repository: alexberardi/jarvis-installer
+          path: jarvis-installer
+
+      - name: Checkout jarvis-admin (SYNC / reconcile generator)
+        uses: actions/checkout@v4
+        with:
+          repository: alexberardi/jarvis-admin
+          path: jarvis-admin
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: jarvis-installer/package-lock.json
+
+      - name: Install tooling
+        run: pip install vastai -r install-e2e/requirements.txt
+
+      - name: Resolve lane → generator args
+        id: lane
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import os, sys
+          sys.path.insert(0, "install-e2e/gpu")
+          from lanes import LANES
+          lane = LANES[os.environ["LANE"]]
+          print(f"gpu={lane.gpu_type}")
+          print(f"whisper={lane.whisper_backend}")
+          EOF
+
+      - name: Ephemeral SSH key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keygen -t ed25519 -N "" -f ~/.ssh/gpu_e2e -C "install-e2e-gpu-${{ github.run_id }}"
+
+      - name: Janitor — reap leaked instances (start)
+        # 15 min: catches instances leaked by a PREVIOUS run (the concurrency
+        # group serializes runs, so anything labeled and older than minutes is
+        # a leak) without reaping sibling matrix lanes' fresh instances.
+        run: python install-e2e/gpu/provision_vast.py janitor --max-age-hours 0.25
+
+      - name: Provision Vast.ai VM
+        id: provision
+        run: |
+          python install-e2e/gpu/provision_vast.py provision \
+            --lane "$LANE" \
+            --ssh-pubkey ~/.ssh/gpu_e2e.pub \
+            --ssh-key ~/.ssh/gpu_e2e \
+            --out provision.json
+          {
+            echo "instance_id=$(jq -r .instance_id provision.json)"
+            echo "ssh_host=$(jq -r .ssh_host provision.json)"
+            echo "ssh_port=$(jq -r .ssh_port provision.json)"
+            echo "ssh_user=$(jq -r .ssh_user provision.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: SSH config (multiplexed — docker-over-ssh spawns many sessions)
+        run: |
+          cat >> ~/.ssh/config <<EOF
+          Host gpu-vm
+            HostName ${{ steps.provision.outputs.ssh_host }}
+            Port ${{ steps.provision.outputs.ssh_port }}
+            User ${{ steps.provision.outputs.ssh_user }}
+            IdentityFile ~/.ssh/gpu_e2e
+            StrictHostKeyChecking accept-new
+            ServerAliveInterval 30
+            ControlMaster auto
+            ControlPath ~/.ssh/cm-%r@%h:%p
+            ControlPersist 10m
+          EOF
+          ssh gpu-vm true && echo "ssh OK"
+          echo "DOCKER_HOST=ssh://gpu-vm" >> "$GITHUB_ENV"
+
+      - name: Bootstrap remote (GPU visibility, docker, storage, test model)
+        run: ssh gpu-vm 'bash -s' -- "${{ steps.lane.outputs.gpu }}" "$TEST_MODEL_URL" < install-e2e/gpu/bootstrap_remote.sh
+
+      - name: Generate the install artifact (installer pattern, GPU flavor)
+        working-directory: jarvis-installer
+        run: |
+          npm ci
+          # gpu-live PR runs track dev (bleeding edge — where fixes land first;
+          # this lane exists to iterate on the harness + validate fixes).
+          # Schedule/dispatch default to stable: what users actually install.
+          REL="${{ github.event.inputs.release || 'stable' }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then REL=dev; fi
+          npx tsx scripts/gen-export-compose.mts \
+            --out "$GITHUB_WORKSPACE/$GEN_FILE" \
+            --storage "$STORAGE_PATH" \
+            --gpu "${{ steps.lane.outputs.gpu }}" \
+            --whisper-backend "${{ steps.lane.outputs.whisper }}" \
+            --release "$REL"
+
+      - name: Validate generated compose
+        run: docker compose -f "$GEN_FILE" -f "$GPU_OVERRIDE_FILE" config -q && echo "compose valid"
+
+      - name: Log in to GHCR (creds forwarded per-pull to the remote daemon)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull images on the VM (with retry — the rocm image is huge)
+        run: |
+          for i in 1 2 3 4; do
+            docker compose -p jarvis -f "$GEN_FILE" -f "$GPU_OVERRIDE_FILE" pull && break
+            echo "::warning::image pull attempt $i failed; retrying in 20s"
+            sleep 20
+          done
+
+      - name: Bring up the stack on the VM
+        run: docker compose -p jarvis -f "$GEN_FILE" -f "$GPU_OVERRIDE_FILE" up -d
+
+      - name: Open SSH tunnels (pytest phases address localhost)
+        run: |
+          FWD=""
+          for p in $TUNNEL_PORTS; do FWD="$FWD -L $p:localhost:$p"; done
+          # shellcheck disable=SC2086 # FWD is a deliberately word-split flag list
+          ssh -f -N $FWD gpu-vm
+          echo "tunnels up"
+
+      - name: Phase 1 — deployment validity (existing suite, unchanged)
+        run: pytest install-e2e/test_deployment.py -v --junitxml="gpu-$LANE"-phase1.xml
+
+      - name: Phase 1.5 — migrations actually ran (existing keystone, unchanged)
+        run: pytest install-e2e/test_migrations.py -v --junitxml="gpu-$LANE"-phase1_5.xml
+
+      - name: Phase G — GPU inference proof (chat + tts→whisper + ggml markers)
+        env:
+          JARVIS_E2E_LANE: ${{ matrix.lane }}
+          JARVIS_E2E_WHISPER_BACKEND: ${{ steps.lane.outputs.whisper }}
+          JARVIS_E2E_GEN_FILE: ${{ env.GEN_FILE }}
+        run: pytest install-e2e/gpu/test_gpu_inference.py -v --junitxml="gpu-$LANE"-phaseG.xml
+
+      - name: Tear down installer stack (keep the model in host storage)
+        run: docker compose -p jarvis -f "$GEN_FILE" -f "$GPU_OVERRIDE_FILE" down -v
+
+      - name: Generate the admin SYNC / reconcile bundle (GPU flavor)
+        working-directory: jarvis-admin/server
+        run: |
+          npm ci || npm install
+          REL="${{ github.event.inputs.release || 'stable' }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then REL=dev; fi
+          npx tsx "$GITHUB_WORKSPACE/install-e2e/gen-sync-compose.mts" \
+            --out "$GITHUB_WORKSPACE/$SYNC_FILE" --bundle \
+            --gpu "${{ steps.lane.outputs.gpu }}" \
+            --whisper-backend "${{ steps.lane.outputs.whisper }}" \
+            --release "$REL"
+
+      - name: Bring up the SYNC stack on the VM
+        run: |
+          # Keep the sync stack on the same release track as the export stack.
+          # The generated .env HARDCODES JARVIS_IMAGE_TAG=latest and an
+          # explicit --env-file wins interpolation over exported shell vars
+          # (proven live: run 19's sync stack pulled latest-cuda — whose DB
+          # seeds are un-unseeded — despite an exported dev). Rewrite the
+          # value in the file itself.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            sed -i 's/^JARVIS_IMAGE_TAG=.*/JARVIS_IMAGE_TAG=dev/' install-e2e/.env
+            grep '^JARVIS_IMAGE_TAG=' install-e2e/.env
+          fi
+          # DOCKER_HOST=ssh:// resolves bind mounts ON THE VM. The bundle's
+          # relative ./init-db.sh (creates the per-service DBs) only exists on
+          # the runner — docker would bind an empty auto-created dir and
+          # postgres would come up with NO databases (proven live: FATAL
+          # database "jarvis_llm_proxy" does not exist). Ship the file to the
+          # VM and point the compose's INIT_DB_PATH/WHISPER_MODELS_DIR
+          # overrides at VM-absolute paths.
+          scp install-e2e/init-db.sh gpu-vm:/var/lib/jarvis/init-db.sh
+          ssh gpu-vm 'chmod +x /var/lib/jarvis/init-db.sh && mkdir -p /var/lib/jarvis/whisper-models'
+          export INIT_DB_PATH=/var/lib/jarvis/init-db.sh
+          export WHISPER_MODELS_DIR=/var/lib/jarvis/whisper-models
+          # The sync compose's LLM models mount defaults to ./.models (runner-
+          # relative) — point it at the VM path where bootstrap staged the
+          # test GGUF (run 21: "Model path does not exist" on the sync stack).
+          export MODELS_DIR=/var/lib/jarvis/models
+          # shellcheck disable=SC2086 # C is a deliberately word-split command
+          C="docker compose --env-file install-e2e/.env -p jarvis-sync -f $SYNC_FILE -f $GPU_OVERRIDE_FILE"
+          $C config -q && echo "sync compose valid"
+          for _ in 1 2 3; do $C pull && break; sleep 20; done
+          $C up -d
+
+      - name: SYNC — migrations keystone + GPU markers
+        # Placeholder app creds on the sync stack aren't registered in auth
+        # (documented gap, same as the CPU sync-live lane) — so Phase G runs
+        # with EXPECT_AUTH=0: HTTP inference skips, ggml log markers (model
+        # loads at startup, no auth involved) still prove the ADMIN-generated
+        # GPU config works on the device.
+        env:
+          JARVIS_E2E_LANE: ${{ matrix.lane }}
+          JARVIS_E2E_WHISPER_BACKEND: ${{ steps.lane.outputs.whisper }}
+          JARVIS_E2E_GEN_FILE: ${{ env.GEN_FILE }}
+          JARVIS_E2E_EXPECT_AUTH: "0"
+        run: |
+          pytest install-e2e/test_migrations.py -v --junitxml="gpu-$LANE"-sync-migrations.xml
+          pytest install-e2e/gpu/test_gpu_inference.py -v --junitxml="gpu-$LANE"-sync-phaseG.xml
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo "── remote GPU state ──"
+          ssh gpu-vm 'nvidia-smi 2>/dev/null || ls -la /dev/kfd /dev/dri 2>/dev/null' || true
+          for PROJ in jarvis jarvis-sync; do
+            echo "── $PROJ ──"
+            docker compose -p $PROJ ps 2>/dev/null || true
+          done
+          # The model service crashes at container START — the interesting log
+          # lines are at the HEAD (the tail is health-check noise) and in any
+          # traceback anywhere in the stream.
+          echo "── llm-proxy log HEAD ──"
+          docker logs jarvis-llm-proxy-api 2>&1 | head -150 || true
+          echo "── llm-proxy tracebacks/errors ──"
+          docker logs jarvis-llm-proxy-api 2>&1 | grep -B3 -A30 -iE 'traceback|error|exception|killed' | head -150 || true
+          echo "── llm-proxy in-container processes + 7705 ──"
+          docker exec jarvis-llm-proxy-api ps aux 2>&1 | head -20 || true
+          docker exec jarvis-llm-proxy-api python -c "import urllib.request;print(urllib.request.urlopen('http://localhost:7705/health',timeout=5).status)" 2>&1 || true
+          echo "── whisper log head ──"
+          docker logs jarvis-whisper-api 2>&1 | head -60 || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-e2e-gpu-${{ matrix.lane }}
+          path: |
+            gpu-*.xml
+            provision.json
+            ${{ env.GEN_FILE }}
+            ${{ env.SYNC_FILE }}
+          if-no-files-found: ignore
+
+      - name: Destroy instance
+        if: always() && github.event.inputs.keep_instance != 'true'
+        run: |
+          if [ -f provision.json ]; then
+            python install-e2e/gpu/provision_vast.py destroy --from provision.json || \
+              echo "::error::destroy failed — janitor will reap (label jarvis-gpu-e2e)"
+          fi
+
+      - name: Janitor — reap leaked instances (end)
+        if: always()
+        run: python install-e2e/gpu/provision_vast.py janitor --max-age-hours 3 || true
+
+      - name: CLEAN GATE — this run left nothing billing
+        # The single non-negotiable backstop. Destroys are individually
+        # verified now, but this step makes the job RED if this run's
+        # instance somehow survives — a leaked instance bills forever, so a
+        # green job must MEAN a clean account. (The 2026-07-03 incident: 29
+        # leaked instances behind green "Destroy" steps — vastai destroy
+        # exits 0 without destroying; only its stdout tells the truth.)
+        if: always()
+        run: python install-e2e/gpu/provision_vast.py clean-gate

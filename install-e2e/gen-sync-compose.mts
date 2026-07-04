@@ -36,6 +36,19 @@ const { values } = parseArgs({
     // sync compose can actually `docker compose up` in the live lane. Without it
     // (static lane), only the compose is emitted — enough to assert entrypoints.
     bundle: { type: "boolean", default: false },
+    // GPU flavor for the reconcile state (state.hardware.gpuType). The GPU
+    // install-e2e lanes use this so the ADMIN generator's GPU output (image
+    // suffixes + device passthrough) is exercised on a real rented GPU, not
+    // just the installer's. Default matches the CPU harness: none.
+    gpu: { type: "string", default: "none" },
+    // Whisper image variant (state.whisperBackend) — independent of --gpu,
+    // same as the wizard's separate whisper choice.
+    "whisper-backend": { type: "string", default: "cpu" },
+    // Release track (state.releaseTrack). dev makes the admin generator emit
+    // floating ${JARVIS_IMAGE_TAG} tags instead of digest pins (dev never
+    // pins — see admin's pinnedOrTaggedImage), so dev-lane CI tests fresh
+    // images. Default matches the CPU harness: stable.
+    release: { type: "string", default: "stable" },
     modules: {
       type: "string",
       // Include jarvis-llm-proxy-api: in the ADMIN registry it's `recommended`
@@ -49,6 +62,19 @@ const { values } = parseArgs({
 });
 
 const adminDir = resolve(values["admin-dir"]!);
+
+const GPU_TYPES = new Set(["none", "nvidia", "amd", "amd-rocm"]);
+const WHISPER_BACKENDS = new Set(["cpu", "cuda", "vulkan", "rocm"]);
+if (!GPU_TYPES.has(values.gpu!)) {
+  console.error(`[gen-sync-compose] invalid --gpu "${values.gpu}" (expected none|nvidia|amd|amd-rocm)`);
+  process.exit(1);
+}
+if (!WHISPER_BACKENDS.has(values["whisper-backend"]!)) {
+  console.error(
+    `[gen-sync-compose] invalid --whisper-backend "${values["whisper-backend"]}" (expected cpu|cuda|vulkan|rocm)`,
+  );
+  process.exit(1);
+}
 
 // Dynamic import by absolute file URL so the admin source resolves regardless of
 // where this script file physically lives.
@@ -98,31 +124,33 @@ const state = {
   dbUser: "jarvis",
   whisperModel: "base.en",
   whisperModelPath: "/whisper-models/ggml-base.en.bin",
+  whisperBackend: values["whisper-backend"],
   llmInterface: "JarvisToolModel",
   deploymentMode: "local",
   deploymentTarget: "standard",
   remoteLlmUrl: "",
   remoteWhisperUrl: "",
   platform: "linux",
-  // GPU-less CI runner: this MUST be a concrete `gpuType: "none"`, not `null`.
-  // The admin generator treats absent hardware as a legacy install and defaults
-  // to nvidia (`const gpuType = detected ?? "nvidia"` in compose-generator.ts),
-  // which emits a `deploy.resources.reservations.devices` nvidia block on the
-  // GPU-required services (llm-proxy + worker). The env-only CI override can't
-  // strip a deploy block, so the sync bring-up dies with "could not select
-  // device driver nvidia" on a GPU-less runner. "none" makes generateCompose
-  // omit the block — mirroring the installer lane's `--gpu none`.
+  // This MUST be a concrete hardware object with an explicit gpuType, not
+  // `null`. The admin generator treats absent hardware as a legacy install and
+  // defaults to nvidia (`const gpuType = detected ?? "nvidia"` in
+  // compose-generator.ts), which emits a `deploy.resources.reservations.devices`
+  // nvidia block on the GPU-required services (llm-proxy + worker). The env-only
+  // CI override can't strip a deploy block, so on a GPU-less runner the sync
+  // bring-up dies with "could not select device driver nvidia". The default
+  // `--gpu none` makes generateCompose omit the block — mirroring the installer
+  // lane's `--gpu none`; the GPU install-e2e lanes pass the lane's real type.
   hardware: {
     platform: "linux",
     arch: "x86_64",
     totalMemoryGb: 16,
     gpuName: null,
     gpuVramMb: null,
-    gpuType: "none",
+    gpuType: values.gpu,
     recommendedBackends: ["REST"],
     recommendedBackend: "REST",
   },
-  releaseTrack: "stable",
+  releaseTrack: values.release,
   relayEnabled: false,
   relayUrl: "",
   nativeServices: [],
@@ -155,5 +183,6 @@ if (values.bundle) {
 
 console.error(
   `[gen-sync-compose] admin SYNC compose → ${values.out} — modules=[${enabledModules.join(", ")}]` +
+    ` gpu=${values.gpu} whisper=${values["whisper-backend"]}` +
     (values.bundle ? " (+ .env + init-db.sh)" : ""),
 );

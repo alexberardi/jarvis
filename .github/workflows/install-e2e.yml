@@ -48,6 +48,12 @@ concurrency:
 
 env:
   STORAGE_PATH: /var/lib/jarvis
+  # P0.4 (installer#18) locks the broker on fresh installs; the harness's
+  # jarvis-node:latest predates broker creds, so CI uses the documented
+  # adoption knob. Drop this once the node ships MQTT creds support and
+  # seed.py provisions them (tracked with the node-release ordering in
+  # jarvis#6).
+  MQTT_ALLOW_ANON: "true"
   COMPOSE_PROJECT: jarvis
   GEN_FILE: install-e2e/docker-compose.gen.yaml
   OVERRIDE_FILE: install-e2e/docker-compose.ci-override.yaml

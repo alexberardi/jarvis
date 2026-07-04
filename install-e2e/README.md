@@ -45,6 +45,17 @@ other service runs the generated config unchanged. Whisper runs its CPU image
 The corpus (`behavior/corpus.cc.yaml`, `behavior/tools.cc.yaml`) is vendored from
 `jarvis-integration-tests/tests/behavior` (the canonical T6b lane) — keep in sync.
 
+## GPU lanes (Phase G)
+
+Everything above runs `--gpu none` on a GPU-less runner; the GPU flavors are
+only validated statically (Phase 0 matrix). The **`install-e2e-gpu` workflow**
+closes that gap nightly: it rents a Vast.ai KVM VM per lane (cuda / vulkan /
+rocm), stands up BOTH generators' composes remotely via `DOCKER_HOST=ssh://`,
+reuses Phases 1 + 1.5 unchanged over SSH tunnels, and adds
+`gpu/test_gpu_inference.py` — real local-GGUF inference + ggml log markers
+proving the GPU did the work. Key-gated on `VAST_API_KEY` (no-ops green
+without). See [`gpu/README.md`](gpu/README.md).
+
 ## Running locally
 
 Against an already-running stack (ports on `localhost`):
