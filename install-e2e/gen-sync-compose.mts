@@ -44,6 +44,11 @@ const { values } = parseArgs({
     // Whisper image variant (state.whisperBackend) — independent of --gpu,
     // same as the wizard's separate whisper choice.
     "whisper-backend": { type: "string", default: "cpu" },
+    // Release track (state.releaseTrack). dev makes the admin generator emit
+    // floating ${JARVIS_IMAGE_TAG} tags instead of digest pins (dev never
+    // pins — see admin's pinnedOrTaggedImage), so dev-lane CI tests fresh
+    // images. Default matches the CPU harness: stable.
+    release: { type: "string", default: "stable" },
     modules: {
       type: "string",
       // Include jarvis-llm-proxy-api: in the ADMIN registry it's `recommended`
@@ -145,7 +150,7 @@ const state = {
     recommendedBackends: ["REST"],
     recommendedBackend: "REST",
   },
-  releaseTrack: "stable",
+  releaseTrack: values.release,
   relayEnabled: false,
   relayUrl: "",
   nativeServices: [],

@@ -323,10 +323,13 @@ jobs:
         working-directory: jarvis-admin/server
         run: |
           npm ci || npm install
+          REL="${{ github.event.inputs.release || 'stable' }}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then REL=dev; fi
           npx tsx "$GITHUB_WORKSPACE/install-e2e/gen-sync-compose.mts" \
             --out "$GITHUB_WORKSPACE/$SYNC_FILE" --bundle \
             --gpu "${{ steps.lane.outputs.gpu }}" \
-            --whisper-backend "${{ steps.lane.outputs.whisper }}"
+            --whisper-backend "${{ steps.lane.outputs.whisper }}" \
+            --release "$REL"
 
       - name: Bring up the SYNC stack on the VM
         run: |
