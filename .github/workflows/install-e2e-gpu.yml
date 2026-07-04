@@ -330,9 +330,16 @@ jobs:
 
       - name: Bring up the SYNC stack on the VM
         run: |
-          # Keep the sync stack on the same release track as the export stack:
-          # its images interpolate ${JARVIS_IMAGE_TAG:-latest}.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then export JARVIS_IMAGE_TAG=dev; fi
+          # Keep the sync stack on the same release track as the export stack.
+          # The generated .env HARDCODES JARVIS_IMAGE_TAG=latest and an
+          # explicit --env-file wins interpolation over exported shell vars
+          # (proven live: run 19's sync stack pulled latest-cuda — whose DB
+          # seeds are un-unseeded — despite an exported dev). Rewrite the
+          # value in the file itself.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            sed -i 's/^JARVIS_IMAGE_TAG=.*/JARVIS_IMAGE_TAG=dev/' install-e2e/.env
+            grep '^JARVIS_IMAGE_TAG=' install-e2e/.env
+          fi
           # DOCKER_HOST=ssh:// resolves bind mounts ON THE VM. The bundle's
           # relative ./init-db.sh (creates the per-service DBs) only exists on
           # the runner — docker would bind an empty auto-created dir and
