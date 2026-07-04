@@ -354,6 +354,10 @@ jobs:
           ssh gpu-vm 'chmod +x /var/lib/jarvis/init-db.sh && mkdir -p /var/lib/jarvis/whisper-models'
           export INIT_DB_PATH=/var/lib/jarvis/init-db.sh
           export WHISPER_MODELS_DIR=/var/lib/jarvis/whisper-models
+          # The sync compose's LLM models mount defaults to ./.models (runner-
+          # relative) — point it at the VM path where bootstrap staged the
+          # test GGUF (run 21: "Model path does not exist" on the sync stack).
+          export MODELS_DIR=/var/lib/jarvis/models
           # shellcheck disable=SC2086 # C is a deliberately word-split command
           C="docker compose --env-file install-e2e/.env -p jarvis-sync -f $SYNC_FILE -f $GPU_OVERRIDE_FILE"
           $C config -q && echo "sync compose valid"
