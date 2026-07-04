@@ -333,6 +333,17 @@ jobs:
           # Keep the sync stack on the same release track as the export stack:
           # its images interpolate ${JARVIS_IMAGE_TAG:-latest}.
           if [ "${{ github.event_name }}" = "pull_request" ]; then export JARVIS_IMAGE_TAG=dev; fi
+          # DOCKER_HOST=ssh:// resolves bind mounts ON THE VM. The bundle's
+          # relative ./init-db.sh (creates the per-service DBs) only exists on
+          # the runner — docker would bind an empty auto-created dir and
+          # postgres would come up with NO databases (proven live: FATAL
+          # database "jarvis_llm_proxy" does not exist). Ship the file to the
+          # VM and point the compose's INIT_DB_PATH/WHISPER_MODELS_DIR
+          # overrides at VM-absolute paths.
+          scp install-e2e/init-db.sh gpu-vm:/var/lib/jarvis/init-db.sh
+          ssh gpu-vm 'chmod +x /var/lib/jarvis/init-db.sh && mkdir -p /var/lib/jarvis/whisper-models'
+          export INIT_DB_PATH=/var/lib/jarvis/init-db.sh
+          export WHISPER_MODELS_DIR=/var/lib/jarvis/whisper-models
           # shellcheck disable=SC2086 # C is a deliberately word-split command
           C="docker compose --env-file install-e2e/.env -p jarvis-sync -f $SYNC_FILE -f $GPU_OVERRIDE_FILE"
           $C config -q && echo "sync compose valid"
