@@ -161,3 +161,34 @@ def test_sync_compose_deferred_have_no_migrate(sync_compose: dict, svc_id: str) 
         f"{svc_id} is DEFERRED (no alembic in its image) but the sync compose "
         f"gave it a migrate entrypoint — it would crash-loop"
     )
+
+
+def _environment(block: dict) -> dict:
+    """Return a service block's `environment` as a dict, accepting either the
+    mapping (`KEY: value`) or list (`KEY=value`) compose form."""
+    env = block.get("environment") or {}
+    if isinstance(env, list):
+        return dict(e.split("=", 1) for e in env if isinstance(e, str) and "=" in e)
+    return env if isinstance(env, dict) else {}
+
+
+def test_sync_compose_admin_wires_command_center_key(sync_compose: dict) -> None:
+    """The jarvis-admin service in the ADMIN SYNC compose must carry
+    COMMAND_CENTER_ADMIN_KEY, sourced from the shared ADMIN_API_KEY secret.
+
+    The admin dashboard proxies to command-center's admin API (request traces,
+    node detail) with `X-API-Key: COMMAND_CENTER_ADMIN_KEY`. When the reconcile
+    compose omitted it, the key resolved to '' and command-center 401'd every
+    admin API call — the traces page was dead in prod until this wiring landed.
+    SYNC-path guard for that env, mirroring how this suite guards the migrate
+    invariant."""
+    block = sync_compose.get("jarvis-admin")
+    if block is None:
+        pytest.skip("jarvis-admin not enabled in the sync compose")
+    env = _environment(block)
+    assert env.get("COMMAND_CENTER_ADMIN_KEY") == "${ADMIN_API_KEY}", (
+        "jarvis-admin SYNC compose is missing COMMAND_CENTER_ADMIN_KEY="
+        "${ADMIN_API_KEY} — the admin dashboard would forward an empty admin key "
+        "to command-center and every admin API call (traces, node detail) 401s. "
+        f"environment={block.get('environment')!r}"
+    )
