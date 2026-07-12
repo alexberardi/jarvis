@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>A self-hosted, extensible voice assistant that runs on your hardware — not someone else's cloud.</strong><br>
-  Wake word, speech-to-text, text-to-speech, and speaker ID all run locally. 30+ voice commands built in and extensible in plain English — plus an <strong>AI Forge</strong> that generates, sandbox-tests, and publishes a complete new command from a one-sentence description. Bring your own LLM: point it at a cloud API for zero setup, or run it fully local on your own GPU for zero cloud dependency.
+  Wake word, speech-to-text, text-to-speech, and speaker ID all run locally. Timers, reminders, memories, web search, smart home, and routines are built in — and 25+ more commands (weather, music, calendar, sports, movies, email) install in one click from the <a href="https://pantry.jarvisautomation.io">Pantry</a>. Extend it in plain English with the <strong>AI Forge</strong>, which generates, sandbox-tests, and publishes a complete new command from a one-sentence description. Bring your own LLM: point it at a cloud API for zero setup, or run it fully local on your own GPU for zero cloud dependency.
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@ Jarvis takes a different approach. Every component runs locally: speech recognit
 
 What makes Jarvis different from other self-hosted alternatives:
 
-- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. 30+ commands ship today (weather, timers, smart home, sports, music, movies, general knowledge), with more in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
+- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. The core ships with conversation, memories, timers, reminders, web search, smart home, and routines; another 25+ packages (weather, music, calendar, sports, movies, email, drive time) are one click away in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
 - **Private by default, on your hardware.** Speech recognition (whisper.cpp), text-to-speech (Piper/Kokoro), and the command center all run on your own machine. No subscriptions, no one listening.
 - **Bring your own LLM — no GPU required.** Point the LLM proxy at a cloud API (Claude, GPT, Ollama, …) and run the whole stack on any Docker host, or go **fully local** with llama.cpp / vLLM / MLX on your own GPU for zero cloud dependency. Your call on the privacy-vs-convenience trade.
 - **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
@@ -161,7 +161,7 @@ Always included in every deployment.
 | [jarvis-whisper-api](https://github.com/alexberardi/jarvis-whisper-api) | 7706 | Speech-to-text via whisper.cpp with speaker identification | [![Tests](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/docker-build-push.yml) |
 | [jarvis-tts](https://github.com/alexberardi/jarvis-tts) | 7707 | Text-to-speech synthesis via Piper or Kokoro | [![Tests](https://github.com/alexberardi/jarvis-tts/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-tts/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-tts/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-tts/actions/workflows/docker-build-push.yml) |
 | [jarvis-settings-server](https://github.com/alexberardi/jarvis-settings-server) | 7708 | Runtime settings aggregator for all services | [![Tests](https://github.com/alexberardi/jarvis-settings-server/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-settings-server/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-settings-server/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-settings-server/actions/workflows/docker-build-push.yml) |
-| [jarvis-admin](https://github.com/alexberardi/jarvis-admin) | 7710 | Web admin UI for settings, training, and administration | [![Tests](https://github.com/alexberardi/jarvis-admin/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-admin/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-admin/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-admin/actions/workflows/docker-build-push.yml) |
+| [jarvis-admin](https://github.com/alexberardi/jarvis-admin) | 7711 | Web admin UI + setup wizard (settings, training, administration) | [![Tests](https://github.com/alexberardi/jarvis-admin/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-admin/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-admin/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-admin/actions/workflows/docker-build-push.yml) |
 
 ### Optional
 
@@ -214,6 +214,10 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 | [jarvis-device-simplisafe](https://github.com/alexberardi/jarvis-device-simplisafe) | SimpliSafe home security — arm, disarm, sensor status |
 | [jarvis-device-zwave](https://github.com/alexberardi/jarvis-device-zwave) | Z-Wave device control via Z-Wave JS UI |
 | [jarvis-device-homeconnect](https://github.com/alexberardi/jarvis-device-homeconnect) | Bosch/Siemens appliance control via Home Connect |
+| [jarvis-device-homekit](https://github.com/alexberardi/jarvis-device-homekit) | Local Apple HomeKit (HAP) accessories — discover, pair, and control over LAN |
+| [jarvis-device-resideo](https://github.com/alexberardi/jarvis-device-resideo) | Resideo / Honeywell Home thermostat control |
+| [jarvis-device-kasa](https://github.com/alexberardi/jarvis-device-kasa) | TP-Link Kasa smart plugs and lights over the local network |
+| [jarvis-device-lifx](https://github.com/alexberardi/jarvis-device-lifx) | LIFX smart lights over the local network |
 
 ### Prompt Providers (IN PROGRESS)
 
