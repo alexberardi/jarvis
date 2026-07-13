@@ -8,7 +8,7 @@ disclosure.
 
 **Please do not open a public GitHub issue for security problems.**
 
-Email **alex@alexberardi.net** with:
+Email **admin@jarvisautomation.io** with:
 
 - A description of the issue and the affected component / repository
 - Steps to reproduce (a proof-of-concept if possible)
