@@ -109,9 +109,15 @@ def test_data_plane_infra_binds_loopback_only(container: str, port: str) -> None
 
 def test_loki_still_reachable_on_loopback() -> None:
     """Loopback-binding must not have broken Loki itself — jarvis-logs depends
-    on it. Guards against 'fixing' the exposure by breaking the service."""
-    r = requests.get("http://127.0.0.1:3100/ready", timeout=10)
-    assert r.status_code == 200, f"loki /ready returned {r.status_code} on loopback"
+    on it. Guards against 'fixing' the exposure by breaking the service.
+
+    Polls: loki answers /ready with 503 ("ingester not ready") for the first few
+    seconds after boot, so a single GET races its warmup.
+    """
+    assert wait_for_http(3100, "/ready", timeout=120), (
+        "loki never became ready on 127.0.0.1:3100 — the loopback bind should "
+        "not have changed whether it serves, only on which interface"
+    )
 
 
 def test_logs_service_can_still_query_loki() -> None:
