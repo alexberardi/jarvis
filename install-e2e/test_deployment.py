@@ -68,6 +68,67 @@ def test_service_http_reachable(svc) -> None:
     )
 
 
+# ── host exposure of data-plane infra ────────────────────────────────────────
+# Loki has NO authentication of its own and it stores voice transcripts, but the
+# generators published it on 0.0.0.0:3100 by default — it was grouped with
+# grafana as a "dashboard", when in fact grafana is the dashboard (and carries a
+# generated admin password) and loki is the raw log API behind it. On a default
+# install, anyone on the LAN — or the whole internet on a VPS — could read a
+# household's voice history over plain HTTP. postgres/redis are the same class
+# of leak.
+#
+# These must bind to loopback. Only grafana (password-protected) and mosquitto
+# (remote nodes must reach it) legitimately stay on all interfaces.
+
+# container -> container-side port that must not be world-published
+LOOPBACK_ONLY_INFRA: dict[str, str] = {
+    "jarvis-loki": "3100/tcp",
+    "jarvis-postgres": "5432/tcp",
+    "jarvis-redis": "6379/tcp",
+}
+
+WORLD_OPEN_HOST_IPS = {"0.0.0.0", "::", ""}
+
+
+@pytest.mark.parametrize("container,port", sorted(LOOPBACK_ONLY_INFRA.items()))
+def test_data_plane_infra_binds_loopback_only(container: str, port: str) -> None:
+    """The generated compose must not publish state/transcript stores off-host."""
+    raw = docker_inspect(container, "{{json .NetworkSettings.Ports}}")
+    assert raw is not None, f"{container} not found"
+    bindings = (json.loads(raw) or {}).get(port) or []
+
+    # Not publishing the port at all is even safer than loopback — that's fine.
+    for b in bindings:
+        host_ip = b.get("HostIp", "")
+        assert host_ip not in WORLD_OPEN_HOST_IPS, (
+            f"{container} publishes {port} on {host_ip or '0.0.0.0'}:{b.get('HostPort')} "
+            f"— reachable off-host. It must bind 127.0.0.1 "
+            f"(JARVIS_INFRA_BIND_HOST is the documented opt-out)."
+        )
+
+
+def test_loki_still_reachable_on_loopback() -> None:
+    """Loopback-binding must not have broken Loki itself — jarvis-logs depends
+    on it. Guards against 'fixing' the exposure by breaking the service.
+
+    Polls: loki answers /ready with 503 ("ingester not ready") for the first few
+    seconds after boot, so a single GET races its warmup.
+    """
+    assert wait_for_http(3100, "/ready", timeout=120), (
+        "loki never became ready on 127.0.0.1:3100 — the loopback bind should "
+        "not have changed whether it serves, only on which interface"
+    )
+
+
+def test_logs_service_can_still_query_loki() -> None:
+    """The real dependency: jarvis-logs reaches loki over the INTERNAL network
+    (http://loki:3100), so the host binding is irrelevant to it. If this breaks,
+    the loopback bind went too far."""
+    assert wait_for_http(7702, "/health", timeout=120)
+    r = requests.get("http://localhost:7702/health", timeout=10)
+    assert r.status_code == 200, f"jarvis-logs unhealthy after loki bind change: {r.text}"
+
+
 # ── admin "configured" flow (dashboard, not the setup wizard) ────────────────
 
 
