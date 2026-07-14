@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>A self-hosted, extensible voice assistant that runs on your hardware — not someone else's cloud.</strong><br>
-  Wake word, speech-to-text, text-to-speech, and speaker ID all run locally. Timers, reminders, memories, web search, smart home, and routines are built in — and 25+ more commands (weather, music, calendar, sports, movies, email) install in one click from the <a href="https://pantry.jarvisautomation.io">Pantry</a>. Extend it in plain English with the <strong>AI Forge</strong>, which generates, sandbox-tests, and publishes a complete new command from a one-sentence description. Bring your own LLM: point it at a cloud API for zero setup, or run it fully local on your own GPU for zero cloud dependency.
+  Wake word, speech-to-text, text-to-speech, and speaker ID all run locally. <strong>20 commands built in</strong> (timers, reminders, memories, web search, smart home, routines) and <strong>24 more</strong> (weather, music, calendar, sports, movies, email) one click away in the <a href="https://pantry.jarvisautomation.io">Pantry</a>. Extend it in plain English with the <strong>AI Forge</strong>, which generates, sandbox-tests, and publishes a complete new command from a one-sentence description. Bring your own LLM: point it at a cloud API for zero setup, or run it fully local on your own GPU for zero cloud dependency.
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@ Jarvis takes a different approach. Every component runs locally: speech recognit
 
 What makes Jarvis different from other self-hosted alternatives:
 
-- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. The core ships with conversation, memories, timers, reminders, web search, smart home, and routines; another 25+ packages (weather, music, calendar, sports, movies, email, drive time) are one click away in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
+- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. **20 commands ship built in** (conversation, memories, timers, reminders, web search, smart home, routines); another **24 packages** (weather, music, calendar, sports, movies, email, drive time) are one click away in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
 - **Private by default, on your hardware.** Speech recognition (whisper.cpp), text-to-speech (Piper/Kokoro), and the command center all run on your own machine. No subscriptions, no one listening.
 - **Bring your own LLM — no GPU required.** Point the LLM proxy at a cloud API (Claude, GPT, Ollama, …) and run the whole stack on any Docker host, or go **fully local** with llama.cpp / vLLM / MLX on your own GPU for zero cloud dependency. Your call on the privacy-vs-convenience trade.
 - **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
@@ -196,7 +196,6 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 | [jarvis-cmd-open-weather](https://github.com/alexberardi/jarvis-cmd-open-weather) | Weather conditions and forecasts via OpenWeather API |
 | [jarvis-cmd-meteo-weather](https://github.com/alexberardi/jarvis-cmd-meteo-weather) | Weather via Open-Meteo (free, no API key) |
 | [jarvis-cmd-sports](https://github.com/alexberardi/jarvis-cmd-sports) | Sports scores, live games, and schedules via ESPN |
-| [jarvis-cmd-web-search](https://github.com/alexberardi/jarvis-cmd-web-search) | Live web search via Bing or DuckDuckGo |
 | [jarvis-cmd-music-assistant](https://github.com/alexberardi/jarvis-cmd-music-assistant) | Music playback and control via Music Assistant |
 | [jarvis-cmd-audacy](https://github.com/alexberardi/jarvis-cmd-audacy) | Live Audacy radio (sports, news, talk, music) streamed on the node |
 | [jarvis-cmd-pandora](https://github.com/alexberardi/jarvis-cmd-pandora) | Pandora radio streaming with voice control |
@@ -269,7 +268,7 @@ The LLM proxy supports multiple inference backends, so you can match your hardwa
 
 ## Built-in Commands
 
-These ship with the node and command-center — no Pantry install required.
+**20 commands**, grouped by category below. These ship with the node and command-center — no Pantry install required, and they're the tools the LLM can call on a fresh install.
 
 | Category | Commands |
 |----------|----------|
@@ -284,7 +283,7 @@ These ship with the node and command-center — no Pantry install required.
 | **Node Control** | Reboot, restart, and other node-side admin from voice |
 | **Mobile Push** | Send a tap-to-open link to a household member's phone via the notifications inbox |
 
-Everything else (weather, calendar, sports, news, music, movies, drive time, …) ships as a [Community Package](#community-packages) — installable from the Pantry. Add your own by implementing the `IJarvisCommand` interface and running `jdt deploy` from the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit).
+Everything else (weather, calendar, sports, news, music, movies, drive time, …) ships as a [Community Package](#community-packages) — **24 are published in the [Pantry](https://pantry.jarvisautomation.io) today**, installable in one click. Add your own by implementing the `IJarvisCommand` interface and running `jdt deploy` from the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit).
 
 ## Requirements
 
