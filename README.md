@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start"><strong>Install Jarvis</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#requirements">Requirements</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#architecture">Architecture</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#services">Services</a>
+  <a href="#quick-start"><strong>Install Jarvis</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#requirements">Requirements</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#architecture">Architecture</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#services">Services</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://discord.com/invite/kMfKr7EZZ"><strong>Discord</strong></a>
 </p>
 
 ---
@@ -353,6 +353,12 @@ cp .env.example .env
 ```
 
 See each service's README for specific setup instructions, or browse the [developer docs](https://docs.jarvisautomation.dev).
+
+## Community
+
+Questions, bug reports, or you want to show off a package you built — **[join the Discord](https://discord.com/invite/kMfKr7EZZ)**. It's the fastest way to get an answer, and where new packages and hardware builds get shared.
+
+Bugs and feature requests are also welcome as GitHub issues on the relevant repo.
 
 ## License
 
