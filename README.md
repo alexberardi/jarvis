@@ -11,6 +11,21 @@
   <a href="#quick-start"><strong>Install Jarvis</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#requirements">Requirements</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#architecture">Architecture</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#services">Services</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://discord.com/invite/kMfKr7EZZ"><strong>Discord</strong></a>
 </p>
 
+<p align="center">
+  <a href="#license"><img src="https://img.shields.io/badge/license-AGPL--3.0%20%2B%20Apache--2.0-blue" alt="License"></a>
+  <a href="https://docs.jarvisautomation.dev"><img src="https://img.shields.io/badge/docs-jarvisautomation.dev-6366f1" alt="Docs"></a>
+  <a href="https://pantry.jarvisautomation.io"><img src="https://img.shields.io/badge/Pantry-community%20package%20store-16a34a" alt="Pantry"></a>
+</p>
+
+<!--
+  TODO(demo): the single highest-impact addition to this README.
+  Record 20-30 seconds of a real interaction (wake word -> question -> spoken answer,
+  ideally ending with the silent mobile-inbox notification landing on a phone)
+  and embed it here:
+
+  <p align="center"><img src="docs/demo.gif" alt="Jarvis demo" width="700"></p>
+-->
+
 ---
 
 ## Why Jarvis?
@@ -27,6 +42,30 @@ What makes Jarvis different from other self-hosted alternatives:
 - **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
 - **Pi Zero voice nodes.** A ~$15 Raspberry Pi Zero 2 W with a mic/speaker HAT becomes a room-scale voice endpoint, headless-provisioned from the mobile app. (Nodes are cheap; the brain runs on a separate host — see [Requirements](#requirements).)
 - **Modular, not monolithic.** ~13 independent services (each with its own database, CI, Docker image, and tests) plus a catalog of **forkable** command and device packages. Swap or extend any piece without touching the rest — and most `jarvis-cmd-*` / `jarvis-device-*` repos are reference implementations meant to be forked and improved.
+
+## How fast is it?
+
+A voice assistant lives or dies on latency. Jarvis targets a **~5-second end-to-end turn** — wake word → transcription → LLM → first spoken audio — on **fully local models from 3B to 32B**. Four design decisions make that possible:
+
+- **Prefix-cache-aware prompts.** Prompts are structured around llama.cpp's prefix cache so the heavyweight static prompt — system prompt and tool definitions — is processed once per conversation instead of on every turn.
+- **Streaming end to end.**<sup>*</sup> LLM output streams into TTS as it generates — Jarvis starts talking before the model finishes thinking.
+- **Nothing heavy on the hot path.** Long-running jobs (deep research, memory extraction) are offloaded to a Redis-backed queue with idempotent enqueue and authenticated callbacks, so background work never competes with live voice inference.
+- **Tiny, cheap edge nodes.** A Pi Zero 2 W handles wake-word detection (openWakeWord) and the node runtime within a ~512 MB memory budget; the heavy lifting stays on your host.
+
+<sub>*Conversational replies stream straight into TTS; commands that execute tools complete the tool call before speaking.</sub>
+
+## Security model
+
+Local-first is the starting point, not the whole story:
+
+- **Per-speaker data scoping.** Household speaker recognition ties memories, preferences, and context to whoever is talking, so one person's data stays theirs.
+- **Discreet by choice.** Talk to Jarvis by text — chat from the companion app or the browser and read the answer instead of having it spoken to the room. Reminders, research results, and background routines can also deliver silently to your inbox.
+
+## Tested like a product
+
+- **Per-service CI.** Every self-hosted service builds, tests, and publishes its own Docker image independently — see the badge walls under [Services](#services).
+- **Real-GPU nightly installs.** CI rents a real GPU on the Vast.ai spot market (typically under $1/night), installs the full 17-container stack from scratch, and asserts actual GPU offload from llama.cpp logs — not just health checks.
+- **Hundreds of test files across ~64 repositories**, plus a submission pipeline that security-reviews and flags every community package before it can be published — with static analysis and network-isolated container sandbox tests on the standard submission path.
 
 ## Forge
 
