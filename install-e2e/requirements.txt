@@ -1,3 +1,6 @@
 pytest==8.3.4
-requests==2.32.3
+# >=2.33.0 required by vastai 1.4.0 (the GPU lane pins vastai==1.4.0 for the
+# v1 instance API); 2.32.3 made `pip install vastai==1.4.0 -r requirements.txt`
+# ResolutionImpossible.
+requests==2.34.2
 PyYAML==6.0.2
