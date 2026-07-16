@@ -98,6 +98,35 @@ def vastai(*args: str, raw: bool = True, confirm: bool = False) -> Any:
     return json.loads(out) if out else None
 
 
+def v1_instances(*labels: str) -> list[dict]:
+    """List instances via the v1 paginated endpoint.
+
+    Vast retired the legacy v0 list (``GET /api/v0/instances/`` → 410) and is
+    migrating everything to v1; ``show instances-v1`` is the replacement and
+    returns full instance rows with the SAME field shape the v0 payload had, so
+    downstream field access (id, label, actual_status, start_date, ssh_host,
+    ports, …) is unchanged. ``--all`` follows the pagination token for us. Pass
+    one or more ``labels`` to filter server-side.
+    """
+    args = ["show", "instances-v1", "--all"]
+    for lbl in labels:
+        args += ["--label", lbl]
+    data = vastai(*args)
+    if not isinstance(data, dict):
+        return []
+    return data.get("instances") or []
+
+
+def v1_get_instance(instance_id: int) -> dict | None:
+    """Single instance via the v1 list — replaces the retired v0 singular
+    ``show instance {id}`` (``/api/v0/instances/{id}/``). Returns None if the
+    contract is gone."""
+    for inst in v1_instances():
+        if inst.get("id") == instance_id:
+            return inst
+    return None
+
+
 def offer_query(lane_key: str) -> str:
     lane = LANES[lane_key]
     names = ", ".join(lane.gpu_names)
@@ -177,7 +206,7 @@ def ssh_url(instance_id: int) -> tuple[str, str, int] | None:
 def find_instance_by_label(label: str) -> dict | None:
     """Authoritative lookup: the label we passed to create is the one thing we
     control end-to-end, regardless of what create printed."""
-    for inst in vastai("show", "instances") or []:
+    for inst in v1_instances(label):
         if inst.get("label") == label:
             return inst
     return None
@@ -230,7 +259,7 @@ def wait_ssh(instance_id: int, user: str, key_path: str | None) -> dict:
                 f"{RUNNING_TIMEOUT_S}s (host still pulling the VM image?) — "
                 "PROVISIONING failure, not a test failure"
             )
-        info = vastai("show", "instance", str(instance_id)) or {}
+        info = v1_get_instance(instance_id) or {}
         status = info.get("actual_status") or "?"
         if status != last_status:
             log(f"instance {instance_id}: {status}")
@@ -254,7 +283,7 @@ def wait_ssh(instance_id: int, user: str, key_path: str | None) -> dict:
         # The proxy record (ssh_host/ssh_port, also what ssh-url returns) has
         # refused connections for entire windows on live VMs, so probe EVERY
         # plausible endpoint each round and take the first that answers.
-        info = vastai("show", "instance", str(instance_id)) or info
+        info = v1_get_instance(instance_id) or info
         candidates: list[tuple[str, int]] = []
         url = ssh_url(instance_id)
         if url:
@@ -380,11 +409,15 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
 
 def instance_alive(instance_id: int) -> bool:
     try:
-        info = vastai("show", "instance", str(instance_id))
+        rows = v1_instances()
     except Exception:  # noqa: BLE001 — a lookup blip must not report "gone"
         return True
-    # A destroyed contract comes back empty/None or without an id.
-    return bool(info) and info.get("id") is not None
+    # Alive iff the contract still appears in the v1 list. Absence == destroyed.
+    # (The old v0 singular `show instance {id}` now 404s once the contract is
+    # reaped, and a 404 raised here used to be swallowed as "still alive" —
+    # a real destroy read as SURVIVED, then bills forever. Membership is
+    # unambiguous: gone from the list means gone.)
+    return any(inst.get("id") == instance_id for inst in rows)
 
 
 def destroy(instance_id: int) -> None:
@@ -415,7 +448,7 @@ def destroy(instance_id: int) -> None:
 
 def list_labeled_instances() -> list[dict]:
     return [
-        inst for inst in (vastai("show", "instances") or [])
+        inst for inst in v1_instances()
         if str(inst.get("label") or "").startswith(LABEL)
     ]
 
