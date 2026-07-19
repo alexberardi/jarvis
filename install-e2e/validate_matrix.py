@@ -35,6 +35,13 @@ TRACKS = ["stable", "dev"]
 MODULE_SETS = {
     "core-only": "",
     "full": "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin",
+    # `full` + every wizard-OPTIONAL service the installer registry carries.
+    # Unknown ids are intersected away by the generator, so this set is a
+    # silent no-op until the registry entry lands (jarvis-installer#34) — and
+    # from then on it pins optional-service generation + image existence
+    # across every gpu × track combo. go2rtc is deliberately absent: it is
+    # admin-registry-only (the SYNC lane covers it).
+    "full-optional": "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,jarvis-phone-gateway",
 }
 
 IMAGE_RE = re.compile(r"image:\s*(ghcr\.io/\S+)")

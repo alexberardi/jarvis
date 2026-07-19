@@ -48,6 +48,34 @@ HTTP_SERVICES: list[Service] = [
     Service("web", "jarvis-web", 7722, "/"),
 ]
 
+# ── Optional services ────────────────────────────────────────────────────────
+# Wizard-optional services (admin/installer registry `category: optional`).
+# They appear in the stack only when the lane's --modules includes them AND the
+# generator's registry has the entry — so their rows are included by PRESENCE
+# (docker inspect at collection), not hard-coded: a lane that legitimately
+# deploys without an optional service must not fail its health tests, and the
+# same suite covers it automatically the moment it ships in the compose.
+# (jarvis-phone-gateway activates once jarvis-installer#34 merges + its image
+# publishes; go2rtc is admin-registry-only today, covered by the SYNC lane.)
+OPTIONAL_HTTP_SERVICES: list[Service] = [
+    Service("phone-gateway", "jarvis-phone-gateway", 7713, "/health"),
+]
+
+
+def _container_exists(name: str) -> bool:
+    try:
+        return (
+            subprocess.run(
+                ["docker", "inspect", name], capture_output=True
+            ).returncode
+            == 0
+        )
+    except OSError:
+        return False
+
+
+HTTP_SERVICES += [s for s in OPTIONAL_HTTP_SERVICES if _container_exists(s.container)]
+
 # Containers with no published HTTP port we still expect running (infra + worker)
 NON_HTTP_CONTAINERS: list[str] = [
     "jarvis-postgres",

@@ -192,3 +192,62 @@ def test_sync_compose_admin_wires_command_center_key(sync_compose: dict) -> None
         "to command-center and every admin API call (traces, node detail) 401s. "
         f"environment={block.get('environment')!r}"
     )
+
+
+# ── Wizard-OPTIONAL services (post-install add via admin Sync Compose) ───────
+# The SYNC/reconcile path is the ONLY surface that adds an optional service to
+# an existing install (admin ReconcilePage → POST /api/install/reconcile →
+# the same generateCompose this fixture drives), so optional-service emission
+# is pinned HERE. gen-sync-compose.mts enables go2rtc + jarvis-phone-gateway
+# in its --modules default; each test skips-with-reason while the admin
+# registry checked out in CI lacks the entry (phone-gateway until
+# jarvis-admin#78), and pins the block from then on.
+
+
+def test_sync_compose_go2rtc_block(sync_compose: dict) -> None:
+    """go2rtc must be emitted by the SYNC generator when enabled: third-party
+    image + its config-file bind. The bind is the sharp edge — the reconcile
+    engine historically never seeded go2rtc.yaml, so a post-install add came up
+    with Docker binding an EMPTY DIRECTORY where the config file belongs
+    (fixed in jarvis-admin#78 by seeding on both generate and reconcile; the
+    seed itself is unit-tested there — this lane pins the compose side)."""
+    block = sync_compose.get("go2rtc")
+    if block is None:
+        pytest.skip("go2rtc not in the admin registry of this checkout")
+    image = block.get("image", "")
+    assert image.startswith("alexxit/go2rtc"), (
+        f"go2rtc SYNC block has unexpected image {image!r}"
+    )
+    volumes = [str(v) for v in (block.get("volumes") or [])]
+    assert any("go2rtc.yaml" in v and "/config/go2rtc.yaml" in v for v in volumes), (
+        f"go2rtc SYNC block is missing the go2rtc.yaml config bind — a "
+        f"post-install add would boot without config. volumes={volumes!r}"
+    )
+    assert "alembic upgrade head" not in _entrypoint_text(block), (
+        "go2rtc is a third-party image — a migrate entrypoint would crash-loop it"
+    )
+
+
+def test_sync_compose_phone_gateway_block(sync_compose: dict) -> None:
+    """jarvis-phone-gateway (wizard-optional, phone-calls PRD) must be emitted
+    by the SYNC generator when enabled: first-party ghcr image, port 7713, and
+    NO migrate entrypoint (the gateway owns no Postgres — CC owns
+    phone_call_sessions; flagging it migrate:true would crash-loop it)."""
+    block = sync_compose.get("jarvis-phone-gateway")
+    if block is None:
+        pytest.skip(
+            "jarvis-phone-gateway not in the admin registry of this checkout "
+            "(lands with jarvis-admin#78)"
+        )
+    image = block.get("image", "")
+    assert image.startswith("ghcr.io/alexberardi/jarvis-phone-gateway"), (
+        f"phone-gateway SYNC block has unexpected image {image!r}"
+    )
+    ports = [str(p) for p in (block.get("ports") or [])]
+    assert any("7713" in p for p in ports), (
+        f"phone-gateway SYNC block does not publish 7713: ports={ports!r}"
+    )
+    assert "alembic upgrade head" not in _entrypoint_text(block), (
+        "jarvis-phone-gateway owns no database — the sync compose gave it a "
+        "migrate entrypoint, which would crash-loop the container"
+    )
