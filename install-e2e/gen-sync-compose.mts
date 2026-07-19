@@ -55,8 +55,13 @@ const { values } = parseArgs({
       // (not core, unlike the installer), so it's only emitted when enabled. We
       // enable it so the sync compose covers the FULL migrate-set (the static +
       // live lanes assert llm-proxy's migrate entrypoint / at-head too).
+      // go2rtc + jarvis-phone-gateway: the wizard-OPTIONAL services. The SYNC
+      // path is the ONLY post-install add surface (admin ReconcilePage), so
+      // this lane is where optional-service generation must be pinned.
+      // Unknown ids are intersected away by the admin generator, so
+      // jarvis-phone-gateway no-ops until jarvis-admin#78 lands its entry.
       default:
-        "jarvis-llm-proxy-api,jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin",
+        "jarvis-llm-proxy-api,jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,go2rtc,jarvis-phone-gateway",
     },
   },
 });

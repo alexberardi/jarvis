@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       modules:
-        description: "Recommended modules to enable (comma-separated)"
+        description: "Recommended/optional modules to enable (comma-separated)"
         default: "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin"
       sync_live:
         description: "Also run the heavy live SYNC-compose bring-up lane (sync-live job)"
@@ -115,7 +115,7 @@ jobs:
             --storage "$STORAGE_PATH" \
             --gpu none \
             --release "$REL" \
-            --modules "${{ github.event.inputs.modules || 'jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin' }}"
+            --modules "${{ github.event.inputs.modules || 'jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,jarvis-phone-gateway' }}"
 
       - name: Validate generated compose
         run: docker compose -f "$GEN_FILE" -f "$OVERRIDE_FILE" config -q && echo "compose valid"
