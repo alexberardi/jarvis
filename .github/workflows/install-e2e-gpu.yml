@@ -74,6 +74,13 @@ env:
   GEN_FILE: install-e2e/docker-compose.gen.yaml
   GPU_OVERRIDE_FILE: install-e2e/gpu/docker-compose.gpu-ci-override.yaml
   SYNC_FILE: install-e2e/docker-compose.sync.yaml
+  # Known-bad Vast hosts (comma-separated machine ids), skipped by
+  # provision_vast.search_offers. A machine, not an offer: sick hosts expose
+  # several offer slots and keep winning the cheapest-first order.
+  # 97012: passes the SSH-ready probe then hangs minutes later (banner-exchange
+  # dead mid-test) — killed both attempts of run 29679192671 on 2026-07-19.
+  # Revisit/remove entries when the host heals or churns.
+  VAST_EXCLUDE_MACHINES: "97012"
   # Small ungated chatml GGUF — must match JARVIS_MODEL_NAME in the override.
   TEST_MODEL_URL: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
   # Ports the pytest phases expect on localhost (conftest HTTP_SERVICES).

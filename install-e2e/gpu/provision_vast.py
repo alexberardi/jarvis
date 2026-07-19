@@ -143,24 +143,47 @@ def offer_query(lane_key: str) -> str:
     )
 
 
+def excluded_machines() -> set[int]:
+    """Known-bad machine ids from VAST_EXCLUDE_MACHINES (comma-separated).
+
+    Exists because a host can pass the SSH-ready probe and then hang minutes
+    later (machine 97012 killed two runs on 2026-07-19 exactly this way — SSH
+    banner exchange dead mid-test, both offer slots on the same box). Cheap
+    sick hosts keep winning the cheapest-first order, so the workflow pins
+    them here until the host heals or the price moves.
+    """
+    out: set[int] = set()
+    for part in os.environ.get("VAST_EXCLUDE_MACHINES", "").split(","):
+        part = part.strip()
+        if part.isdigit():
+            out.add(int(part))
+    return out
+
+
 def search_offers(lane_key: str) -> list[dict]:
     query = offer_query(lane_key)
     log(f"searching offers: {query}")
     offers = vastai("search", "offers", query, "--order", "dph_total") or []
     # One offer per machine (a broken host is broken for all its offers), and
     # deprioritized geos go to the back of the cheapest-first order.
+    excluded = excluded_machines()
     seen_machines: set = set()
     preferred, deprioritized = [], []
+    n_excluded = 0
     for o in offers:
         mid = o.get("machine_id")
         if mid in seen_machines:
             continue
         seen_machines.add(mid)
+        if mid in excluded:
+            n_excluded += 1
+            continue
         geo = str(o.get("geolocation") or "")
         (deprioritized if geo.endswith(DEPRIORITIZED_GEO_SUFFIXES) else preferred).append(o)
     ordered = preferred + deprioritized
     log(f"{len(offers)} qualifying offer(s) → {len(ordered)} distinct machines "
-        f"({len(deprioritized)} deprioritized by geo)")
+        f"({len(deprioritized)} deprioritized by geo, "
+        f"{n_excluded} excluded via VAST_EXCLUDE_MACHINES)")
     return ordered
 
 
