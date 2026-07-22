@@ -37,6 +37,7 @@ Jarvis takes a different approach. Every component runs locally: speech recognit
 What makes Jarvis different from other self-hosted alternatives:
 
 - **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. **20 commands ship built in** (conversation, memories, timers, reminders, web search, smart home, routines); another **24 packages** (weather, music, calendar, sports, movies, email, drive time) are one click away in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
+- **Fast, for something fully local.** A full turn — you stop talking → Jarvis starts talking — runs in about **2.4 seconds** with no cloud in the loop. Local voice usually means slow; prefix-cache-aware prompts and LAN-direct nodes keep it competitive. [How it works ↓](#how-fast-is-it)
 - **Private by default, on your hardware.** Speech recognition (whisper.cpp), text-to-speech (Piper/Kokoro), and the command center all run on your own machine. No subscriptions, no one listening.
 - **Bring your own LLM — no GPU required.** Point the LLM proxy at a cloud API (Claude, GPT, Ollama, …) and run the whole stack on any Docker host, or go **fully local** with llama.cpp / vLLM / MLX on your own GPU for zero cloud dependency. Your call on the privacy-vs-convenience trade.
 - **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
@@ -45,9 +46,10 @@ What makes Jarvis different from other self-hosted alternatives:
 
 ## How fast is it?
 
-A voice assistant lives or dies on latency. Jarvis targets a **~5-second end-to-end turn** — wake word → transcription → LLM → first spoken audio — on **fully local models from 3B to 32B**. Four design decisions make that possible:
+A voice assistant lives or dies on latency. A full turn — wake word → transcription → LLM → first spoken audio — runs in **~2.4 seconds** on a Pi node co-located with the server, entirely on local models (a 14B live model here), no cloud inference. Five design decisions make that possible:
 
-- **Prefix-cache-aware prompts.** Prompts are structured around llama.cpp's prefix cache so the heavyweight static prompt — system prompt and tool definitions — is processed once per conversation instead of on every turn.
+- **Prefix-cache-aware prompts.** Prompts are structured around llama.cpp's prefix cache so the heavyweight static prompt — system prompt and tool definitions — is processed once and reused, not reprocessed every turn. Keeping that cache warm across a turn (no throwaway calls evicting the single slot) is the difference between a ~0.3s first inference and a ~2.4s one.
+- **Local-first routing.** A node on the server's LAN reaches it directly instead of round-tripping through the cloud relay — an audio upload lands in ~7ms instead of ~2s. Remote nodes still use the relay; it's a per-node override.
 - **Streaming end to end.**<sup>*</sup> LLM output streams into TTS as it generates — Jarvis starts talking before the model finishes thinking.
 - **Nothing heavy on the hot path.** Long-running jobs (deep research, memory extraction) are offloaded to a Redis-backed queue with idempotent enqueue and authenticated callbacks, so background work never competes with live voice inference.
 - **Tiny, cheap edge nodes.** A Pi Zero 2 W handles wake-word detection (openWakeWord) and the node runtime within a ~512 MB memory budget; the heavy lifting stays on your host.
