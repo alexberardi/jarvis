@@ -56,6 +56,25 @@ A voice assistant lives or dies on latency. A full turn — wake word → transc
 
 <sub>*Conversational replies stream straight into TTS; commands that execute tools complete the tool call before speaking.</sub>
 
+<!-- BENCHMARK:START -->
+
+## 🎙️ Which local model routes voice best?
+
+How well each local model routes canned voice commands to the right built-in tool — through command-center's real `/voice/command` path, 80 utterances across 7 tool categories + small-talk negatives. Higher accuracy = fewer wrong/missed actions; lower latency = snappier.
+
+| Model | Correct tool | Correct args | Never mis-fires | Routing (p50) | Est. spoken response |
+|---|--:|--:|--:|--:|--:|
+| **Hermes-3-Llama-3.1-8B (Q4_K_M)** | 100% | 100% | 100% | 661ms | ~2.3s |
+| **Qwen3-8B (Q4_K_M)** | 100% | 100% | 100% | 718ms | ~2.3s |
+| **Qwen3-4B (Q4_K_M)** | 99% | 100% | 100% | 586ms | ~2.2s |
+| **Mistral-7B-Instruct-v0.3 (Q4_K_M)** | 99% | 100% | 90% | 798ms | ~2.4s |
+| **Gemma-2-9B-it (Q4_K_M)** | 99% | 100% | 100% | 1168ms | ~2.8s |
+| **Llama-3.1-8B-Instruct (Q4_K_M)** | 97% | 100% | 100% | 554ms | ~2.2s |
+
+<sub>GPU: **NVIDIA GeForce RTX 3080 Ti, 12288 MiB, driver 580.173.02** · “Est. spoken response” = routing p50 + ~1.6s STT+TTS overhead · generated 2026-07-25 · [how this is measured](install-e2e/gpu/BENCHMARK.md)</sub>
+
+<!-- BENCHMARK:END -->
+
 ## Security model
 
 Local-first is the starting point, not the whole story:
@@ -259,14 +278,19 @@ Standalone command packages installable via the Pantry. Each was extracted from 
 | [jarvis-device-kasa](https://github.com/alexberardi/jarvis-device-kasa) | TP-Link Kasa smart plugs and lights over the local network |
 | [jarvis-device-lifx](https://github.com/alexberardi/jarvis-device-lifx) | LIFX smart lights over the local network |
 
-### Prompt Providers (IN PROGRESS)
+### Prompt Providers
 
-Installable LLM prompt providers for additional model support. **WIP** — packaging story is being finalized; expect interface changes.
+A **prompt provider** is a model-family strategy — the system-prompt shape plus the `<tool_call>` format command-center parses back out (local GGUF models don't do native tool-calling reliably, so tools ride in the prompt). Command-center ships built-in providers for the mainstream local families, each benchmarked for voice-command tool-routing accuracy + latency in the [GPU e2e lane](install-e2e/gpu/BENCHMARK.md):
 
-| Package | Description |
-|---------|-------------|
-| [jarvis-pp-hermes](https://github.com/alexberardi/jarvis-pp-hermes) | Prompt providers for NousResearch Hermes 3 Llama 3.1 8B |
-| [jarvis-pp-mistral](https://github.com/alexberardi/jarvis-pp-mistral) | Prompt providers for Mistral 7B Instruct and Mixtral 8x7B |
+| Family | Built-in provider(s) |
+|--------|----------------------|
+| Qwen 2.5 / Qwen 3 | `Qwen25MediumUntrained`, `Qwen3_8B_Compressed`, … |
+| Llama 3.1 | `Llama31MediumUntrained` |
+| Gemma 2 | `Gemma2MediumUntrained` |
+| Hermes 3 | `HermesMediumUntrained` |
+| Mistral 7B | `Mistral7bMediumUntrained` |
+
+Add a new model by dropping a provider into `jarvis-command-center/app/core/prompt_providers/`, or ship one as a Pantry package — the [jarvis-pp-hermes](https://github.com/alexberardi/jarvis-pp-hermes) and [jarvis-pp-mistral](https://github.com/alexberardi/jarvis-pp-mistral) repos are the reference pattern.
 
 ### Client Libraries
 

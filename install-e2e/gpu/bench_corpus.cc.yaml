@@ -1,0 +1,279 @@
+# Expanded voice-command corpus for the MODEL BENCHMARK (install-e2e/gpu).
+#
+# This is a superset of ../behavior/corpus.cc.yaml (the 29-entry regression
+# gate). It grows every built-in tool category to ~10 utterances so per-category
+# accuracy is a stable RANKING signal across models rather than a noisy 2-3-cell
+# pass/fail gate. It uses the SAME tool schemas (../behavior/tools.cc.yaml) and
+# the SAME matcher semantics (equals / contains / in / any_of).
+#
+# Scope: BUILT-IN node-setup tools only (set_timer, reminder, get_current_time,
+# shopping_list, todo_list, calculate, convert_measurement) + small-talk
+# negatives. control_device is excluded (multi-turn HA flow, needs node context).
+#
+# Assertion discipline (keep the benchmark measuring routing, not matcher luck):
+#   * assert the primary subject + required action/operation only;
+#   * never assert optional secondary args (label, time formatting, num1/num2)
+#     that models fill inconsistently;
+#   * keep utterances UNAMBIGUOUS so temperature=0 routing is deterministic.
+#
+# Each entry: {utterance, tool | null, args?}. See tools.cc.yaml for arg shapes.
+
+# =========================================================================== #
+# set_timer — relative countdowns; duration converted to seconds (min x60)
+# =========================================================================== #
+- utterance: "set a 10 minute timer"
+  tool: set_timer
+  args: {duration_seconds: {equals: 600}}
+- utterance: "set a timer for 5 minutes"
+  tool: set_timer
+  args: {duration_seconds: {equals: 300}}
+- utterance: "give me a 20 minute timer for the pasta"
+  tool: set_timer
+  args: {duration_seconds: {equals: 1200}}
+- utterance: "start a timer for one hour"
+  tool: set_timer
+  args: {duration_seconds: {equals: 3600}}
+- utterance: "set a timer for 45 seconds"
+  tool: set_timer
+  args: {duration_seconds: {equals: 45}}
+- utterance: "set a two minute timer"
+  tool: set_timer
+  args: {duration_seconds: {equals: 120}}
+- utterance: "start a 15 minute timer"
+  tool: set_timer
+  args: {duration_seconds: {equals: 900}}
+- utterance: "set a timer for 90 seconds"
+  tool: set_timer
+  args: {duration_seconds: {equals: 90}}
+- utterance: "set a 30 minute timer"
+  tool: set_timer
+  args: {duration_seconds: {equals: 1800}}
+- utterance: "set a timer for 3 minutes"
+  tool: set_timer
+  args: {duration_seconds: {equals: 180}}
+
+# =========================================================================== #
+# reminder — absolute clock-time alerts; must NOT collapse into set_timer.
+# Assert action=set (+ subject text where unambiguous); time formatting varies.
+# =========================================================================== #
+- utterance: "wake me up at 7 in the morning"
+  tool: reminder
+  args: {action: {equals: set}}
+- utterance: "set an alarm for 6:30 am"
+  tool: reminder
+  args: {action: {equals: set}}
+- utterance: "remind me to call mom at 5pm"
+  tool: reminder
+  args: {action: {equals: set}, text: {contains: "mom"}}
+- utterance: "remind me to take out the trash at 8pm"
+  tool: reminder
+  args: {action: {equals: set}, text: {contains: "trash"}}
+- utterance: "set an alarm for 6 am"
+  tool: reminder
+  args: {action: {equals: set}}
+- utterance: "remind me to take my medication at 9pm"
+  tool: reminder
+  args: {action: {equals: set}, text: {contains: "medication"}}
+- utterance: "wake me up at 5:45 tomorrow morning"
+  tool: reminder
+  args: {action: {equals: set}}
+- utterance: "remind me to leave for the airport at 3pm"
+  tool: reminder
+  args: {action: {equals: set}, text: {contains: "airport"}}
+- utterance: "set an alarm for 7:15 in the morning"
+  tool: reminder
+  args: {action: {equals: set}}
+- utterance: "remind me to feed the dog at 6pm"
+  tool: reminder
+  args: {action: {equals: set}, text: {contains: "dog"}}
+
+# =========================================================================== #
+# get_current_time — clock/date lookups; must NOT collapse into set_timer.
+# =========================================================================== #
+- utterance: "what time is it"
+  tool: get_current_time
+- utterance: "what time is it in Tokyo right now"
+  tool: get_current_time
+  args: {location: {contains: "tokyo"}}
+- utterance: "what time is it in London"
+  tool: get_current_time
+  args: {location: {contains: "london"}}
+- utterance: "what's the time in New York"
+  tool: get_current_time
+  args: {location: {contains: "new york"}}
+- utterance: "what time is it in Paris"
+  tool: get_current_time
+  args: {location: {contains: "paris"}}
+- utterance: "tell me the current time"
+  tool: get_current_time
+- utterance: "what time is it in Sydney"
+  tool: get_current_time
+  args: {location: {contains: "sydney"}}
+- utterance: "what's the current time in Los Angeles"
+  tool: get_current_time
+  args: {location: {contains: "los angeles"}}
+- utterance: "do you know what time it is"
+  tool: get_current_time
+- utterance: "what time is it in Berlin"
+  tool: get_current_time
+  args: {location: {contains: "berlin"}}
+
+# =========================================================================== #
+# shopping_list — items[] is an array (matched on str(value)); action enum.
+# =========================================================================== #
+- utterance: "add milk to my shopping list"
+  tool: shopping_list
+  args: {action: {equals: add}, items: {contains: "milk"}}
+- utterance: "put eggs on the grocery list"
+  tool: shopping_list
+  args: {action: {equals: add}, items: {contains: "eggs"}}
+- utterance: "add bread and butter to the shopping list"
+  tool: shopping_list
+  args: {action: {equals: add}, items: {any_of: ["bread", "butter"]}}
+- utterance: "what's on my shopping list"
+  tool: shopping_list
+  args: {action: {equals: read}}
+- utterance: "remove milk from my shopping list"
+  tool: shopping_list
+  args: {action: {equals: remove}, items: {contains: "milk"}}
+- utterance: "add apples to the grocery list"
+  tool: shopping_list
+  args: {action: {equals: add}, items: {contains: "apple"}}
+- utterance: "put chicken on my shopping list"
+  tool: shopping_list
+  args: {action: {equals: add}, items: {contains: "chicken"}}
+- utterance: "add coffee and sugar to the shopping list"
+  tool: shopping_list
+  args: {action: {equals: add}, items: {any_of: ["coffee", "sugar"]}}
+- utterance: "clear my shopping list"
+  tool: shopping_list
+  args: {action: {equals: clear}}
+- utterance: "add bananas to the grocery list"
+  tool: shopping_list
+  args: {action: {equals: add}, items: {contains: "banana"}}
+
+# =========================================================================== #
+# todo_list — near-neighbour of shopping_list; tasks[] array; action enum.
+# =========================================================================== #
+- utterance: "add call the dentist to my to-do list"
+  tool: todo_list
+  args: {action: {equals: add}, tasks: {contains: "dentist"}}
+- utterance: "add finish the report to my to-do list"
+  tool: todo_list
+  args: {action: {equals: add}, tasks: {contains: "report"}}
+- utterance: "add water the plants to my to-do list"
+  tool: todo_list
+  args: {action: {equals: add}, tasks: {contains: "plants"}}
+- utterance: "what's on my to-do list"
+  tool: todo_list
+  args: {action: {equals: read}}
+- utterance: "add pay the electric bill to my to-do list"
+  tool: todo_list
+  args: {action: {equals: add}, tasks: {any_of: ["electric", "bill"]}}
+- utterance: "add schedule the oil change to my to-do list"
+  tool: todo_list
+  args: {action: {equals: add}, tasks: {contains: "oil"}}
+- utterance: "remove call the dentist from my to-do list"
+  tool: todo_list
+  args: {action: {equals: remove}, tasks: {contains: "dentist"}}
+- utterance: "add book the flight to my to-do list"
+  tool: todo_list
+  args: {action: {equals: add}, tasks: {contains: "flight"}}
+- utterance: "add mow the lawn to my to-do list"
+  tool: todo_list
+  args: {action: {equals: add}, tasks: {contains: "lawn"}}
+- utterance: "clear my to-do list"
+  tool: todo_list
+  args: {action: {equals: clear}}
+
+# =========================================================================== #
+# calculate — two-number arithmetic; operation enum (add/subtract/multiply/divide)
+# =========================================================================== #
+- utterance: "what's 15 times 12"
+  tool: calculate
+  args: {operation: {any_of: ["multiply"]}}
+- utterance: "what is 100 divided by 4"
+  tool: calculate
+  args: {operation: {any_of: ["divide"]}}
+- utterance: "add 25 and 17"
+  tool: calculate
+  args: {operation: {any_of: ["add"]}}
+- utterance: "subtract 8 from 30"
+  tool: calculate
+  args: {operation: {any_of: ["subtract"]}}
+- utterance: "what's 9 times 7"
+  tool: calculate
+  args: {operation: {any_of: ["multiply"]}}
+- utterance: "what is 250 divided by 5"
+  tool: calculate
+  args: {operation: {any_of: ["divide"]}}
+- utterance: "what is 45 plus 55"
+  tool: calculate
+  args: {operation: {any_of: ["add"]}}
+- utterance: "what's 200 minus 75"
+  tool: calculate
+  args: {operation: {any_of: ["subtract"]}}
+- utterance: "multiply 6 by 8"
+  tool: calculate
+  args: {operation: {any_of: ["multiply"]}}
+- utterance: "what is 144 divided by 12"
+  tool: calculate
+  args: {operation: {any_of: ["divide"]}}
+
+# =========================================================================== #
+# convert_measurement — explicit unit conversions ONLY (commands, not "how many")
+# =========================================================================== #
+- utterance: "convert 2 quarts to cups"
+  tool: convert_measurement
+  args: {from_unit: {any_of: ["quart", "cup"]}, to_unit: {any_of: ["quart", "cup"]}}
+- utterance: "convert 5 miles to kilometers"
+  tool: convert_measurement
+  args: {from_unit: {contains: "mile"}, to_unit: {any_of: ["kilomet", "km"]}}
+- utterance: "convert 3 pounds to ounces"
+  tool: convert_measurement
+  args: {from_unit: {any_of: ["pound", "lb"]}, to_unit: {any_of: ["ounce", "oz"]}}
+- utterance: "convert 10 kilometers to miles"
+  tool: convert_measurement
+  args: {from_unit: {any_of: ["kilomet", "km"]}, to_unit: {contains: "mile"}}
+- utterance: "convert 100 celsius to fahrenheit"
+  tool: convert_measurement
+  args: {from_unit: {contains: "celsius"}, to_unit: {contains: "fahrenheit"}}
+- utterance: "convert 2 liters to gallons"
+  tool: convert_measurement
+  args: {from_unit: {contains: "liter"}, to_unit: {contains: "gallon"}}
+- utterance: "convert 6 feet to meters"
+  tool: convert_measurement
+  args: {from_unit: {any_of: ["feet", "foot"]}, to_unit: {contains: "meter"}}
+- utterance: "convert 500 grams to pounds"
+  tool: convert_measurement
+  args: {from_unit: {contains: "gram"}, to_unit: {any_of: ["pound", "lb"]}}
+- utterance: "convert 32 fahrenheit to celsius"
+  tool: convert_measurement
+  args: {from_unit: {contains: "fahrenheit"}, to_unit: {contains: "celsius"}}
+- utterance: "convert 3 cups to milliliters"
+  tool: convert_measurement
+  args: {from_unit: {contains: "cup"}, to_unit: {any_of: ["millilit", "ml"]}}
+
+# =========================================================================== #
+# negatives — small talk must NOT trigger any tool call.
+# =========================================================================== #
+- utterance: "hello there"
+  tool: null
+- utterance: "thank you so much, that's all for now"
+  tool: null
+- utterance: "tell me a joke"
+  tool: null
+- utterance: "how are you doing today"
+  tool: null
+- utterance: "good morning"
+  tool: null
+- utterance: "what's your name"
+  tool: null
+- utterance: "that was really helpful"
+  tool: null
+- utterance: "i'm feeling great today"
+  tool: null
+- utterance: "thanks for your help"
+  tool: null
+- utterance: "never mind"
+  tool: null
