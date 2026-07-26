@@ -40,15 +40,8 @@ on:
         description: "Skip instance destroy for debugging (janitor reaps in 3h)"
         type: boolean
         default: false
-      run_benchmark:
-        description: "Also run the voice-command model benchmark (6-model sweep; +~15min + ~28GB download). Auto-runs on the Sunday nightly."
-        type: boolean
-        default: false
   schedule:
     - cron: "23 7 * * *" # nightly, after install-e2e (06:37) so a common breakage reads top-down
-    # The voice-command model benchmark rides the Sunday nightly (weekly cadence)
-    # — gated in the "Resolve benchmark gate" step by day-of-week, so no extra
-    # provision. Model routing doesn't drift daily; weekly keeps GPU spend bounded.
   # PRs touching the GPU harness run ONLY the read-only marketplace spike
   # (inventory + prices per lane — no instance is ever created, no spend).
   # The paid lanes are hard-gated off pull_request in the plan job below —
@@ -61,7 +54,7 @@ on:
       - ".github/workflows/install-e2e-gpu.yml"
 
 permissions:
-  contents: write # write: the weekly benchmark commits the refreshed README table
+  contents: read
   packages: read
 
 # One GPU run at a time; never cancel mid-run (a cancelled run can strand a
@@ -238,20 +231,6 @@ jobs:
           print(f"whisper={lane.whisper_backend}")
           EOF
 
-      - name: Resolve benchmark gate (weekly Sunday, or manual opt-in; cuda only)
-        id: bench
-        run: |
-          # The 6-model voice-command benchmark runs weekly (Sunday nightly) or
-          # on a manual dispatch with run_benchmark=true — cuda lane only (the
-          # only rentable GPU lane). Gated here so the download + sweep + README
-          # commit steps share one condition.
-          RUN=false
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.run_benchmark }}" = "true" ]; then RUN=true; fi
-          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(date -u +%u)" = "7" ]; then RUN=true; fi  # %u: 7 = Sunday
-          if [ "$LANE" != "cuda" ]; then RUN=false; fi
-          echo "run=$RUN" >> "$GITHUB_OUTPUT"
-          echo "benchmark gate: run=$RUN (event=${{ github.event_name }}, lane=$LANE, dow=$(date -u +%u))"
-
       - name: Ephemeral SSH key
         run: |
           mkdir -p ~/.ssh
@@ -356,58 +335,6 @@ jobs:
           JARVIS_E2E_GEN_FILE: ${{ env.GEN_FILE }}
         run: pytest install-e2e/gpu/test_gpu_inference.py -v --junitxml="gpu-$LANE"-phaseG.xml
 
-      - name: Benchmark — download the model set onto the VM
-        if: steps.bench.outputs.run == 'true'
-        run: |
-          # Fetch the benchmark GGUFs into the model store (bind-mounted at
-          # /app/.models). ~28GB total; resumable (-C -), skips complete files.
-          python3 install-e2e/gpu/bench_models.py --downloads | while IFS=$'\t' read -r rel url; do
-            echo "→ $rel"
-            ssh gpu-vm "mkdir -p \"$STORAGE_PATH/models/$(dirname "$rel")\" && curl -fL --retry 6 --retry-delay 5 -C - -o \"$STORAGE_PATH/models/$rel\" \"$url\""
-          done
-
-      - name: Benchmark — voice-command tool-routing sweep (6 models)
-        if: steps.bench.outputs.run == 'true'
-        env:
-          # The stack is up on the VM; ports are tunnelled to localhost; the
-          # harness swaps models via settings + a model-service restart and drives
-          # CC's real /voice/command path. 24GB GPU → no --free-vram needed.
-          LLM_PROXY_URL: http://localhost:7704
-          LLM_PROXY_SSH: gpu-vm
-          MODEL_CONTAINER: jarvis-llm-proxy-api  # single container supervises the model service
-          API_CONTAINER: jarvis-llm-proxy-api
-          CC_URL: http://localhost:7703
-          AUTH_URL: http://localhost:7701
-          CC_CONTAINER: jarvis-command-center
-          AUTH_CONTAINER: jarvis-auth
-          HEALTH_TIMEOUT_S: "300"
-        run: python3 install-e2e/gpu/benchmark_models.py --out "gpu-$LANE-benchmark.json"
-
-      - name: Benchmark — refresh the README table + commit (weekly run only)
-        if: steps.bench.outputs.run == 'true' && github.event_name == 'schedule'
-        run: |
-          # Guard: never publish an incomplete table. A slow/sick Vast host can
-          # fail to download some GGUFs (they get skipped), and a `stable` image
-          # that predates a provider merge routes those models wrong — either way
-          # we'd overwrite the home-page table with partial/degraded data. Only
-          # commit when every BENCH_MODELS entry produced a result.
-          GOT=$(python3 -c "import json;print(len(json.load(open('gpu-$LANE-benchmark.json')).get('models',[])))" 2>/dev/null || echo 0)
-          WANT=$(python3 install-e2e/gpu/bench_models.py --downloads | wc -l | tr -d ' ')
-          if [ "${GOT:-0}" -lt "$WANT" ]; then
-            echo "::warning title=Benchmark not published::produced ${GOT}/${WANT} models — skipping the README commit (likely incomplete downloads or a pre-release stable image)."
-            exit 0
-          fi
-          python3 install-e2e/gpu/update_readme.py "gpu-$LANE-benchmark.json" --readme README.md
-          if git diff --quiet README.md; then
-            echo "README benchmark section unchanged — nothing to commit"
-          else
-            git config user.name "jarvis-bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add README.md
-            git commit -m "docs(readme): refresh voice-command model benchmark [skip ci]"
-            git push origin HEAD:main || echo "::warning::README benchmark push failed (main advanced?) — next weekly run will retry"
-          fi
-
       - name: Tear down installer stack (keep the model in host storage)
         run: docker compose -p jarvis -f "$GEN_FILE" -f "$GPU_OVERRIDE_FILE" down -v
 
@@ -500,7 +427,6 @@ jobs:
           name: install-e2e-gpu-${{ matrix.lane }}
           path: |
             gpu-*.xml
-            gpu-*-benchmark.json
             provision.json
             ${{ env.GEN_FILE }}
             ${{ env.SYNC_FILE }}

@@ -103,30 +103,41 @@ breakdown, `latency_ms` (p50/p95/mean/min/max), `load_time_s`, and the full
   whisper/tts hold ~3.8 GB. It runs at 4096 ctx (corpus prompts are < 2 K
   tokens). The rented CI GPU (24 GB) has no such constraint.
 
-## Shipping to CI (install-e2e-gpu)
+## Weekly run (persistent box)
 
-The `install-e2e-gpu` lane rents a 24 GB Vast GPU (RTX 4090 / 3090) and runs the
-benchmark **weekly** (the Sunday nightly, gated by day-of-week) or on a manual
-`workflow_dispatch` with `run_benchmark=true` — cuda lane only. Steps (after
-Phase G, before teardown): download the `BENCH_MODELS` GGUFs onto the VM
-(`bench_models.py --downloads`), run this driver, upload `gpu-<lane>-benchmark.json`
-as an artifact, and — on the weekly run — regenerate the README table
-(`update_readme.py`) and commit it.
+The weekly benchmark runs on the **persistent dev setup** — laptop
+command-center → GPU box llm-proxy at `10.0.0.122`, where the models are cached —
+**not** the ephemeral Vast `install-e2e-gpu` lane. That lane re-downloaded ~28 GB
+of GGUFs onto a fresh, often-slow rented host every week (routinely timing out on
+a slow-network box), and its `stable` image lagged the provider merges. The
+persistent box already has the models (no download), uses the live `:dev`
+providers (so all six are correct), and costs nothing to run.
 
-The same driver runs unchanged; only the environment differs (everything is on
-the VM, reached via `DOCKER_HOST=ssh://gpu-vm` + SSH tunnels):
+It's a launchd job on the laptop — a self-hosted GitHub runner is unsafe on a
+**public** repo (a fork PR could run on your machine). Two files:
 
-| Var | CI value | Why it differs from dev |
-|---|---|---|
-| `LLM_PROXY_URL` | `http://localhost:7704` | tunnelled to the VM |
-| `LLM_PROXY_SSH` | `gpu-vm` | the rented VM's ssh alias |
-| `MODEL_CONTAINER` / `API_CONTAINER` | `jarvis-llm-proxy-api` | one container supervises the model service (no separate `llm-proxy-model`) |
-| `CC_CONTAINER` | `jarvis-command-center` | compose service name on the VM |
-| `AUTH_CONTAINER` | `jarvis-auth` | compose service name on the VM |
-| `CC_URL` / `AUTH_URL` | `http://localhost:7703` / `:7701` | tunnelled |
+- `run-weekly-benchmark.sh` — runs the 6-model sweep against `.122` (`--free-vram`
+  so the 9B fits the 12 GB card), then publishes the table to the jarvis README on
+  `origin/main` **only if every model produced a result** — the guard against a
+  partial run overwriting the home page. It uses a dedicated `.venv` (launchd's
+  system python lacks `requests`/`pyyaml`) and publishes via a throwaway worktree
+  off `origin/main` (local `main` is diverged, so it's never touched).
+- `com.jarvis.weekly-benchmark.plist` — schedules it Sunday 03:00 local (runs on
+  next wake if the laptop is asleep).
 
-No `--free-vram` on the 24 GB GPU. **Dependency:** the CC image the lane installs
-must already contain the `Mistral7bMediumUntrained` / `HermesMediumUntrained`
-providers and the Gemma-2 parse fix — ship the command-center change first, then
-validate with a manual `run_benchmark=true` dispatch before trusting the weekly
-schedule.
+Install (once):
+
+```bash
+cd install-e2e/gpu
+/usr/bin/python3 -m venv .venv && ./.venv/bin/pip install requests pyyaml
+cp com.jarvis.weekly-benchmark.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.jarvis.weekly-benchmark.plist
+# run it now:  launchctl kickstart -k gui/$(id -u)/com.jarvis.weekly-benchmark
+# log:         /tmp/jarvis-weekly-benchmark.log
+```
+
+Run-time prereqs: Docker Desktop up (CC container), `.122` reachable over ssh, and
+git push access to `origin`.
+
+The Vast `install-e2e-gpu` lane keeps doing what it's good at — validating a clean
+install + Phase-G GPU inference — and no longer carries the benchmark.
