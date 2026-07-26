@@ -386,6 +386,17 @@ jobs:
       - name: Benchmark — refresh the README table + commit (weekly run only)
         if: steps.bench.outputs.run == 'true' && github.event_name == 'schedule'
         run: |
+          # Guard: never publish an incomplete table. A slow/sick Vast host can
+          # fail to download some GGUFs (they get skipped), and a `stable` image
+          # that predates a provider merge routes those models wrong — either way
+          # we'd overwrite the home-page table with partial/degraded data. Only
+          # commit when every BENCH_MODELS entry produced a result.
+          GOT=$(python3 -c "import json;print(len(json.load(open('gpu-$LANE-benchmark.json')).get('models',[])))" 2>/dev/null || echo 0)
+          WANT=$(python3 install-e2e/gpu/bench_models.py --downloads | wc -l | tr -d ' ')
+          if [ "${GOT:-0}" -lt "$WANT" ]; then
+            echo "::warning title=Benchmark not published::produced ${GOT}/${WANT} models — skipping the README commit (likely incomplete downloads or a pre-release stable image)."
+            exit 0
+          fi
           python3 install-e2e/gpu/update_readme.py "gpu-$LANE-benchmark.json" --readme README.md
           if git diff --quiet README.md; then
             echo "README benchmark section unchanged — nothing to commit"
