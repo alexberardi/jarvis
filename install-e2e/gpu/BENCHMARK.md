@@ -103,37 +103,38 @@ breakdown, `latency_ms` (p50/p95/mean/min/max), `load_time_s`, and the full
   whisper/tts hold ~3.8 GB. It runs at 4096 ctx (corpus prompts are < 2 K
   tokens). The rented CI GPU (24 GB) has no such constraint.
 
-## Weekly run (persistent box)
+## Nightly run (persistent box)
 
-The weekly benchmark runs on the **persistent dev setup** — laptop
+The nightly benchmark runs on the **persistent dev setup** — laptop
 command-center → GPU box llm-proxy at `10.0.0.122`, where the models are cached —
 **not** the ephemeral Vast `install-e2e-gpu` lane. That lane re-downloaded ~28 GB
-of GGUFs onto a fresh, often-slow rented host every week (routinely timing out on
+of GGUFs onto a fresh, often-slow rented host every run (routinely timing out on
 a slow-network box), and its `stable` image lagged the provider merges. The
 persistent box already has the models (no download), uses the live `:dev`
-providers (so all six are correct), and costs nothing to run.
+providers (so all six are correct), and costs nothing to run — which is why it
+runs every night rather than weekly.
 
 It's a launchd job on the laptop — a self-hosted GitHub runner is unsafe on a
 **public** repo (a fork PR could run on your machine). Two files:
 
-- `run-weekly-benchmark.sh` — runs the 6-model sweep against `.122` (`--free-vram`
+- `run-nightly-benchmark.sh` — runs the 6-model sweep against `.122` (`--free-vram`
   so the 9B fits the 12 GB card), then publishes the table to the jarvis README on
   `origin/main` **only if every model produced a result** — the guard against a
   partial run overwriting the home page. It uses a dedicated `.venv` (launchd's
   system python lacks `requests`/`pyyaml`) and publishes via a throwaway worktree
   off `origin/main` (local `main` is diverged, so it's never touched).
-- `com.jarvis.weekly-benchmark.plist` — schedules it Sunday 03:00 local (runs on
-  next wake if the laptop is asleep).
+- `com.jarvis.nightly-benchmark.plist` — schedules it 03:00 local every night
+  (runs on next wake if the laptop is asleep).
 
 Install (once):
 
 ```bash
 cd install-e2e/gpu
 /usr/bin/python3 -m venv .venv && ./.venv/bin/pip install requests pyyaml
-cp com.jarvis.weekly-benchmark.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.jarvis.weekly-benchmark.plist
-# run it now:  launchctl kickstart -k gui/$(id -u)/com.jarvis.weekly-benchmark
-# log:         /tmp/jarvis-weekly-benchmark.log
+cp com.jarvis.nightly-benchmark.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.jarvis.nightly-benchmark.plist
+# run it now:  launchctl kickstart -k gui/$(id -u)/com.jarvis.nightly-benchmark
+# log:         /tmp/jarvis-nightly-benchmark.log
 ```
 
 Run-time prereqs: Docker Desktop up (CC container), `.122` reachable over ssh, and

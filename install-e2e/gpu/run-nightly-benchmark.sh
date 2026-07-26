@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Weekly voice-command model benchmark — runs on the PERSISTENT dev setup
+# Nightly voice-command model benchmark — runs on the PERSISTENT dev setup
 # (laptop command-center → GPU box llm-proxy at 10.0.0.122, models cached), NOT
 # the ephemeral Vast install-e2e-gpu lane. The models live permanently on the
 # box, so there is no per-run 26GB download to flake on, and it uses the live
 # :dev providers (so Mistral/Hermes/Gemma are correct, unlike a stale stable
-# image). Scheduled by launchd — see com.jarvis.weekly-benchmark.plist.
+# image). Inference is free on our own hardware, so it runs every night.
+# Scheduled by launchd — see com.jarvis.nightly-benchmark.plist.
 #
 # Flow: run the 6-model sweep against .122, then publish the results table to the
 # jarvis README on origin/main — but ONLY if every model produced a result
 # (guard against a partial run overwriting the home page with bad data).
 #
-#   run-weekly-benchmark.sh                       # full: benchmark + publish
-#   run-weekly-benchmark.sh --publish-only F.json # publish an existing result (test)
-#   run-weekly-benchmark.sh --no-publish          # benchmark only, don't push
+#   run-nightly-benchmark.sh                       # full: benchmark + publish
+#   run-nightly-benchmark.sh --publish-only F.json # publish an existing result (test)
+#   run-nightly-benchmark.sh --no-publish          # benchmark only, don't push
 set -uo pipefail
 
 # launchd runs with a minimal environment — set PATH explicitly so python3,
@@ -21,7 +22,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PA
 
 REPO="${JARVIS_REPO:-/Users/alexanderberardi/jarvis}"
 GPUDIR="$REPO/install-e2e/gpu"
-OUT="${BENCH_OUT:-/tmp/jarvis-weekly-benchmark.json}"
+OUT="${BENCH_OUT:-/tmp/jarvis-nightly-benchmark.json}"
 
 # launchd's system python3 lacks requests/pyyaml; use the dedicated venv
 # (created once: `/usr/bin/python3 -m venv .venv && .venv/bin/pip install
@@ -41,7 +42,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-echo "===== weekly benchmark $(date -u +%FT%TZ) mode=$MODE ====="
+echo "===== nightly benchmark $(date -u +%FT%TZ) mode=$MODE ====="
 
 # Resolve OUT to an absolute path — the publish step cd's to the repo, so a
 # relative results path would break there.
@@ -84,7 +85,7 @@ else
   if git -C "$WT" push origin HEAD:main; then
     echo "PUBLISHED refreshed benchmark to origin/main"
   else
-    echo "ERROR: push failed (main advanced? auth?) — will retry next week"
+    echo "ERROR: push failed (main advanced? auth?) — will retry tomorrow night"
   fi
 fi
 echo "===== done $(date -u +%FT%TZ) ====="

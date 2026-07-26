@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Weekly voice-command model benchmark, on the persistent dev setup (laptop
+  Nightly voice-command model benchmark, on the persistent dev setup (laptop
   command-center -> GPU box llm-proxy at 10.0.0.122, models cached). Replaces the
-  flaky ephemeral-Vast benchmark. Fires Sunday 03:00 local (runs on next wake if
-  the laptop is asleep). Install:
+  flaky ephemeral-Vast benchmark. The models live permanently on the box (no
+  per-run download) and inference is free on our own hardware, so it runs every
+  night rather than weekly. Fires 03:00 local (runs on next wake if the laptop
+  is asleep). Install:
 
-    cp install-e2e/gpu/com.jarvis.weekly-benchmark.plist ~/Library/LaunchAgents/
-    launchctl load ~/Library/LaunchAgents/com.jarvis.weekly-benchmark.plist
-    # trigger a run now:  launchctl kickstart -k gui/$(id -u)/com.jarvis.weekly-benchmark
-    # log:  /tmp/jarvis-weekly-benchmark.log
+    cp install-e2e/gpu/com.jarvis.nightly-benchmark.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.jarvis.nightly-benchmark.plist
+    # trigger a run now:  launchctl kickstart -k gui/$(id -u)/com.jarvis.nightly-benchmark
+    # log:  /tmp/jarvis-nightly-benchmark.log
 
   Prereqs at run time: Docker Desktop running (CC container), 10.0.0.122 reachable
   over ssh, and git push access to origin (ssh key or keychain).
@@ -17,16 +19,14 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.jarvis.weekly-benchmark</string>
+  <string>com.jarvis.nightly-benchmark</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/alexanderberardi/jarvis/install-e2e/gpu/run-weekly-benchmark.sh</string>
+    <string>/Users/alexanderberardi/jarvis/install-e2e/gpu/run-nightly-benchmark.sh</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
-    <key>Weekday</key>
-    <integer>0</integer>
     <key>Hour</key>
     <integer>3</integer>
     <key>Minute</key>
@@ -35,9 +35,9 @@
   <key>RunAtLoad</key>
   <false/>
   <key>StandardOutPath</key>
-  <string>/tmp/jarvis-weekly-benchmark.log</string>
+  <string>/tmp/jarvis-nightly-benchmark.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/jarvis-weekly-benchmark.log</string>
+  <string>/tmp/jarvis-nightly-benchmark.log</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
