@@ -64,14 +64,14 @@ How well each local model routes canned voice commands to the right built-in too
 
 | Model | Correct tool | Correct args | Never mis-fires | Routing (p50) | Est. spoken response |
 |---|--:|--:|--:|--:|--:|
-| **Hermes-3-Llama-3.1-8B (Q4_K_M)** | 100% | 100% | 100% | 681ms | ~2.3s |
-| **Qwen3-8B (Q4_K_M)** | 100% | 100% | 100% | 732ms | ~2.3s |
-| **Llama-3.1-8B-Instruct (Q4_K_M)** | 99% | 100% | 100% | 554ms | ~2.2s |
-| **Qwen3-4B (Q4_K_M)** | 99% | 100% | 100% | 589ms | ~2.2s |
-| **Mistral-7B-Instruct-v0.3 (Q4_K_M)** | 99% | 100% | 90% | 800ms | ~2.4s |
-| **Gemma-2-9B-it (Q4_K_M)** | 97% | 100% | 100% | 1139ms | ~2.7s |
+| **Gemma-2-9B-it (Q4_K_M)** | 100% | 100% | 100% | 1221ms | ~2.8s |
+| **Qwen3-4B (Q4_K_M)** | 99% | 100% | 100% | 617ms | ~2.2s |
+| **Llama-3.1-8B-Instruct (Q4_K_M)** | 97% | 100% | 100% | 587ms | ~2.2s |
+| **Hermes-3-Llama-3.1-8B (Q4_K_M)** | 97% | 100% | 100% | 711ms | ~2.3s |
+| **Qwen3-8B (Q4_K_M)** | 97% | 100% | 100% | 746ms | ~2.3s |
+| **Mistral-7B-Instruct-v0.3 (Q4_K_M)** | 96% | 100% | 90% | 823ms | ~2.4s |
 
-<sub>GPU: **NVIDIA GeForce RTX 3080 Ti, 12288 MiB, driver 580.173.02** · “Est. spoken response” = routing p50 + ~1.6s STT+TTS overhead · generated 2026-07-27 · [how this is measured](install-e2e/gpu/BENCHMARK.md)</sub>
+<sub>GPU: **NVIDIA GeForce RTX 3080 Ti, 12288 MiB, driver 580.173.02** · “Est. spoken response” = routing p50 + ~1.6s STT+TTS overhead · generated 2026-07-29 · [how this is measured](install-e2e/gpu/BENCHMARK.md)</sub>
 
 <!-- BENCHMARK:END -->
 
