@@ -86,6 +86,15 @@ NON_HTTP_CONTAINERS: list[str] = [
     "llm-proxy-worker",
 ]
 
+# The llama-server sidecar (Qwen3.5-9B REST serving — the llama-server-sidecar
+# rollout §6.4) is deployed ONLY on the sidecar GPU e2e lane; CPU and in-process
+# lanes never have it. Append it conditionally (same pattern as the optional HTTP
+# services above) so test_deployment asserts it's running + healthy where present
+# — catching the §9b missing-weights crash-loop — without affecting any other
+# lane. Deliberately NOT in MIGRATE_SET below: a third-party image with no DB.
+if _container_exists("llama-server-9b"):
+    NON_HTTP_CONTAINERS.append("llama-server-9b")
+
 ALL_CONTAINERS: list[str] = [s.container for s in HTTP_SERVICES] + NON_HTTP_CONTAINERS
 
 # ── Migrate-set ──────────────────────────────────────────────────────────────

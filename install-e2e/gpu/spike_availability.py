@@ -62,6 +62,11 @@ def main() -> None:
 
     exit_code = 0
     for key, lane in LANES.items():
+        # Serving variants (e.g. the llama-server sidecar lane) rent the SAME
+        # hardware as their base GPU lane — a marketplace spike on them is
+        # redundant. Availability is decided by the base lane's row.
+        if lane.serving != "in-process":
+            continue
         query = offer_query(key)
         offers = vastai("search", "offers", query, "--order", "dph_total") or []
         # Same query WITHOUT the VM constraint, to show whether vms_enabled is
