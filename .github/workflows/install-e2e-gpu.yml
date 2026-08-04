@@ -124,8 +124,11 @@ jobs:
           # Nightly default is cuda-only: the 2026-07-02 spike found ZERO AMD
           # inventory on Vast (gpu_arch=amd → 0 offers marketplace-wide). The
           # nightly spike job below keeps watching — widen this when it turns.
+          # `cuda-sidecar` is dispatch-only (NOT in the default) — it exercises
+          # the llama-server REST sidecar and stays dormant until the generators
+          # support `--serving llama-server-sidecar` (rollout §4c).
           LANES="${{ github.event.inputs.lanes || 'cuda' }}"
-          JSON=$(echo "$LANES" | tr ',' '\n' | sed 's/ //g' | grep -E '^(cuda|vulkan|rocm)$' | jq -Rcs 'split("\n") | map(select(length>0))')
+          JSON=$(echo "$LANES" | tr ',' '\n' | sed 's/ //g' | grep -E '^(cuda|cuda-sidecar|vulkan|rocm)$' | jq -Rcs 'split("\n") | map(select(length>0))')
           echo "enabled=true" >> "$GITHUB_OUTPUT"
           echo "lanes=$JSON" >> "$GITHUB_OUTPUT"
           echo "running lanes: $JSON"
@@ -229,6 +232,8 @@ jobs:
           lane = LANES[os.environ["LANE"]]
           print(f"gpu={lane.gpu_type}")
           print(f"whisper={lane.whisper_backend}")
+          print(f"serving={lane.serving}")
+          print(f"marker_container={lane.marker_container}")
           EOF
 
       - name: Ephemeral SSH key
@@ -277,6 +282,17 @@ jobs:
       - name: Bootstrap remote (GPU visibility, docker, storage, test model)
         run: ssh gpu-vm 'bash -s' -- "${{ steps.lane.outputs.gpu }}" "$TEST_MODEL_URL" < install-e2e/gpu/bootstrap_remote.sh
 
+      - name: Sidecar lane — model-file contract var (rollout §6.4)
+        if: steps.lane.outputs.serving == 'llama-server-sidecar'
+        run: |
+          # The generated `llama-server-9b` block must template its `-m` path as
+          # `/models/${JARVIS_SIDECAR_MODEL_FILE:-<preset default>}` so this e2e
+          # can serve the small staged test GGUF (bootstrap downloaded it) rather
+          # than the multi-GB 9B. CONTRACT: requires the installer/admin sidecar
+          # block (rollout §3/§4c) to honor this var. GITHUB_ENV → the later
+          # `docker compose config/up` steps substitute it.
+          echo "JARVIS_SIDECAR_MODEL_FILE=$(basename "$TEST_MODEL_URL")" >> "$GITHUB_ENV"
+
       - name: Generate the install artifact (installer pattern, GPU flavor)
         working-directory: jarvis-installer
         run: |
@@ -286,12 +302,21 @@ jobs:
           # Schedule/dispatch default to stable: what users actually install.
           REL="${{ github.event.inputs.release || 'stable' }}"
           if [ "${{ github.event_name }}" = "pull_request" ]; then REL=dev; fi
+          # Sidecar lane flips the proxy to a REST llama-server sidecar. DORMANT
+          # until gen-export-compose.mts supports --serving (rollout §4c) — until
+          # then the cuda-sidecar lane is dispatch-only and errors here on the
+          # unknown flag, which is the intended "not ready yet" signal.
+          SERVING_ARG=""
+          if [ "${{ steps.lane.outputs.serving }}" != "in-process" ]; then
+            SERVING_ARG="--serving ${{ steps.lane.outputs.serving }}"
+          fi
+          # shellcheck disable=SC2086 # SERVING_ARG is a deliberately split flag
           npx tsx scripts/gen-export-compose.mts \
             --out "$GITHUB_WORKSPACE/$GEN_FILE" \
             --storage "$STORAGE_PATH" \
             --gpu "${{ steps.lane.outputs.gpu }}" \
             --whisper-backend "${{ steps.lane.outputs.whisper }}" \
-            --release "$REL"
+            --release "$REL" $SERVING_ARG
 
       - name: Validate generated compose
         run: docker compose -f "$GEN_FILE" -f "$GPU_OVERRIDE_FILE" config -q && echo "compose valid"
@@ -344,11 +369,18 @@ jobs:
           npm ci || npm install
           REL="${{ github.event.inputs.release || 'stable' }}"
           if [ "${{ github.event_name }}" = "pull_request" ]; then REL=dev; fi
+          # Same sidecar gating as the export generator above — the SYNC/reconcile
+          # generator (admin) must also honor --serving (rollout §4c/§5).
+          SERVING_ARG=""
+          if [ "${{ steps.lane.outputs.serving }}" != "in-process" ]; then
+            SERVING_ARG="--serving ${{ steps.lane.outputs.serving }}"
+          fi
+          # shellcheck disable=SC2086 # SERVING_ARG is a deliberately split flag
           npx tsx "$GITHUB_WORKSPACE/install-e2e/gen-sync-compose.mts" \
             --out "$GITHUB_WORKSPACE/$SYNC_FILE" --bundle \
             --gpu "${{ steps.lane.outputs.gpu }}" \
             --whisper-backend "${{ steps.lane.outputs.whisper }}" \
-            --release "$REL"
+            --release "$REL" $SERVING_ARG
 
       - name: Bring up the SYNC stack on the VM
         run: |
@@ -417,6 +449,11 @@ jobs:
           echo "── llm-proxy in-container processes + 7705 ──"
           docker exec jarvis-llm-proxy-api ps aux 2>&1 | head -20 || true
           docker exec jarvis-llm-proxy-api python -c "import urllib.request;print(urllib.request.urlopen('http://localhost:7705/health',timeout=5).status)" 2>&1 || true
+          # Sidecar lane: the GGUF/GPU work + any crash-loop is in the
+          # llama-server container, not the (REST) proxy. Harmless no-op when the
+          # sidecar isn't present (in-process lanes).
+          echo "── llama-server-9b log HEAD (sidecar lane) ──"
+          docker logs llama-server-9b 2>&1 | head -150 || true
           echo "── whisper log head ──"
           docker logs jarvis-whisper-api 2>&1 | head -60 || true
 

@@ -32,6 +32,18 @@ class Lane:
     # tag (real tags: hub.docker.com/r/vastai/kvm/tags). The cuda-*-auto images
     # ship the NVIDIA driver; AMD lanes get the plain CLI image.
     vm_image: str
+    # How the LLM proxy serves the model on this lane:
+    #   "in-process"           — proxy loads the GGUF itself (default; every lane
+    #                            below except the sidecar one).
+    #   "llama-server-sidecar" — proxy runs a REST backend against a separate
+    #                            llama.cpp `llama-server` container (the
+    #                            Qwen3.5-9B hybrid-SSM rollout). CUDA-only.
+    serving: str = "in-process"
+    # Which container's logs carry the ggml backend-init + `offloaded N/M layers`
+    # markers Phase G greps. In-process: the proxy loads the model, so the proxy.
+    # Sidecar: the proxy is REST and does NO GGUF load — the markers live ONLY in
+    # the llama-server container, so reading the proxy's logs would falsely fail.
+    marker_container: str = "jarvis-llm-proxy-api"
 
 
 # Offload proof, common to all lanes: llama.cpp logs "offloaded N/M layers to
@@ -53,6 +65,27 @@ LANES: dict[str, Lane] = {
         # tag were the broken cheap hosts, which the fail-fast offer strategy
         # now skips past.
         vm_image="docker.io/vastai/kvm:cuda-12.4.1-auto",
+    ),
+    # Same rented hardware + CUDA markers as `cuda`, but the proxy serves the
+    # model through a llama.cpp `llama-server` REST sidecar instead of loading it
+    # in-process (the Qwen3.5-9B hybrid-SSM rollout — see
+    # jarvis-installer/docs/llama-server-sidecar-rollout.md). CUDA-only: the
+    # sidecar image (ghcr.io/ggml-org/llama.cpp:server-cuda) needs the NVIDIA
+    # runtime. Opt-in only — NOT in the nightly default (`cuda`); dispatch
+    # `lanes: cuda-sidecar` to run it. DORMANT until the installer/admin
+    # generators support the `--serving llama-server-sidecar` enablement flag
+    # (rollout §4c) — without it, compose generation errors on an unknown flag.
+    "cuda-sidecar": Lane(
+        key="cuda-sidecar",
+        gpu_type="nvidia",
+        whisper_backend="cuda",
+        gpu_names=("RTX_4090", "RTX_3090"),
+        max_dph=0.60,
+        disk_gb=100,
+        device_markers=("ggml_cuda_init: found", "CUDA devices"),
+        vm_image="docker.io/vastai/kvm:cuda-12.4.1-auto",
+        serving="llama-server-sidecar",
+        marker_container="llama-server-9b",
     ),
     "vulkan": Lane(
         key="vulkan",

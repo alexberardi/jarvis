@@ -11,6 +11,12 @@
 #
 # Same file works for the export stack AND the admin SYNC stack (service names
 # match; `environment` maps merge).
+#
+# The `cuda-sidecar` lane REUSES this file unchanged: there the proxy is already
+# REST (the generator did that via --serving) with RUN_MODEL_SERVICE=false, so
+# JARVIS_MODEL_NAME here is simply ignored — harmless. That lane instead serves
+# the model from the `llama-server-9b` sidecar, whose `-m` path is selected by
+# the workflow's JARVIS_SIDECAR_MODEL_FILE contract var (rollout §6.4), not here.
 
 services:
   jarvis-llm-proxy-api:

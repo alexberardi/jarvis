@@ -141,18 +141,23 @@ def test_chat_completion_real_local_model():
 
 
 def test_llm_backend_initialized_gpu_device():
-    logs = wait_for_markers("jarvis-llm-proxy-api", LANE.device_markers)
+    # In-process lanes: markers are in the proxy (it loads the GGUF). Sidecar
+    # lane: the proxy is REST and loads nothing — the ggml init lines live only
+    # in the llama-server container. LANE.marker_container selects the right one.
+    container = LANE.marker_container
+    logs = wait_for_markers(container, LANE.device_markers)
     assert any(m in logs for m in LANE.device_markers), (
-        f"lane '{LANE.key}': none of {LANE.device_markers} in llm-proxy logs "
+        f"lane '{LANE.key}': none of {LANE.device_markers} in {container} logs "
         f"after {MARKER_TIMEOUT_S}s — the backend did not initialize the GPU "
         "(silent CPU fallback?)"
     )
 
 
 def test_llm_layers_offloaded_to_gpu():
-    logs = wait_for_markers("jarvis-llm-proxy-api", ("layers to GPU",))
+    container = LANE.marker_container
+    logs = wait_for_markers(container, ("layers to GPU",))
     matches = [int(m.group(1)) for m in re.finditer(OFFLOAD_PATTERN, logs)]
-    assert matches, "no 'offloaded N/M layers to GPU' line in llm-proxy logs"
+    assert matches, f"no 'offloaded N/M layers to GPU' line in {container} logs"
     assert max(matches) > 0, (
         f"model loaded with 0 GPU layers (offload counts: {matches}) — "
         "inference is running on CPU despite the GPU image"
