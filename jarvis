@@ -131,6 +131,10 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
             jarvis-ocr-service*)   SERVICES[$i]="jarvis-ocr-service|7031|3|local|/health" ;;
         esac
     done
+    # jarvis-osx-api is native-ONLY (needs TCC grants + a GUI session; no
+    # Docker image exists) and macOS-only, so it joins the registry only on
+    # Darwin — mode is always local, never rewritten to docker.
+    SERVICES+=("jarvis-osx-api|7723|3|local|/health")
 fi
 
 # ── Database mapping ─────────────────────────────────────────────────────────
