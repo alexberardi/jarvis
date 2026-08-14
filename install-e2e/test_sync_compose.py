@@ -67,13 +67,9 @@ def _admin_server_dir() -> Path | None:
     return None
 
 
-@pytest.fixture(scope="module")
-def sync_compose() -> dict:
-    """Regenerate the admin SYNC compose and return its parsed `services` map.
-
-    Skips if the jarvis-admin/server checkout or tsx isn't available (so local
-    runs without the installer/admin checkout don't hard-fail) — CI provides
-    both."""
+def _admin_or_skip() -> Path:
+    """Locate the jarvis-admin/server checkout + tsx, or SKIP (local runs without
+    the admin checkout don't hard-fail) — CI provides both."""
     admin = _admin_server_dir()
     if admin is None:
         pytest.skip(
@@ -82,11 +78,19 @@ def sync_compose() -> dict:
         )
     if shutil.which("npx") is None:
         pytest.skip("npx/tsx not available to run the admin SYNC generator")
+    return admin
 
-    out = _HERE / "docker-compose.sync.yaml"
+
+def _gen_sync_services(
+    admin: Path, out_name: str, extra_args: list[str] | None = None
+) -> dict:
+    """Run gen-sync-compose.mts against the admin checkout and return the parsed
+    `services` map. Skips (not fails) if the generator can't run — CI installs the
+    admin deps; local dev without them self-skips."""
+    out = _HERE / out_name
     script = _HERE / "gen-sync-compose.mts"
     res = subprocess.run(
-        ["npx", "tsx", str(script), "--out", str(out)],
+        ["npx", "tsx", str(script), "--out", str(out), *(extra_args or [])],
         cwd=str(admin), capture_output=True, text=True, timeout=180,
     )
     if res.returncode != 0:
@@ -98,6 +102,27 @@ def sync_compose() -> dict:
     services = doc.get("services") if isinstance(doc, dict) else None
     assert services, f"sync compose has no services block:\n{out.read_text()[:300]}"
     return services
+
+
+@pytest.fixture(scope="module")
+def sync_compose() -> dict:
+    """The admin SYNC compose at the DEFAULT serving type (llama-cpp / in-process
+    GGUF), parsed `services` map."""
+    return _gen_sync_services(_admin_or_skip(), "docker-compose.sync.yaml")
+
+
+@pytest.fixture(scope="module")
+def sync_compose_llama_server() -> dict:
+    """The admin SYNC compose regenerated with servingType=llama-server, proving a
+    clean install / sync regen with that serving type emits the managed
+    llama-server sidecar (the docker-compose.override.yml footgun fix). STATIC
+    only — never `docker compose up`'d, since the sidecar needs a GPU + real GGUF
+    (that boot check is the gpu-nightly cuda-sidecar lane, #20)."""
+    return _gen_sync_services(
+        _admin_or_skip(),
+        "docker-compose.sync-llama.yaml",
+        ["--serving-type", "llama-server"],
+    )
 
 
 def _entrypoint_text(block: dict) -> str:
@@ -250,4 +275,58 @@ def test_sync_compose_phone_gateway_block(sync_compose: dict) -> None:
     assert "alembic upgrade head" not in _entrypoint_text(block), (
         "jarvis-phone-gateway owns no database — the sync compose gave it a "
         "migrate entrypoint, which would crash-loop the container"
+    )
+
+
+# ── Live-model llama-server sidecar (servingType) ─────────────────────────────
+# The live voice model is served by a standalone llama.cpp `llama-server` sidecar.
+# It used to live ONLY in a hand-maintained docker-compose.override.yml the admin
+# SYNC generator didn't emit — so a reconcile silently dropped it and killed live
+# inference (prod, 2026-08). It's now a first-class generated service gated on
+# servingType=llama-server (jarvis-admin#101). These two lanes pin that on a clean
+# install / sync: the default omits it, the explicit serving type emits it
+# correctly. Static only — the sidecar itself needs a GPU + real GGUF, so the
+# actual boot check is the gpu-nightly cuda-sidecar lane (#20).
+
+
+def test_default_sync_compose_omits_llama_server_sidecar(sync_compose: dict) -> None:
+    """Default serving (llama-cpp, in-process GGUF) must NOT emit the standalone
+    llama-server sidecar. Pins the servingType gate so a clean install / sync
+    without an explicit serving type stays exactly as before."""
+    assert "llama-server" not in sync_compose, (
+        "the admin SYNC compose emitted a llama-server sidecar WITHOUT "
+        "servingType=llama-server — the serving-type gate is broken"
+    )
+
+
+def test_llama_server_sync_compose_emits_managed_sidecar(
+    sync_compose_llama_server: dict,
+) -> None:
+    """servingType=llama-server must emit the llama-server sidecar as a first-class
+    generated service, so a sync regen can't silently drop the live-model sidecar
+    (the override.yml footgun that took prod live inference down)."""
+    block = sync_compose_llama_server.get("llama-server")
+    assert block is not None, (
+        "servingType=llama-server did NOT emit a llama-server service — the "
+        "live-model sidecar would vanish on the next sync (the override.yml footgun)"
+    )
+    # llama.cpp server image + host 7799 -> 8080.
+    assert "llama.cpp:server-cuda" in str(block.get("image", "")), block.get("image")
+    ports = " ".join(map(str, block.get("ports") or []))
+    assert "7799" in ports and "8080" in ports, block.get("ports")
+    # Env-parametrized command: the live model retargets via ${LIVE_MODEL_FILE} in
+    # .env with no YAML edit (the settings-driven live-model swap depends on this).
+    cmd = " ".join(map(str, block.get("command") or []))
+    assert "LIVE_MODEL_FILE" in cmd, cmd
+    assert "--chat-template" in cmd, cmd
+    # NVIDIA GPU passthrough present.
+    assert "nvidia" in str(block.get("deploy") or ""), block.get("deploy")
+    # It is NOT a Jarvis app: no alembic migrate wrapper, no app-to-app creds.
+    assert "alembic upgrade head" not in _entrypoint_text(block), (
+        "llama-server got an alembic migrate entrypoint — it is not a DB-backed "
+        "Jarvis app; the generator must not wrap it"
+    )
+    assert not any("JARVIS_APP_ID" in k for k in _environment(block)), (
+        f"llama-server should carry NO app-to-app creds (not a Jarvis app); "
+        f"environment={block.get('environment')!r}"
     )
