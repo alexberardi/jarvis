@@ -63,6 +63,14 @@ const { values } = parseArgs({
       default:
         "jarvis-llm-proxy-api,jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,go2rtc,jarvis-phone-gateway",
     },
+    // Live-model serving type (state.servingType). Unset → the generator default
+    // (llama-cpp, in-process GGUF, NO sidecar). 'llama-server' → emit the
+    // standalone llama.cpp `llama-server` sidecar as a first-class generated
+    // service (the docker-compose.override.yml footgun fix). The static sync lane
+    // sets this to assert the sidecar EMITS on a clean install / sync regen; it
+    // never `docker compose up`s that variant (the sidecar needs a GPU + real
+    // GGUF — that boot check is the gpu-nightly cuda-sidecar lane's job).
+    "serving-type": { type: "string" },
   },
 });
 
@@ -159,6 +167,8 @@ const state = {
   relayEnabled: false,
   relayUrl: "",
   nativeServices: [],
+  // undefined → generator default (llama-cpp, no sidecar); 'llama-server' → sidecar.
+  servingType: values["serving-type"],
 };
 
 writeFileSync(values.out!, generateCompose(state, registry));
@@ -189,5 +199,6 @@ if (values.bundle) {
 console.error(
   `[gen-sync-compose] admin SYNC compose → ${values.out} — modules=[${enabledModules.join(", ")}]` +
     ` gpu=${values.gpu} whisper=${values["whisper-backend"]}` +
+    (values["serving-type"] ? ` servingType=${values["serving-type"]}` : "") +
     (values.bundle ? " (+ .env + init-db.sh)" : ""),
 );

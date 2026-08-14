@@ -35,6 +35,7 @@ configs/
 # install-e2e generated artifacts (built in CI from the installer / admin)
 install-e2e/docker-compose.gen.yaml
 install-e2e/docker-compose.sync.yaml
+install-e2e/docker-compose.sync-llama.yaml
 install-e2e/.env
 install-e2e/init-db.sh
 
