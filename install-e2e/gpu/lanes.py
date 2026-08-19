@@ -70,7 +70,7 @@ LANES: dict[str, Lane] = {
     # model through a llama.cpp `llama-server` REST sidecar instead of loading it
     # in-process (the Qwen3.5-9B hybrid-SSM rollout — see
     # jarvis-installer/docs/llama-server-sidecar-rollout.md). CUDA-only: the
-    # sidecar image (ghcr.io/ggml-org/llama.cpp:server-cuda) needs the NVIDIA
+    # sidecar image (ghcr.io/ggml-org/llama.cpp, digest-pinned) needs the NVIDIA
     # runtime. Opt-in only — NOT in the nightly default (`cuda`); dispatch
     # `lanes: cuda-sidecar` to run it. DORMANT until the installer/admin
     # generators support the `--serving llama-server-sidecar` enablement flag

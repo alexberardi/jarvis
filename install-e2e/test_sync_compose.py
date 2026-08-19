@@ -310,8 +310,12 @@ def test_llama_server_sync_compose_emits_managed_sidecar(
         "servingType=llama-server did NOT emit a llama-server service — the "
         "live-model sidecar would vanish on the next sync (the override.yml footgun)"
     )
-    # llama.cpp server image + host 7799 -> 8080.
-    assert "llama.cpp:server-cuda" in str(block.get("image", "")), block.get("image")
+    # llama.cpp server image + host 7799 -> 8080. Must be DIGEST-pinned, never the
+    # floating :server-cuda tag — a `docker compose pull` must not silently swap the
+    # live-inference engine out from under prod (jarvis-admin LLAMA_CPP_IMAGE pin).
+    image = str(block.get("image", ""))
+    assert "ghcr.io/ggml-org/llama.cpp@sha256:" in image, image
+    assert ":server-cuda" not in image, image
     ports = " ".join(map(str, block.get("ports") or []))
     assert "7799" in ports and "8080" in ports, block.get("ports")
     # Env-parametrized command: the live model retargets via ${LIVE_MODEL_FILE} in
