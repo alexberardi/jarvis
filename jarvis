@@ -58,6 +58,40 @@ SERVICES=(
     "jarvis-node-setup|7771|5|docker|/health"
 )
 
+# ── Container coordinates (bridge mode) ─────────────────────────────────────
+# Format: "name|dns_name|internal_port"
+#
+# On the shared jarvis-net, containers reach each other by the COMPOSE SERVICE
+# NAME (Compose registers it as a network alias, on external networks too) at
+# the container's INTERNAL port — not the published one.
+#
+# This is required, not just tidier: a container on jarvis-net that dials a
+# published port whose DNAT lands back inside jarvis-net hits NAT hairpin and
+# times out. host.docker.internal only works for targets on a *different*
+# network (postgres/redis/minio), which is why infra kept working while every
+# service-to-service call silently failed.
+#
+# dns_name is the compose service name, NOT the generated container name
+# (jarvis-config-service-jarvis-config-1) — that varies with directory name.
+# Keep in sync when a compose file renames its service or changes its port.
+SERVICE_COORDS=(
+    "jarvis-config-service|jarvis-config|7700"
+    "jarvis-auth|auth-api|8000"
+    "jarvis-logs|jarvis-logs|7702"
+    "jarvis-command-center|jarvis-voice-api|7703"
+    "jarvis-llm-proxy-api|llm-proxy-api|7704"
+    "jarvis-tts|jarvis-tts|7707"
+    "jarvis-whisper-api|jarvis-whisper|7706"
+    "jarvis-ocr-service|ocr-server|7031"
+    "jarvis-recipes-server|recipes-api|7030"
+    "jarvis-settings-server|jarvis-settings-server|7708"
+    "jarvis-mcp|jarvis-mcp|7709"
+    "jarvis-notifications|jarvis-notifications|7712"
+    "jarvis-admin|jarvis-admin|7710"
+    "jarvis-web|jarvis-web|7722"
+    "jarvis-node-setup|jarvis-node|7771"
+)
+
 # ── Test registry ─────────────────────────────────────────────────────────
 # Format: "name|type|test_command|cov_package"
 # type: pytest (uses .venv), poetry (uses poetry run), npm (uses npm), skip
@@ -186,6 +220,95 @@ _get_port()   { _parse_field "$1" 2; }
 _get_tier()   { _parse_field "$1" 3; }
 _get_mode()   { _parse_field "$1" 4; }
 _get_health() { _parse_field "$1" 5; }
+
+# ── Services that are NOT on the shared jarvis-net ──────────────────────────
+# The CLI's .jarvis-net-override.yaml only renames a compose's `default`
+# network, so it silently misses any compose that puts its services on an
+# explicitly NAMED network. jarvis-logs does exactly that (every service sits
+# on jarvis-logs-network), which leaves it isolated: it can reach the host
+# gateway, but cannot resolve container DNS like auth-api, and nothing on
+# jarvis-net can resolve `jarvis-logs` either.
+#
+# So container coords are wrong whenever EITHER end is off-net — both have to
+# fall back to the published port. (jarvis-node-setup also names its network,
+# but declares it `external: true` against jarvis-net, so it IS on-net.)
+#
+# The real fix is to attach jarvis-logs to jarvis-net in its compose; until
+# then this list keeps URL generation honest.
+OFF_NET_SERVICES=(
+    "jarvis-logs"
+)
+
+_is_off_net() {
+    local target="$1" s
+    for s in "${OFF_NET_SERVICES[@]}"; do
+        [[ "$s" == "$target" ]] && return 0
+    done
+    return 1
+}
+
+# ── Container coordinate lookups ────────────────────────────────────────────
+_coord_entry() {
+    # Echo the SERVICE_COORDS entry for a service name, or nothing.
+    local target="$1" entry
+    for entry in "${SERVICE_COORDS[@]}"; do
+        [[ "${entry%%|*}" == "$target" ]] && { echo "$entry"; return 0; }
+    done
+    return 1
+}
+
+_get_dns()      { local e; e=$(_coord_entry "$1") && _parse_field "$e" 2; }
+_get_internal() { local e; e=$(_coord_entry "$1") && _parse_field "$e" 3; }
+
+_svc_url() {
+    # Base URL another service should use to reach "$1", correct for the
+    # current network mode and the CALLER's mode.
+    #
+    #   bridge + caller in docker -> container coords  (http://auth-api:8000)
+    #   otherwise                 -> published coords  (host.docker.internal / localhost)
+    #
+    # Distributed installs run with --no-network (NETWORK_MODE != bridge) and
+    # keep the published coords, so cross-machine setups are unaffected.
+    local target="$1" caller_mode="${2:-docker}" caller_name="${3:-}"
+    local published dns internal entry target_mode on_net=true
+
+    entry=$(_get_service_entry "$target") || return 1
+    published=$(_get_port "$entry")
+    target_mode=$(_get_mode "$entry")
+
+    # Container DNS only resolves when both ends share jarvis-net.
+    _is_off_net "$target" && on_net=false
+    [[ -n "$caller_name" ]] && _is_off_net "$caller_name" && on_net=false
+
+    # Container coords need BOTH ends in Docker on the shared network. On macOS
+    # the GPU services (llm-proxy, tts, ocr) are flipped to mode=local above and
+    # run as native launch agents for Metal — there is no container and no DNS
+    # name, so a dockerized caller must still reach them over the published port
+    # via host.docker.internal.
+    if [[ "$NETWORK_MODE" == "bridge" && "$caller_mode" == "docker" && "$target_mode" == "docker" && "$on_net" == true ]]; then
+        dns=$(_get_dns "$target")
+        internal=$(_get_internal "$target")
+        if [[ -n "$dns" && -n "$internal" ]]; then
+            echo "http://${dns}:${internal}"
+            return 0
+        fi
+    fi
+
+    if [[ "$caller_mode" == "local" ]] || [[ "$caller_mode" == "npm" ]]; then
+        echo "http://localhost:${published}"
+    else
+        echo "http://host.docker.internal:${published}"
+    fi
+}
+
+_get_service_entry() {
+    # Echo the SERVICES entry for a service name, or nothing.
+    local target="$1" entry
+    for entry in "${SERVICES[@]}"; do
+        [[ "$(_get_name "$entry")" == "$target" ]] && { echo "$entry"; return 0; }
+    done
+    return 1
+}
 
 _kill_tree() {
     # Kill a process and all its descendants
@@ -431,6 +554,7 @@ _generate_tokens() {
 
     local jwt_secret auth_admin_token config_admin_token
     local cc_admin_key model_service_token llm_internal_token
+    local adapter_callback_token
 
     jwt_secret=$(_generate_token)
     auth_admin_token=$(_generate_token)
@@ -438,6 +562,7 @@ _generate_tokens() {
     cc_admin_key=$(_generate_token)
     model_service_token=$(_generate_token)
     llm_internal_token=$(_generate_token)
+    adapter_callback_token=$(_generate_token)
     relay_jwt_secret=$(_generate_token)
     default_household_id=$(python3 -c "import uuid; print(uuid.uuid4())")
 
@@ -450,6 +575,11 @@ JARVIS_CONFIG_ADMIN_TOKEN=${config_admin_token}
 ADMIN_API_KEY=${cc_admin_key}
 MODEL_SERVICE_TOKEN=${model_service_token}
 LLM_PROXY_INTERNAL_TOKEN=${llm_internal_token}
+# Signs async-job enqueues and validates their result callbacks in
+# command-center. FAIL-CLOSED: unset -> every callback 503s, so memory
+# extraction, deep-research results, transcript mark_processed and inbox
+# delivery all silently never persist (CC logs the rejection at startup).
+JARVIS_ADAPTER_CALLBACK_TOKEN=${adapter_callback_token}
 RELAY_JWT_SECRET=${relay_jwt_secret}
 DEFAULT_HOUSEHOLD_ID=${default_household_id}
 EOF
@@ -527,7 +657,9 @@ _stamp_env_files() {
             fi
         fi
 
-        # Docker services need host.docker.internal; local/npm use localhost
+        # Infra (postgres/redis/minio) lives on its own compose network, so a
+        # published-port hop via host.docker.internal genuinely works for it.
+        # Service-to-service URLs are different — see _svc_url.
         local svc_host="host.docker.internal"
         if [[ "$mode" == "local" ]] || [[ "$mode" == "npm" ]]; then
             svc_host="localhost"
@@ -535,11 +667,26 @@ _stamp_env_files() {
 
         # --- Shared tokens (all services) ---
         _inject_env_var "$env_file" "JARVIS_AUTH_ADMIN_TOKEN" "$JARVIS_AUTH_ADMIN_TOKEN"
-        _inject_env_var "$env_file" "JARVIS_CONFIG_URL" "http://${svc_host}:7700"
+        _inject_env_var "$env_file" "JARVIS_CONFIG_URL" "$(_svc_url jarvis-config-service "$mode" "$name")"
 
-        # Docker services need dockerized URLs from config-service
+        # 'dockerized' stays correct for BOTH topologies, so it is unconditional.
+        # The rewrite only fires when the stored host is literally localhost /
+        # 127.0.0.1, so it leaves bridge-mode container coords (auth-api:8000)
+        # alone, while still rewriting the macOS native services (llm-proxy,
+        # tts, ocr registered on localhost) to host.docker.internal for
+        # dockerized callers. Using 'default' here would break that mixed case.
         if [[ "$mode" == "docker" ]]; then
-            _inject_env_var "$env_file" "JARVIS_CONFIG_URL_STYLE" "dockerized"
+            if _is_off_net "$name"; then
+                # An off-net service cannot resolve the container coords that
+                # 'dockerized' would hand back untouched (auth-api:8000), so ask
+                # for the published pair instead. jarvis-config-client sends its
+                # own config-url hostname as remote_host, so the "localhost"
+                # sentinel in external_host is rewritten to host.docker.internal
+                # — which off-net containers CAN reach.
+                _inject_env_var "$env_file" "JARVIS_CONFIG_URL_STYLE" "external"
+            else
+                _inject_env_var "$env_file" "JARVIS_CONFIG_URL_STYLE" "dockerized"
+            fi
         fi
 
         # --- Service-specific tokens ---
@@ -549,7 +696,7 @@ _stamp_env_files() {
                 ;;
             jarvis-config-service)
                 _inject_env_var "$env_file" "JARVIS_CONFIG_ADMIN_TOKEN" "$JARVIS_CONFIG_ADMIN_TOKEN"
-                _inject_env_var "$env_file" "JARVIS_AUTH_URL" "http://${svc_host}:7701"
+                _inject_env_var "$env_file" "JARVIS_AUTH_URL" "$(_svc_url jarvis-auth "$mode" "$name")"
                 _inject_env_var "$env_file" "DOCKER_HOST_GATEWAY" "host.docker.internal"
                 _inject_env_var "$env_file" "JARVIS_HOST_ROOT" "$JARVIS_ROOT"
                 _inject_env_var "$env_file" "JARVIS_ROOT" "/jarvis"
@@ -560,6 +707,10 @@ _stamp_env_files() {
             jarvis-command-center)
                 _inject_env_var "$env_file" "ADMIN_API_KEY" "$ADMIN_API_KEY"
                 _inject_env_var "$env_file" "JARVIS_AUTH_SECRET_KEY" "$AUTH_SECRET_KEY"
+                # Without this every async-job callback is rejected 503 and the
+                # persist step never runs — deep-research results and memory
+                # extraction complete in the worker but land nowhere.
+                _inject_env_var "$env_file" "JARVIS_ADAPTER_CALLBACK_TOKEN" "$JARVIS_ADAPTER_CALLBACK_TOKEN"
                 ;;
             jarvis-recipes-server)
                 _inject_env_var "$env_file" "AUTH_SECRET_KEY" "$AUTH_SECRET_KEY"
@@ -597,18 +748,18 @@ print(header+'.'+payload+'.'+sig)
                 ;;
             jarvis-admin)
                 _inject_env_var "$env_file" "PORT" "7711"
-                _inject_env_var "$env_file" "AUTH_URL" "http://${svc_host}:7701"
-                _inject_env_var "$env_file" "CONFIG_SERVICE_URL" "http://${svc_host}:7700"
-                _inject_env_var "$env_file" "COMMAND_CENTER_URL" "http://${svc_host}:7703"
+                _inject_env_var "$env_file" "AUTH_URL" "$(_svc_url jarvis-auth "$mode" "$name")"
+                _inject_env_var "$env_file" "CONFIG_SERVICE_URL" "$(_svc_url jarvis-config-service "$mode" "$name")"
+                _inject_env_var "$env_file" "COMMAND_CENTER_URL" "$(_svc_url jarvis-command-center "$mode" "$name")"
                 _inject_env_var "$env_file" "COMMAND_CENTER_ADMIN_KEY" "$ADMIN_API_KEY"
                 # LLM_PROXY_URL intentionally omitted — resolved from config-service
                 # since llm-proxy may run on a remote host (e.g. Linux GPU box)
                 ;;
             jarvis-web)
                 _inject_env_var "$env_file" "PORT" "7722"
-                _inject_env_var "$env_file" "COMMAND_CENTER_URL" "http://${svc_host}:7703"
-                _inject_env_var "$env_file" "AUTH_URL" "http://${svc_host}:7701"
-                _inject_env_var "$env_file" "NOTIFICATIONS_URL" "http://${svc_host}:7712"
+                _inject_env_var "$env_file" "COMMAND_CENTER_URL" "$(_svc_url jarvis-command-center "$mode" "$name")"
+                _inject_env_var "$env_file" "AUTH_URL" "$(_svc_url jarvis-auth "$mode" "$name")"
+                _inject_env_var "$env_file" "NOTIFICATIONS_URL" "$(_svc_url jarvis-notifications "$mode" "$name")"
                 _inject_env_var "$env_file" "PANTRY_URL" "http://${svc_host}:7721"
                 ;;
         esac
@@ -621,7 +772,7 @@ print(header+'.'+payload+'.'+sig)
 
         # --- Auth service URL (env var fallback for module-level auth init) ---
         if [[ "$name" != "jarvis-auth" && "$name" != "jarvis-config-service" && "$name" != "jarvis-admin" && "$name" != "jarvis-web" ]]; then
-            _inject_env_var "$env_file" "JARVIS_AUTH_BASE_URL" "http://${svc_host}:7701"
+            _inject_env_var "$env_file" "JARVIS_AUTH_BASE_URL" "$(_svc_url jarvis-auth "$mode" "$name")"
         fi
 
         # --- Redis password (for services that use Redis) ---
@@ -2095,17 +2246,45 @@ _auto_register() {
         # Skip admin (no backend registration needed)
         [[ "$name" == "jarvis-admin" ]] && continue
 
-        local port=""
+        local port="" svc_mode="docker"
         for entry in "${SERVICES[@]}"; do
             if [[ "$(_get_name "$entry")" == "$name" ]]; then
                 port=$(_get_port "$entry")
+                svc_mode=$(_get_mode "$entry")
                 break
             fi
         done
         [[ -z "$port" ]] && continue
 
+        # host/port are the coords SERVICES use to reach each other; external_*
+        # are the published coords for clients off the docker network (mobile,
+        # browser, another machine). Service.get_url() picks between them via
+        # ?style= — see jarvis-config-service/app/models.py.
+        #
+        # In bridge mode the in-stack coords are container DNS + internal port,
+        # because a published port that DNATs back into jarvis-net dies on NAT
+        # hairpin. external_host stays the literal "localhost" sentinel that
+        # ?style=remote/external rewrites to the caller's reachable host, so
+        # multi-machine installs keep working.
+        # Only containers get container coords. On macOS llm-proxy / tts / ocr
+        # run as native launch agents (mode=local), so they stay on localhost +
+        # published port — a container DNS name would resolve to nothing.
+        # An off-net service (jarvis-logs) has no alias on jarvis-net, so nothing
+        # on the shared network could resolve the name we would publish here.
+        local reg_host="localhost" reg_port="$port"
+        if [[ "$NETWORK_MODE" == "bridge" && "$svc_mode" == "docker" ]] && ! _is_off_net "$name"; then
+            local dns internal
+            dns=$(_get_dns "$name")
+            internal=$(_get_internal "$name")
+            if [[ -n "$dns" && -n "$internal" ]]; then
+                reg_host="$dns"
+                reg_port="$internal"
+            fi
+        fi
+
         [[ "$first" == true ]] && first=false || services_json+=","
-        services_json+="{\"name\":\"${name}\",\"host\":\"localhost\",\"port\":${port}}"
+        services_json+="{\"name\":\"${name}\",\"host\":\"${reg_host}\",\"port\":${reg_port}"
+        services_json+=",\"external_host\":\"localhost\",\"external_port\":${port}}"
     done
     services_json+="]"
 

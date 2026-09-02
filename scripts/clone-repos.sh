@@ -23,8 +23,8 @@ REPOS=(
     "jarvis-log-client|git@github.com:alexberardi/jarvis-log-client.git"
     "jarvis-logs|git@github.com:alexberardi/jarvis-logs.git"
     "jarvis-mcp|git@github.com:alexberardi/jarvis-mcp.git"
-    "jarvis-mcp-client|git@github.com:alexberardi/jarvis-mcp-client.git"
     "jarvis-node-mobile|git@github.com:alexberardi/jarvis-node-mobile.git"
+    "jarvis-notifications|git@github.com:alexberardi/jarvis-notifications.git"
     "jarvis-node-setup|git@github.com:alexberardi/jarvis-node-setup.git"
     "jarvis-ocr-service|git@github.com:alexberardi/jarvis-ocr-service.git"
     "jarvis-recipes-mobile|git@github.com:alexberardi/jarvis-recipes-mobile.git"
@@ -32,10 +32,12 @@ REPOS=(
     "jarvis-settings-client|git@github.com:alexberardi/jarvis-settings-client.git"
     "jarvis-settings-server|git@github.com:alexberardi/jarvis-settings-server.git"
     "jarvis-tts|git@github.com:alexberardi/jarvis-tts.git"
+    "jarvis-web|git@github.com:alexberardi/jarvis-web.git"
     "jarvis-whisper-api|git@github.com:alexberardi/jarvis-whisper-api.git"
 )
 
 cloned=0
+failed=()
 for entry in "${REPOS[@]}"; do
     repo="${entry%%|*}"
     url="${entry#*|}"
@@ -43,10 +45,22 @@ for entry in "${REPOS[@]}"; do
         echo "✓ $repo already exists, skipping"
     else
         echo "→ Cloning $repo..."
-        git clone "$url" "$repo"
-        cloned=$((cloned + 1))
+        if git clone "$url" "$repo"; then
+            cloned=$((cloned + 1))
+        else
+            echo "✗ $repo FAILED to clone"
+            failed+=("$repo")
+        fi
     fi
 done
 
 echo ""
+if [ ${#failed[@]} -gt 0 ]; then
+    echo "Done with ERRORS: ${#REPOS[@]} listed, ${cloned} newly cloned, ${#failed[@]} FAILED:"
+    printf '  ✗ %s\n' "${failed[@]}"
+    echo ""
+    echo "A missing repo no longer aborts the run — but the stack is incomplete"
+    echo "until these resolve (./jarvis start --all silently skips absent dirs)."
+    exit 1
+fi
 echo "Done! ${#REPOS[@]} repositories (${cloned} newly cloned)."

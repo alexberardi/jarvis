@@ -39,7 +39,14 @@ from lanes import LANES  # noqa: E402
 # their own instance by label — the ground truth when create's stdout is
 # unparseable (observed live: `create instance` can exit 0 with EMPTY stdout
 # while the instance IS created — parse-and-pray leaks rented GPUs).
-LABEL = "jarvis-gpu-e2e"
+# Overridable so a SECOND workflow can rent instances without the two janitors
+# reaping each other. install-e2e-gpu keeps the default; install-e2e-quickstart
+# sets VAST_LABEL_PREFIX=jarvis-qs-e2e. Without this, the GPU lane's start-of-run
+# janitor (--max-age-hours 0.25) would destroy a live quickstart instance, whose
+# source builds run far longer than 15 minutes — a confusing mid-run SSH death
+# rather than a test failure. janitor/clean-gate read the same constant, so the
+# override covers every path.
+LABEL = os.environ.get("VAST_LABEL_PREFIX", "jarvis-gpu-e2e")
 # Per-lane VM template images live in lanes.py (fully-qualified
 # docker.io/vastai/kvm:* tags — VM offers accept nothing else). VAST_VM_IMAGE /
 # --vm-image overrides for experimentation.

@@ -1,0 +1,237 @@
+name: install-e2e-quickstart
+
+# Proof that the SOURCE-DEV quickstart still works on a clean machine.
+#
+# install-e2e.yml stands up the installer's prebuilt-image artifact; this stands
+# up what a CONTRIBUTOR runs from a bare box:
+#
+#   scripts/clone-repos.sh  →  ./jarvis init  →  ./jarvis start --all
+#
+# Those are different code paths with different bugs, and only the installer one
+# had CI. On 2026-09-01 the quickstart was run clean for the first time in months
+# and every phase was broken: clone-repos.sh aborted partway under `set -e` on a
+# repo that no longer exists (silently skipping the ~8 listed after it) and omits
+# two services the CLI requires; `./jarvis init` could not complete on a clean box
+# at all (jarvis-net is created only by cmd_start, but init's _start_infra needs
+# it — a chicken-and-egg); _auto_register printed success while leaving every
+# JARVIS_APP_KEY empty; no MQTT broker was ever started despite being registered;
+# and JARVIS_ADAPTER_CALLBACK_TOKEN was never generated, so every async-job
+# callback 503'd and inbox delivery silently persisted nothing.
+#
+# WHY A GPU BOX: jarvis-llm-proxy-api / jarvis-whisper-api / jarvis-tts BUILD
+# CUDA-linked llama.cpp / whisper.cpp wheels from source here rather than pulling
+# a prebuilt image. That build is exactly where "weird stuff" happens, and a CPU
+# lane would compile something else entirely and prove nothing. Phase E asserts
+# real GPU offload so a silent CPU fallback (green /health, no offload) fails.
+#
+# COST: gated entirely on the VAST_API_KEY secret — without it the lane no-ops
+# green, same as install-e2e-gpu. Source builds are much slower than image pulls,
+# so this run is longer (and dearer) than the GPU nightly: it is DISPATCH-ONLY
+# while it stabilises. Turn on the schedule below once it has gone green a few
+# times — an unattended nightly that hangs is the expensive failure mode.
+#
+# Guardrails: lane $/hr cap (lanes.py), job timeout, destroy in always(), janitor
+# at both ends, and clean-gate as the final word (vastai destroy can exit 0
+# WITHOUT destroying — only its stdout tells the truth).
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "jarvis meta-repo ref to test the quickstart of (default: the dispatched branch)"
+        default: ""
+      keep_instance:
+        description: "Skip instance destroy for debugging (janitor reaps in 3h)"
+        type: boolean
+        default: false
+  # Enable once this has run green a few times on dispatch. Deliberately offset
+  # from install-e2e (06:37) and install-e2e-gpu (07:23) so a shared breakage
+  # reads top-down in the morning.
+  # schedule:
+  #   - cron: "47 8 * * *"
+
+permissions:
+  contents: read
+  packages: read
+
+# Its own group: serialises quickstart runs against each other without blocking
+# install-e2e-gpu. Never cancel mid-run — a cancelled run can strand a rented
+# instance (the janitor covers it, but don't make it routine).
+concurrency:
+  group: install-e2e-quickstart
+  cancel-in-progress: false
+
+env:
+  JARVIS_ROOT: /opt/jarvis
+  RESULT_DIR: /opt/jarvis-e2e
+  LANE: cuda
+  # Distinct instance label so this lane's janitor and install-e2e-gpu's cannot
+  # reap each other's live instances (provision_vast.py reads this).
+  VAST_LABEL_PREFIX: jarvis-qs-e2e
+  # Ports the pytest suite addresses on localhost, tunnelled from the VM.
+  TUNNEL_PORTS: "7700 7701 7702 7703 7704 7706 7707 7708 7710 7712 7722 7030 7031"
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - id: gate
+        env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+        run: |
+          if [ -z "$VAST_API_KEY" ]; then
+            echo "::warning::VAST_API_KEY not set — quickstart lane no-ops"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  quickstart:
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    # Source-building ~15 images is the long pole; the GPU lane's 60 is not
+    # enough. The instance is destroyed in always(), so a timeout still tears down.
+    timeout-minutes: 150
+    env:
+      VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pinned for the same reason as install-e2e-gpu: provision_vast.py drives
+      # `show instances-v1`, which landed in 1.4.0.
+      - name: Install tooling
+        run: |
+          pip install 'vastai==1.4.0' -r install-e2e/requirements.txt
+
+      - name: Generate ephemeral SSH key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keygen -t ed25519 -N "" -f ~/.ssh/qs_e2e -C "install-e2e-quickstart-${{ github.run_id }}"
+
+      - name: Janitor — reap leaked quickstart instances (start)
+        # Only ever matches VAST_LABEL_PREFIX, so this cannot touch a live
+        # install-e2e-gpu instance. 15 min: the concurrency group serialises this
+        # workflow, so anything labeled and older is a leak from a prior run.
+        run: python install-e2e/gpu/provision_vast.py janitor --max-age-hours 0.25
+
+      - name: Provision Vast.ai VM
+        id: provision
+        run: |
+          python install-e2e/gpu/provision_vast.py provision \
+            --lane "$LANE" \
+            --ssh-pubkey ~/.ssh/qs_e2e.pub \
+            --ssh-key ~/.ssh/qs_e2e \
+            --out provision.json
+          {
+            echo "instance_id=$(jq -r .instance_id provision.json)"
+            echo "ssh_host=$(jq -r .ssh_host provision.json)"
+            echo "ssh_port=$(jq -r .ssh_port provision.json)"
+            echo "ssh_user=$(jq -r .ssh_user provision.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: SSH config (multiplexed)
+        run: |
+          cat >> ~/.ssh/config <<EOF
+          Host qs-vm
+            HostName ${{ steps.provision.outputs.ssh_host }}
+            Port ${{ steps.provision.outputs.ssh_port }}
+            User ${{ steps.provision.outputs.ssh_user }}
+            IdentityFile ~/.ssh/qs_e2e
+            StrictHostKeyChecking accept-new
+            ServerAliveInterval 30
+            ControlMaster auto
+            ControlPath ~/.ssh/cm-%r@%h:%p
+            ControlPersist 10m
+          EOF
+          ssh qs-vm true && echo "ssh OK"
+
+      - name: Bootstrap remote (GPU visibility, docker, toolkit, host deps)
+        run: |
+          ssh qs-vm "JARVIS_ROOT=$JARVIS_ROOT bash -s" -- nvidia \
+            < install-e2e/quickstart/bootstrap_quickstart.sh
+
+      # ── THE SUBJECT UNDER TEST ────────────────────────────────────────────
+      # Non-fatal: run_quickstart.sh records each phase's exit code as an
+      # artifact, and the pytest suite turns those into named failures. Letting
+      # a failed `init` abort the job here would lose the diagnosis.
+      - name: Run the quickstart (clone-repos → init → start --all)
+        id: qs
+        continue-on-error: true
+        run: |
+          ssh qs-vm "JARVIS_ROOT=$JARVIS_ROOT RESULT_DIR=$RESULT_DIR bash -s" -- \
+            "${{ github.event.inputs.ref || github.ref_name }}" \
+            < install-e2e/quickstart/run_quickstart.sh
+
+      - name: Fetch run artifacts
+        if: always()
+        run: |
+          mkdir -p qs-results
+          scp -r "qs-vm:$RESULT_DIR/*" qs-results/ 2>/dev/null || echo "::warning::no run artifacts to fetch"
+          ls -la qs-results || true
+
+      - name: Open SSH tunnels (pytest addresses localhost)
+        if: always()
+        run: |
+          FWD=""
+          for p in $TUNNEL_PORTS; do FWD="$FWD -L $p:localhost:$p"; done
+          # shellcheck disable=SC2086 # deliberately word-split flag list
+          ssh -f -N $FWD qs-vm && echo "tunnels up"
+
+      # docker exec / docker logs assertions run against the VM's daemon.
+      - name: Point docker at the VM
+        if: always()
+        run: echo "DOCKER_HOST=ssh://qs-vm" >> "$GITHUB_ENV"
+
+      - name: Quickstart regression suite
+        if: always()
+        env:
+          JARVIS_QS_RESULTS: qs-results
+        run: |
+          pytest install-e2e/quickstart -v \
+            --junitxml=quickstart-results.xml
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        run: |
+          ssh qs-vm 'docker ps -a; echo ---; df -h /; echo ---; free -h' > diagnostics.txt 2>&1 || true
+          ssh qs-vm 'for c in $(docker ps -aq); do echo "=== $(docker inspect -f "{{.Name}}" $c) ==="; docker logs --tail 60 $c 2>&1; done' \
+            > container-logs.txt 2>&1 || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickstart-e2e
+          path: |
+            qs-results/
+            quickstart-results.xml
+            diagnostics.txt
+            container-logs.txt
+            provision.json
+          if-no-files-found: warn
+
+      # ── Teardown ──────────────────────────────────────────────────────────
+      - name: Destroy instance
+        if: always() && github.event.inputs.keep_instance != 'true'
+        run: |
+          python install-e2e/gpu/provision_vast.py destroy --from provision.json || \
+            echo "::error::destroy failed — janitor will reap (label $VAST_LABEL_PREFIX)"
+
+      - name: Janitor — reap leaks (end)
+        if: always()
+        run: python install-e2e/gpu/provision_vast.py janitor --max-age-hours 3 || true
+
+      # vastai destroy exits 0 without destroying; only its stdout tells the
+      # truth. clean-gate re-queries and FAILS the run if this run's label still
+      # has a live instance — a green run that leaked a GPU is worse than a red one.
+      - name: Clean gate (fail if this run leaked an instance)
+        if: always() && github.event.inputs.keep_instance != 'true'
+        run: python install-e2e/gpu/provision_vast.py clean-gate
