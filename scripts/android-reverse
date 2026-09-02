@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Map the Jarvis service ports from the Android emulator/device back to this host.
+#
+#   android-reverse            set up reverse tunnels on the first attached device
+#   android-reverse <serial>   target a specific device (see: adb devices)
+#   android-reverse --list     show tunnels currently installed
+#   android-reverse --clear    remove them
+#
+# Why this and not 10.0.2.2:
+#   jarvis-config-service hands the client absolute URLs for every other service.
+#   Those come back as localhost:<port>, which inside the emulator would resolve to
+#   the emulator's own loopback. `adb reverse` makes the emulator's localhost:<port>
+#   tunnel to this host's <port>, so every discovered URL resolves correctly without
+#   rewriting anything the config service returns.
+#
+# These do NOT survive an emulator restart or an adb server restart — re-run then.
+
+set -euo pipefail
+
+ADB="${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb"
+[[ -x "$ADB" ]] || { echo "adb not found at $ADB" >&2; exit 1; }
+
+# name:port — mirrors the SERVICES registry in ./jarvis
+PORTS=(
+    "config-service:7700"
+    "auth:7701"
+    "logs:7702"
+    "command-center:7703"
+    "llm-proxy:7704"
+    "llm-proxy-model:7705"
+    "whisper:7706"
+    "tts:7707"
+    "settings-server:7708"
+    "mcp:7709"
+    "admin:7710"
+    "notifications:7712"
+    "pantry:7721"
+    "web:7722"
+    "recipes-server:7030"
+    "ocr-service:7031"
+    "node-setup:7771"
+    "metro:8081"
+)
+
+GREEN=$'\033[0;32m'; RED=$'\033[0;31m'; DIM=$'\033[2m'; BOLD=$'\033[1m'; NC=$'\033[0m'
+
+TARGET=()
+case "${1:-}" in
+    --list)  "$ADB" reverse --list; exit 0 ;;
+    --clear) "$ADB" reverse --remove-all && echo "cleared"; exit 0 ;;
+    "")      ;;
+    *)       TARGET=(-s "$1") ;;
+esac
+
+# Fail loudly rather than silently tunnelling to the wrong place.
+device_count=$("$ADB" devices | awk 'NR>1 && $2=="device"' | wc -l)
+if (( device_count == 0 )); then
+    echo "${RED}No device attached.${NC} Start the emulator first:" >&2
+    echo "    \$ANDROID_HOME/emulator/emulator -avd jarvis-pixel8 &" >&2
+    exit 1
+fi
+if (( device_count > 1 )) && (( ${#TARGET[@]} == 0 )); then
+    echo "${RED}Multiple devices attached${NC} — pass a serial:" >&2
+    "$ADB" devices | awk 'NR>1 && $2=="device" {print "    "$1}' >&2
+    exit 1
+fi
+
+echo ""
+echo "${BOLD}adb reverse${NC} ${DIM}(emulator localhost:<port> -> this host)${NC}"
+echo ""
+failed=0
+for entry in "${PORTS[@]}"; do
+    name="${entry%%:*}"; port="${entry##*:}"
+    if "$ADB" "${TARGET[@]}" reverse "tcp:${port}" "tcp:${port}" >/dev/null 2>&1; then
+        printf '  %-20s %-6s %sOK%s\n' "$name" "$port" "$GREEN" "$NC"
+    else
+        printf '  %-20s %-6s %sFAIL%s\n' "$name" "$port" "$RED" "$NC"
+        failed=$((failed + 1))
+    fi
+done
+echo ""
+(( failed )) && echo "  ${RED}${failed} tunnel(s) failed${NC}" && exit 1
+echo "  ${DIM}Re-run after any emulator or adb restart.${NC}"
+echo ""

@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Switch the GPU services between the local stack and the Mac stack.
+#
+#   jarvis-profile local     point at this box's own infra (10.0.0.x -> host.docker.internal)
+#   jarvis-profile mac       point back at the Mac control plane (10.0.0.103)
+#   jarvis-profile status    show which profile is active
+#
+# Only the services that can be pointed at either control plane are switched;
+# everything else in the stack is local-only and untouched.
+
+set -euo pipefail
+
+JARVIS_ROOT="${JARVIS_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+STATE_FILE="${HOME}/.jarvis/profile"
+
+SWITCHABLE=(
+    jarvis-llm-proxy-api
+    jarvis-tts
+    jarvis-whisper-api
+)
+
+RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[0;33m'
+DIM=$'\033[2m'; BOLD=$'\033[1m'; NC=$'\033[0m'
+
+die() { echo "${RED}error:${NC} $*" >&2; exit 1; }
+
+# Compare .env against each profile so `status` reflects the files on disk,
+# not just whatever the state file last recorded.
+detect_profile() {
+    local svc="$1" dir="${JARVIS_ROOT}/$1"
+    [[ -f "$dir/.env" ]] || { echo "none"; return; }
+    for p in local mac; do
+        if [[ -f "$dir/.env.$p" ]] && cmp -s "$dir/.env" "$dir/.env.$p"; then
+            echo "$p"; return
+        fi
+    done
+    echo "modified"
+}
+
+cmd_status() {
+    echo ""
+    echo "${BOLD}JARVIS PROFILE${NC}"
+    echo ""
+    if [[ -f "$STATE_FILE" ]]; then
+        echo "  recorded: ${BOLD}$(cat "$STATE_FILE")${NC}"
+    else
+        echo "  recorded: ${DIM}(none)${NC}"
+    fi
+    echo ""
+    for svc in "${SWITCHABLE[@]}"; do
+        local actual; actual=$(detect_profile "$svc")
+        local colour="$GREEN"
+        [[ "$actual" == "modified" ]] && colour="$YELLOW"
+        [[ "$actual" == "none" ]] && colour="$RED"
+        printf '  %-24s %s%s%s\n' "$svc" "$colour" "$actual" "$NC"
+    done
+    echo ""
+    if grep -q modified <<<"$(for s in "${SWITCHABLE[@]}"; do detect_profile "$s"; done)"; then
+        echo "  ${YELLOW}note:${NC} 'modified' means .env has drifted from both profiles."
+        echo "        Save it first:  cp <svc>/.env <svc>/.env.<profile>"
+        echo ""
+    fi
+}
+
+cmd_switch() {
+    local profile="$1"
+
+    # Refuse to clobber unsaved edits.
+    local drifted=()
+    for svc in "${SWITCHABLE[@]}"; do
+        [[ "$(detect_profile "$svc")" == "modified" ]] && drifted+=("$svc")
+    done
+    if (( ${#drifted[@]} )) && [[ "${FORCE:-false}" != true ]]; then
+        echo "${YELLOW}Refusing to switch — these have unsaved .env edits:${NC}" >&2
+        printf '  %s\n' "${drifted[@]}" >&2
+        echo "" >&2
+        echo "Save them (cp <svc>/.env <svc>/.env.<profile>) or re-run with FORCE=true." >&2
+        exit 1
+    fi
+
+    echo ""
+    echo "${BOLD}Switching to '${profile}'${NC}"
+    echo ""
+    for svc in "${SWITCHABLE[@]}"; do
+        local dir="${JARVIS_ROOT}/${svc}"
+        local src="${dir}/.env.${profile}"
+        [[ -d "$dir" ]] || { printf '  %-24s %sskipped (not cloned)%s\n' "$svc" "$DIM" "$NC"; continue; }
+        [[ -f "$src" ]] || die "missing ${src} — create it before switching"
+        cp "$src" "${dir}/.env"
+        printf '  %-24s %sOK%s\n' "$svc" "$GREEN" "$NC"
+    done
+
+    mkdir -p "$(dirname "$STATE_FILE")"
+    echo "$profile" > "$STATE_FILE"
+
+    echo ""
+    echo "  ${DIM}.env files updated. Containers still hold the old values —${NC}"
+    echo "  ${DIM}docker compose re-reads env_file only on recreate, not restart:${NC}"
+    echo ""
+    echo "      cd ${JARVIS_ROOT} && ./jarvis restart jarvis-llm-proxy-api jarvis-tts jarvis-whisper-api"
+    echo ""
+}
+
+case "${1:-status}" in
+    local|mac) cmd_switch "$1" ;;
+    status)    cmd_status ;;
+    *)         die "usage: jarvis-profile {local|mac|status}" ;;
+esac

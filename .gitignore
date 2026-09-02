@@ -1,5 +1,5 @@
 # Ignore all service repositories (they have their own git repos)
-jarvis-*/
+/jarvis-*/
 
 # Ignore archives
 *.zip

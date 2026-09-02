@@ -119,6 +119,59 @@ The `./jarvis` CLI handles platform differences automatically.
 
 ---
 
+## Dev scripts
+
+Helpers in `scripts/` for working on a source checkout. Prefer these over
+hand-editing `.env` files or re-deriving `adb` flags.
+
+### `./scripts/jarvis-profile {local|mac|status}`
+
+Switches the three services that can point at **either** control plane —
+`jarvis-llm-proxy-api`, `jarvis-tts`, `jarvis-whisper-api` — between two saved
+`.env` profiles:
+
+| profile | points at |
+|---|---|
+| `.env.local` | this machine's own stack |
+| `.env.mac` | a remote stack (e.g. the Mac at `10.0.0.103`) |
+
+Use it when a box is acting as a **GPU satellite** for a stack hosted elsewhere:
+the GPU services run locally for CUDA while Postgres/Redis/config-service live
+on the other host.
+
+- `status` compares each `.env` against **both** profiles rather than trusting
+  the state file, so it reports `modified` when one has drifted from both.
+- Switching refuses to clobber unsaved edits; `FORCE=true` overrides.
+- Containers keep the old values until **recreated** — `docker compose restart`
+  does not re-read `env_file`. Follow a switch with
+  `./jarvis restart jarvis-llm-proxy-api jarvis-tts jarvis-whisper-api`.
+
+The `.env.mac` / `.env.local` files hold real tokens and DB passwords. They are
+gitignored in all three service repos (`.env.*` with `!.env.example`) — keep it
+that way.
+
+### `./scripts/android-reverse [serial|--list|--clear]`
+
+Maps every Jarvis service port (plus Metro on 8081) from an Android
+emulator/device back to this host via `adb reverse`.
+
+**Required for any Android work against a source stack.** `jarvis-config-service`
+hands the client *absolute* URLs for every other service, and those come back as
+`localhost:<port>`. Inside the emulator that resolves to the emulator's own
+loopback, so nothing connects. `adb reverse` makes the emulator's
+`localhost:<port>` tunnel to this host, so every discovered URL resolves as-is —
+no rewriting of what the config service returns.
+
+Tunnels do **not** survive an emulator or `adb` restart; re-run it then. It fails
+loudly when no device is attached, or when several are and no serial was given.
+
+Related emulator gotchas: the emulator is NAT'd, so `react-native-zeroconf`
+cannot see `_jarvis-config._tcp` — set `EXPO_PUBLIC_MANUAL_CONFIG_URL` (the
+documented escape hatch in `src/config/env.ts`) instead of relying on discovery.
+Node QR provisioning needs a physical device.
+
+---
+
 ## Development rules
 
 **Logging:**
