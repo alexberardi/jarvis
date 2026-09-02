@@ -56,7 +56,22 @@ LANES: dict[str, Lane] = {
         key="cuda",
         gpu_type="nvidia",
         whisper_backend="cuda",
-        gpu_names=("RTX_4090", "RTX_3090"),
+        # Widened 2026-09-02. Restricting to two consumer cards left the KVM
+        # pool essentially empty: the spike found ONE qualifying VM offer
+        # marketplace-wide, and that host hung in 'loading' for 600s without
+        # ever pulling the VM image. vms_enabled is the filter that hurts (32
+        # offers without it, 1 with it) and cannot be dropped — the harness
+        # needs a real VM to run Docker — so widen the GPU set instead.
+        #
+        # Everything here is >=16GB VRAM, which comfortably fits the workload
+        # (source builds + an 8B Q4 GGUF + whisper + TTS). All are NVIDIA, so
+        # the CUDA device_markers below still apply.
+        gpu_names=(
+            "RTX_4090", "RTX_3090", "RTX_3090_Ti", "RTX_5090",
+            "RTX_4080", "RTX_4080_SUPER",
+            "RTX_A5000", "RTX_A4500", "RTX_A6000",
+            "L4", "A10",
+        ),
         # TEMPORARY raise from 0.60. Both GPU lanes failed to provision on
         # 2026-09-02 with "0 qualifying offer(s)" — the marketplace had nothing
         # at <=$0.60/hr meeting vms_enabled + disk_space>=100. VM (KVM) offers
