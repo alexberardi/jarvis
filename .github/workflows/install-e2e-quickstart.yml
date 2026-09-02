@@ -175,10 +175,22 @@ jobs:
       - name: Run the quickstart (clone-repos → init → start --all)
         id: qs
         continue-on-error: true
+        # exit 42 = the HOST is unusable (e.g. cannot reach GitHub), which is a
+        # provisioning-class failure. Anything else is a real quickstart result
+        # and must still reach the suite.
         run: |
           ssh qs-vm "JARVIS_ROOT=$JARVIS_ROOT RESULT_DIR=$RESULT_DIR bash -s" -- \
             "${{ github.event.inputs.ref || github.ref_name }}" \
             < install-e2e/quickstart/run_quickstart.sh
+
+      - name: Flag an unusable host (exit 42 from the driver)
+        if: always() && steps.ssh.outcome == 'success' && steps.qs.outcome == 'failure'
+        run: |
+          if ssh qs-vm "test -s $RESULT_DIR/host_unreachable" 2>/dev/null; then
+            echo "::error::PROVISIONING: this rented host cannot reach GitHub — not a quickstart failure"
+            ssh qs-vm "cat $RESULT_DIR/host_unreachable" 2>/dev/null | sed 's/^/  /' || true
+            echo "HOST_UNUSABLE=1" >> "$GITHUB_ENV"
+          fi
 
       - name: Fetch run artifacts
         if: always() && steps.ssh.outcome == 'success'
@@ -201,7 +213,7 @@ jobs:
         run: echo "DOCKER_HOST=ssh://qs-vm" >> "$GITHUB_ENV"
 
       - name: Quickstart regression suite
-        if: always() && steps.ssh.outcome == 'success'
+        if: always() && steps.ssh.outcome == 'success' && env.HOST_UNUSABLE != '1'
         env:
           JARVIS_QS_RESULTS: qs-results
         run: |

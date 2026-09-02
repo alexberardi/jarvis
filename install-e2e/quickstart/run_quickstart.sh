@@ -25,13 +25,38 @@ log() { echo "[quickstart] $*"; }
 mark() { echo "$2" > "$RESULT_DIR/$1"; }
 
 # ── Phase 1: clone the meta repo ──
+# A rented host that cannot reach GitHub is a PROVISIONING failure, not a test
+# failure, and must be reported as such. On 2026-09-02 a host answered the clone
+# with a non-git response:
+#     fatal: could not read Username for 'https://github.com'
+#     fatal: expected flush after ref listing
+# The old code rm -rf'd the target BEFORE cloning and never checked the result,
+# so /opt/jarvis simply did not exist and one network fault cascaded into 23
+# unrelated assertion failures. Clone to a temp path, retry, and bail loudly.
 log "cloning meta repo @ $REF -> $JARVIS_ROOT"
 if [ ! -d "$JARVIS_ROOT/.git" ]; then
+  TMP_CLONE="${JARVIS_ROOT}.tmp.$$"
+  rm -rf "$TMP_CLONE"
+  clone_rc=1
+  for attempt in 1 2 3; do
+    if GIT_TERMINAL_PROMPT=0 git clone --quiet "$REPO_BASE/jarvis.git" "$TMP_CLONE" 2>"$RESULT_DIR/clone_meta.err"; then
+      clone_rc=0; break
+    fi
+    log "  meta clone attempt $attempt failed; retrying"
+    rm -rf "$TMP_CLONE"; sleep 10
+  done
+  if [ "$clone_rc" -ne 0 ]; then
+    mark phase_clone_meta.rc 1
+    cp "$RESULT_DIR/clone_meta.err" "$RESULT_DIR/host_unreachable" 2>/dev/null || true
+    log "FATAL: this host cannot clone from GitHub — PROVISIONING failure, not a test failure"
+    sed 's/^/  /' "$RESULT_DIR/clone_meta.err" 2>/dev/null || true
+    exit 42
+  fi
   rm -rf "$JARVIS_ROOT"
-  git clone --quiet "$REPO_BASE/jarvis.git" "$JARVIS_ROOT"
+  mv "$TMP_CLONE" "$JARVIS_ROOT"
 fi
-cd "$JARVIS_ROOT"
-git fetch --quiet origin "$REF" && git checkout --quiet FETCH_HEAD
+cd "$JARVIS_ROOT" || { mark phase_clone_meta.rc 1; log "FATAL: $JARVIS_ROOT missing"; exit 42; }
+GIT_TERMINAL_PROMPT=0 git fetch --quiet origin "$REF" && git checkout --quiet FETCH_HEAD
 mark phase_clone_meta.rc 0
 git rev-parse HEAD > "$RESULT_DIR/meta_sha"
 
