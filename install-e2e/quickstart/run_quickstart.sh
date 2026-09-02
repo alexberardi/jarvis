@@ -113,15 +113,21 @@ done
 # THE clean-machine phase. Captures rc + full output; the suite asserts rc==0 and
 # greps for the network-ordering failure specifically.
 log "running ./jarvis init"
-( cd "$JARVIS_ROOT" && ./jarvis init ) > "$RESULT_DIR/init.log" 2>&1
-INIT_RC=$?
+# tee, not a bare redirect: `./jarvis init` can run silently for 10+ minutes
+# while it builds venvs and pulls infra images. With output going only to a
+# file the SSH channel has NO traffic, the connection gets dropped, and this
+# script dies by SIGHUP the moment init returns — losing the exit code and
+# every phase after it (observed 2026-09-02: init.log complete, phase_init.rc
+# never written). PIPESTATUS keeps the real rc rather than tee's.
+( cd "$JARVIS_ROOT" && ./jarvis init ) 2>&1 | tee "$RESULT_DIR/init.log"
+INIT_RC=${PIPESTATUS[0]}
 mark phase_init.rc "$INIT_RC"
 log "  init rc=$INIT_RC"
 
 # ── Phase 4: ./jarvis start --all ──
 log "running ./jarvis start --all (source builds — slow)"
-( cd "$JARVIS_ROOT" && ./jarvis start --all ) > "$RESULT_DIR/start.log" 2>&1
-START_RC=$?
+( cd "$JARVIS_ROOT" && ./jarvis start --all ) 2>&1 | tee "$RESULT_DIR/start.log"
+START_RC=${PIPESTATUS[0]}
 mark phase_start.rc "$START_RC"
 log "  start rc=$START_RC"
 

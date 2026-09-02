@@ -156,7 +156,11 @@ jobs:
             # buys nothing and costs spurious failures.
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
-            ServerAliveInterval 30
+            # Source builds go quiet for long stretches; a dropped channel
+            # kills the driver by SIGHUP mid-run. 15s x 240 = survive an hour
+            # of silence rather than the default ~90s.
+            ServerAliveInterval 15
+            ServerAliveCountMax 240
             ControlMaster auto
             ControlPath ~/.ssh/cm-%r@%h:%p
             ControlPersist 10m

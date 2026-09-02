@@ -85,6 +85,28 @@ log "installing host prerequisites..."
 apt-get update -qq
 apt-get install -y -qq git curl jq openssl python3 python3-venv python3-pip build-essential
 
+# ./jarvis init builds a HOST venv per service to run alembic, and six services
+# declare requires-python >=3.11 (config-service, auth, logs, command-center,
+# tts, whisper-api). The cuda-12.4.1-auto template ships Ubuntu 22.04 whose
+# python3 is 3.10.12, so every one of those venvs failed:
+#   ERROR: Package 'jarvis-auth' requires a different Python: 3.10.12 not in '<4.0,>=3.11'
+# -> "Migrations: 3 OK, 7 failed" and a stack that cannot come up.
+#
+# Install 3.11 and put it FIRST on PATH via /usr/local/bin rather than
+# repointing /usr/bin/python3, which would break apt's own tooling.
+PY_MAJOR_MINOR=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+log "system python3 is ${PY_MAJOR_MINOR}"
+if [ "$(printf '%s\n3.11\n' "$PY_MAJOR_MINOR" | sort -V | head -1)" != "3.11" ]; then
+  log "installing python3.11 (services require >=3.11)"
+  apt-get install -y -qq software-properties-common
+  add-apt-repository -y ppa:deadsnakes/ppa >/dev/null 2>&1
+  apt-get update -qq
+  apt-get install -y -qq python3.11 python3.11-venv python3.11-dev
+  ln -sf /usr/bin/python3.11 /usr/local/bin/python3
+  hash -r
+  log "python3 is now $(/usr/local/bin/python3 -V 2>&1)"
+fi
+
 # ── 6. Disk headroom check ──
 # Source-building ~15 images (CUDA llama.cpp + whisper.cpp wheels) is far heavier
 # than pulling them. Fail here with a clear message rather than 40 minutes into a
