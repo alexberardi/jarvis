@@ -171,14 +171,14 @@ jobs:
             < install-e2e/quickstart/run_quickstart.sh
 
       - name: Fetch run artifacts
-        if: always()
+        if: always() && steps.provision.outcome == 'success'
         run: |
           mkdir -p qs-results
           scp -r "qs-vm:$RESULT_DIR/*" qs-results/ 2>/dev/null || echo "::warning::no run artifacts to fetch"
           ls -la qs-results || true
 
       - name: Open SSH tunnels (pytest addresses localhost)
-        if: always()
+        if: always() && steps.provision.outcome == 'success'
         run: |
           FWD=""
           for p in $TUNNEL_PORTS; do FWD="$FWD -L $p:localhost:$p"; done
@@ -187,11 +187,11 @@ jobs:
 
       # docker exec / docker logs assertions run against the VM's daemon.
       - name: Point docker at the VM
-        if: always()
+        if: always() && steps.provision.outcome == 'success'
         run: echo "DOCKER_HOST=ssh://qs-vm" >> "$GITHUB_ENV"
 
       - name: Quickstart regression suite
-        if: always()
+        if: always() && steps.provision.outcome == 'success'
         env:
           JARVIS_QS_RESULTS: qs-results
         run: |
@@ -199,7 +199,7 @@ jobs:
             --junitxml=quickstart-results.xml
 
       - name: Collect diagnostics on failure
-        if: failure()
+        if: failure() && steps.provision.outcome == 'success'
         run: |
           ssh qs-vm 'docker ps -a; echo ---; df -h /; echo ---; free -h' > diagnostics.txt 2>&1 || true
           ssh qs-vm 'for c in $(docker ps -aq); do echo "=== $(docker inspect -f "{{.Name}}" $c) ==="; docker logs --tail 60 $c 2>&1; done' \
