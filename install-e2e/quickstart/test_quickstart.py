@@ -51,6 +51,32 @@ def test_clone_repos_inventory_is_complete() -> None:
     )
 
 
+def test_build_context_repos_are_cloned() -> None:
+    """Sibling repos used as docker build contexts must be cloned.
+
+    FOUND 2026-09-02: jarvis-node-setup's compose declares jarvis-command-sdk as
+    an additional build context, but clone-repos.sh never listed it, so
+    `./jarvis start --all` died with
+
+      failed to get build context jarvis-command-sdk:
+        stat /opt/jarvis/jarvis-command-sdk: no such file or directory
+
+    This is a different class from the SERVICES-registry gap above:
+    jarvis-command-sdk is a library, not a service, so completeness against
+    SERVICES could never catch it — that test passed on the same run this one
+    would have failed.
+
+    jarvis-mcp-client is deliberately tolerated: the repo does not exist, and
+    command-center mounts it with a `[ -f pyproject.toml ] || echo SKIP` guard,
+    so its absence is harmless.
+    """
+    missing = [r for r in result_lines("build_context_missing") if r != "jarvis-mcp-client"]
+    assert not missing, (
+        "sibling repos referenced by a compose build context / bind mount but "
+        f"never cloned: {missing}"
+    )
+
+
 def test_all_listed_repos_clone_successfully() -> None:
     """Every repo clone-repos.sh lists must actually exist and clone.
 

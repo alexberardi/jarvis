@@ -56,6 +56,21 @@ for r in "${REPOS[@]}"; do
 done
 cp scripts/clone-repos.sh "$RESULT_DIR/clone-repos.snapshot.sh" 2>/dev/null || true
 
+# Sibling repos referenced as docker BUILD CONTEXTS or bind mounts. These are a
+# separate class from the SERVICES registry: jarvis-command-sdk is not a service,
+# but jarvis-node-setup's compose declares it as an additional build context, so
+# a missing clone fails the build outright —
+#   failed to get build context jarvis-command-sdk: stat ...: no such file
+# whereas the missing SERVICES repos merely got skipped. Record what is
+# referenced vs what exists so the suite can assert on it.
+: > "$RESULT_DIR/build_context_missing"
+for f in "$JARVIS_ROOT"/jarvis-*/docker-compose*.y*ml; do
+  [ -f "$f" ] || continue
+  grep -hoE '\.\./jarvis-[a-z0-9-]+' "$f" 2>/dev/null | sed 's|\.\./||'
+done | sort -u | while read -r r; do
+  [ -d "$JARVIS_ROOT/$r" ] || echo "$r" >> "$RESULT_DIR/build_context_missing"
+done
+
 # Also clone anything the CLI's SERVICES registry needs that the script omits.
 # Recorded separately so the suite can FAIL on the omission while still bringing
 # up a complete stack to test the rest against.

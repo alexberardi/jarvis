@@ -1115,6 +1115,16 @@ cmd_init() {
     echo -e "\n${DIM}Step 5: Set up local services${NC}"
     _setup_local_services
 
+    # The shared network must exist BEFORE _start_infra: jarvis-data-services
+    # declares jarvis-net as `external: true`, so compose up fails with
+    # "network jarvis-net declared as external, but could not be found" on any
+    # machine that has never run start --all. _write_network_override is
+    # idempotent (docker network create ... || true) and also writes the
+    # overlay file, so calling it here costs nothing on a warm machine.
+    if [[ "$NETWORK_MODE" == "bridge" ]]; then
+        _write_network_override
+    fi
+
     echo ""
     _start_infra
 

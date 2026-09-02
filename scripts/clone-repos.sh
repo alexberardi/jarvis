@@ -15,6 +15,7 @@ REPOS=(
     "jarvis-auth|git@github.com:alexberardi/jarvis-auth.git"
     "jarvis-auth-client|git@github.com:alexberardi/jarvis-auth-client.git"
     "jarvis-command-center|git@github.com:alexberardi/jarvis-command-center.git"
+    "jarvis-command-sdk|git@github.com:alexberardi/jarvis-command-sdk.git"
     "jarvis-config-client|git@github.com:alexberardi/jarvis-config-client.git"
     "jarvis-config-service|git@github.com:alexberardi/jarvis-config-service.git"
     "jarvis-data-services|git@github.com:alexberardi/jarvis-data-services.git"
@@ -32,6 +33,7 @@ REPOS=(
     "jarvis-settings-client|git@github.com:alexberardi/jarvis-settings-client.git"
     "jarvis-settings-server|git@github.com:alexberardi/jarvis-settings-server.git"
     "jarvis-tts|git@github.com:alexberardi/jarvis-tts.git"
+    "jarvis-web-scraper|git@github.com:alexberardi/jarvis-web-scraper.git"
     "jarvis-web|git@github.com:alexberardi/jarvis-web.git"
     "jarvis-whisper-api|git@github.com:alexberardi/jarvis-whisper-api.git"
 )
