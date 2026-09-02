@@ -57,7 +57,16 @@ LANES: dict[str, Lane] = {
         gpu_type="nvidia",
         whisper_backend="cuda",
         gpu_names=("RTX_4090", "RTX_3090"),
-        max_dph=0.60,
+        # TEMPORARY raise from 0.60. Both GPU lanes failed to provision on
+        # 2026-09-02 with "0 qualifying offer(s)" — the marketplace had nothing
+        # at <=$0.60/hr meeting vms_enabled + disk_space>=100. VM (KVM) offers
+        # are far scarcer than container offers, so the VM filter plus the disk
+        # floor is what prices us out, not the GPU choice.
+        #
+        # A quickstart run is ~1-2h of source builds, so at this cap a run costs
+        # roughly $1.50-3.00. Lower it once the spike shows where offers
+        # actually clear.
+        max_dph=1.50,
         disk_gb=100,
         device_markers=("ggml_cuda_init: found", "CUDA devices"),
         # Must be a cuda-* template: ubuntu_cli guests ship NO nvidia driver
