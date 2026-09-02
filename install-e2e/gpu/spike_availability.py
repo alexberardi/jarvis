@@ -16,12 +16,17 @@ box).
 """
 from __future__ import annotations
 
+import re
+
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lanes import LANES  # noqa: E402
 from provision_vast import offer_query, vastai  # noqa: E402
+
+
+THIN_POOL = 3  # below this a lane cannot 'fail fast' — diagnose it
 
 
 def _count(query: str) -> int | str:
@@ -38,6 +43,10 @@ def diagnose_dry_lane(key: str, query: str) -> None:
     relaxations = [
         ("without verified", query.replace("verified=true ", "")),
         ("without reliability", query.replace("reliability>0.98 ", "")),
+        ("without inet_down", query.replace("inet_down>=500 ", "")),
+        ("without disk floor", re.sub(r"disk_space>=\d+ ", "", query)),
+        ("vms_enabled + gpu only",
+         f"{query.split(' num_gpus')[0]} vms_enabled=true"),
         ("without price cap", query.split(" dph_total")[0]),
         ("bare gpu_name only", query.split(" num_gpus")[0]),
     ]
@@ -84,10 +93,20 @@ def main() -> None:
                 f"rel={o.get('reliability2', o.get('reliability', 0)):.3f} "
                 f"geo={o.get('geolocation', '?')}"
             )
-        if not offers:
-            print(f"  !! NO VM OFFERS — lane '{key}' cannot run on Vast right now")
+        # Diagnose a THIN pool too, not just an empty one. A lane with 1-2
+        # offers is effectively dry: the provisioning strategy is "fail fast
+        # through the junk to find a warm host", which needs hosts to fall
+        # through TO. On 2026-09-02 the cuda lane sat at exactly 1 offer for
+        # hours, both candidates stalled in 'loading', and no diagnosis ran
+        # because the pool was not technically empty — so we could not see
+        # which filter was doing the damage without another round trip.
+        if len(offers) < THIN_POOL:
+            if not offers:
+                print(f"  !! NO VM OFFERS — lane '{key}' cannot run on Vast right now")
+                exit_code = 1
+            else:
+                print(f"  !! THIN POOL ({len(offers)}) — too few hosts to fail fast through")
             diagnose_dry_lane(key, query)
-            exit_code = 1
 
     if exit_code:
         print("\nSPIKE RESULT: at least one lane has no VM inventory — do not "
