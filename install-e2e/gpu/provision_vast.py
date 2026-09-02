@@ -57,7 +57,20 @@ CREATE_ATTEMPTS = 6  # offers to try before giving up
 # in loading/created FOREVER, while every host that ever worked reached
 # "running" in <7 min. So: short per-offer budgets, more offers, and an
 # overall wall-clock cap — fail fast through the junk to find a warm host.
-RUNNING_TIMEOUT_S = 10 * 60
+# TEMPORARY raise 10 -> 20 min (2026-09-02). The fail-fast strategy above
+# assumes MANY offers to cycle through — "fail fast through the junk to find a
+# warm host". That premise no longer holds: the KVM pool is down to 1-2 offers
+# marketplace-wide (32-64 offers exist WITHOUT vms_enabled), and on 2026-09-02
+# both of them stalled in 'loading' at exactly the 600s cap, on two independent
+# hosts, in two separate runs. With no third host to fall through to, failing
+# fast just fails. Widening the GPU pool to 11 cards did not add a single KVM
+# offer, so this is the remaining lever.
+#
+# If a host still stalls at 20 min, the original finding stands (cold hosts
+# stall forever) and the answer is to wait for better inventory rather than
+# raise this again — put it back to 10 min at that point, because a longer
+# budget costs real rental on every dud.
+RUNNING_TIMEOUT_S = 20 * 60
 # "running" means KVM started — the guest OS + cloud-init are still booting
 # inside; observed refusals past 6 min. The overall PROVISION_DEADLINE_S is
 # the real cap.
