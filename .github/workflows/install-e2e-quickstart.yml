@@ -138,6 +138,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: SSH config (multiplexed)
+        id: ssh
         run: |
           cat >> ~/.ssh/config <<EOF
           Host qs-vm
@@ -145,7 +146,16 @@ jobs:
             Port ${{ steps.provision.outputs.ssh_port }}
             User ${{ steps.provision.outputs.ssh_user }}
             IdentityFile ~/.ssh/qs_e2e
-            StrictHostKeyChecking accept-new
+            # Vast recycles IP:port across instances, and provision_vast.py's
+            # SSH-ready probe has already written a known_hosts entry for this
+            # address from an earlier attempt — so the key legitimately CHANGES
+            # under us. accept-new only tolerates UNKNOWN hosts, not changed
+            # ones, so it fails with "Host key verification failed" on a VM that
+            # is otherwise perfectly healthy. These are ephemeral rented boxes
+            # we just created and address by instance id; pinning their host key
+            # buys nothing and costs spurious failures.
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
             ServerAliveInterval 30
             ControlMaster auto
             ControlPath ~/.ssh/cm-%r@%h:%p
@@ -171,14 +181,14 @@ jobs:
             < install-e2e/quickstart/run_quickstart.sh
 
       - name: Fetch run artifacts
-        if: always() && steps.provision.outcome == 'success'
+        if: always() && steps.ssh.outcome == 'success'
         run: |
           mkdir -p qs-results
           scp -r "qs-vm:$RESULT_DIR/*" qs-results/ 2>/dev/null || echo "::warning::no run artifacts to fetch"
           ls -la qs-results || true
 
       - name: Open SSH tunnels (pytest addresses localhost)
-        if: always() && steps.provision.outcome == 'success'
+        if: always() && steps.ssh.outcome == 'success'
         run: |
           FWD=""
           for p in $TUNNEL_PORTS; do FWD="$FWD -L $p:localhost:$p"; done
@@ -187,11 +197,11 @@ jobs:
 
       # docker exec / docker logs assertions run against the VM's daemon.
       - name: Point docker at the VM
-        if: always() && steps.provision.outcome == 'success'
+        if: always() && steps.ssh.outcome == 'success'
         run: echo "DOCKER_HOST=ssh://qs-vm" >> "$GITHUB_ENV"
 
       - name: Quickstart regression suite
-        if: always() && steps.provision.outcome == 'success'
+        if: always() && steps.ssh.outcome == 'success'
         env:
           JARVIS_QS_RESULTS: qs-results
         run: |
@@ -199,7 +209,7 @@ jobs:
             --junitxml=quickstart-results.xml
 
       - name: Collect diagnostics on failure
-        if: failure() && steps.provision.outcome == 'success'
+        if: failure() && steps.ssh.outcome == 'success'
         run: |
           ssh qs-vm 'docker ps -a; echo ---; df -h /; echo ---; free -h' > diagnostics.txt 2>&1 || true
           ssh qs-vm 'for c in $(docker ps -aq); do echo "=== $(docker inspect -f "{{.Name}}" $c) ==="; docker logs --tail 60 $c 2>&1; done' \
