@@ -119,14 +119,14 @@ log "running ./jarvis init"
 # script dies by SIGHUP the moment init returns — losing the exit code and
 # every phase after it (observed 2026-09-02: init.log complete, phase_init.rc
 # never written). PIPESTATUS keeps the real rc rather than tee's.
-( cd "$JARVIS_ROOT" && ./jarvis init ) 2>&1 | tee "$RESULT_DIR/init.log"
+( cd "$JARVIS_ROOT" && ./jarvis init < /dev/null ) 2>&1 | tee "$RESULT_DIR/init.log"
 INIT_RC=${PIPESTATUS[0]}
 mark phase_init.rc "$INIT_RC"
 log "  init rc=$INIT_RC"
 
 # ── Phase 4: ./jarvis start --all ──
 log "running ./jarvis start --all (source builds — slow)"
-( cd "$JARVIS_ROOT" && ./jarvis start --all ) 2>&1 | tee "$RESULT_DIR/start.log"
+( cd "$JARVIS_ROOT" && ./jarvis start --all < /dev/null ) 2>&1 | tee "$RESULT_DIR/start.log"
 START_RC=${PIPESTATUS[0]}
 mark phase_start.rc "$START_RC"
 log "  start rc=$START_RC"

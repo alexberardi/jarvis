@@ -183,9 +183,18 @@ jobs:
         # provisioning-class failure. Anything else is a real quickstart result
         # and must still reach the suite.
         run: |
-          ssh qs-vm "JARVIS_ROOT=$JARVIS_ROOT RESULT_DIR=$RESULT_DIR bash -s" -- \
-            "${{ github.event.inputs.ref || github.ref_name }}" \
-            < install-e2e/quickstart/run_quickstart.sh
+          # COPY the driver and execute it, rather than `ssh 'bash -s' < script`.
+          # With bash -s the script IS stdin and is read incrementally as it
+          # runs, so any command inside `./jarvis init` that reads stdin eats
+          # the rest of the script — bash then hits EOF and exits silently, mid
+          # run, reporting success. Observed twice (33694076746, 33696358973):
+          # init.log complete and "Init complete", yet phase_init.rc never
+          # written and `start --all` never executed, with no error anywhere.
+          # </dev/null on the remote command is belt-and-braces.
+          scp -q install-e2e/quickstart/run_quickstart.sh qs-vm:/tmp/run_quickstart.sh
+          ssh qs-vm "JARVIS_ROOT=$JARVIS_ROOT RESULT_DIR=$RESULT_DIR \
+            bash /tmp/run_quickstart.sh '${{ github.event.inputs.ref || github.ref_name }}'" \
+            < /dev/null
 
       - name: Flag an unusable host (exit 42 from the driver)
         if: always() && steps.ssh.outcome == 'success' && steps.qs.outcome == 'failure'
