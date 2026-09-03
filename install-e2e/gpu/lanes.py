@@ -115,7 +115,13 @@ LANES: dict[str, Lane] = {
             "L4", "A10",
         ),
         max_dph=1.50,
-        disk_gb=250,
+        # 150, not 250: at 250 the host never finished allocating the volume —
+        # the instance sat in 'created' past the 1200s budget and the run hit
+        # the overall provisioning deadline (33702778899). Bigger disk also
+        # shrinks an already-thin KVM pool. The build cache is bounded instead,
+        # via a buildkit GC policy in bootstrap_quickstart.sh, which attacks the
+        # actual cause rather than paying for it in disk.
+        disk_gb=150,
         device_markers=("ggml_cuda_init: found", "CUDA devices"),
         vm_image="docker.io/vastai/kvm:cuda-12.4.1-auto",
     ),

@@ -47,6 +47,28 @@ if ! command -v docker >/dev/null 2>&1; then
   log "installing docker..."
   curl -fsSL https://get.docker.com | sh >/dev/null
 fi
+# Bound the buildkit cache BEFORE anything builds. ./jarvis start --all builds
+# ~15 images; llm-proxy (llama.cpp CUDA), whisper-api (torch + torchaudio cu124
+# + a pywhispercpp source build), tts and ocr each drag in their own multi-GB
+# torch stack, and buildkit keeps every intermediate layer forever. That filled
+# a 97G disk (92G used) and ENOSPC'd whisper-api mid-pip. Capping the cache is
+# the fix; buying more disk just moves the wall and makes instances slower to
+# provision (a 250G request never finished allocating).
+mkdir -p /etc/docker
+if [ ! -f /etc/docker/daemon.json ]; then
+  cat > /etc/docker/daemon.json <<'JSON'
+{
+  "builder": {
+    "gc": {
+      "enabled": true,
+      "defaultKeepStorage": "20GB"
+    }
+  }
+}
+JSON
+  log "buildkit cache capped at 20GB"
+  systemctl restart docker 2>/dev/null || service docker restart || true
+fi
 docker version --format 'docker {{.Server.Version}}'
 if ! docker compose version >/dev/null 2>&1; then
   log "installing docker compose plugin..."
@@ -113,9 +135,9 @@ fi
 # build with a confusing ENOSPC.
 AVAIL_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
 log "root filesystem free: ${AVAIL_GB}G"
-if [ "${AVAIL_GB:-0}" -lt 150 ]; then
-  log "FATAL: <150G free — the full source build needs ~150G+ (observed 92G used
-        on a 97G disk before whisper-api hit ENOSPC). Raise the lane's disk_gb."
+if [ "${AVAIL_GB:-0}" -lt 100 ]; then
+  log "FATAL: <100G free — the source build needs ~100G+ even with the buildkit
+        cache capped. Raise the lane's disk_gb."
   exit 42
 fi
 
