@@ -109,6 +109,32 @@ for r in "${NEEDED[@]}"; do
   git clone --quiet --depth 1 "$REPO_BASE/$r.git" "$JARVIS_ROOT/$r" 2>/dev/null || true
 done
 
+# ── Phase 2.5: stage models the services need ──
+# A bare `init` leaves both model-backed services dead, by design rather than by
+# accident, and neither can ever go healthy without this:
+#
+#   llm-proxy: model.main.name defaults to a path that ships with nothing —
+#     ValueError: Model path does not exist:
+#       .models/llama-3.1-8b-instruct-jarvis-Q4_K_M.gguf
+#   whisper:   RuntimeError: Whisper model file not found at
+#       '/root/whisper.cpp/models/ggml-base.en.bin' and model auto-download is
+#       disabled (whisper.allow_model_autodownload is false). Outbound internet
+#       is opt-in only.
+#
+# Real users resolve this with the installer wizard / ./jarvis llm-setup. The
+# lane stages a SMALL model instead, mirroring install-e2e-gpu's TEST_MODEL_URL,
+# so the rest of the stack is exercised for real rather than xfail'd away.
+TEST_MODEL_URL="${TEST_MODEL_URL:-https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf}"
+MODEL_DIR="$JARVIS_ROOT/jarvis-llm-proxy-api/.models"
+MODEL_FILE="$MODEL_DIR/$(basename "$TEST_MODEL_URL")"
+mkdir -p "$MODEL_DIR"
+if [ ! -s "$MODEL_FILE" ]; then
+  log "downloading test GGUF -> $MODEL_FILE"
+  curl -fL --retry 4 --retry-delay 5 -C - -o "$MODEL_FILE" "$TEST_MODEL_URL" 2>/dev/null \
+    || log "  WARNING: test model download failed; llm-proxy will stay degraded"
+fi
+ls -lh "$MODEL_FILE" 2>/dev/null | sed 's/^/  /' || true
+
 # ── Phase 3: ./jarvis init ──
 # THE clean-machine phase. Captures rc + full output; the suite asserts rc==0 and
 # greps for the network-ordering failure specifically.
@@ -123,6 +149,34 @@ log "running ./jarvis init"
 INIT_RC=${PIPESTATUS[0]}
 mark phase_init.rc "$INIT_RC"
 log "  init rc=$INIT_RC"
+
+# Applied AFTER init, which is what creates/stamps these .env files.
+if [ -s "$MODEL_FILE" ]; then
+  LLM_ENV="$JARVIS_ROOT/jarvis-llm-proxy-api/.env"
+  if grep -q '^JARVIS_MODEL_NAME=' "$LLM_ENV" 2>/dev/null; then
+    sed -i "s|^JARVIS_MODEL_NAME=.*|JARVIS_MODEL_NAME=.models/$(basename "$MODEL_FILE")|" "$LLM_ENV"
+  else
+    echo "JARVIS_MODEL_NAME=.models/$(basename "$MODEL_FILE")" >> "$LLM_ENV"
+  fi
+  # llama-cpp-python rejects "llama3"; the qwen GGUF wants the qwen template.
+  if grep -q '^JARVIS_MODEL_CHAT_FORMAT=' "$LLM_ENV" 2>/dev/null; then
+    sed -i 's|^JARVIS_MODEL_CHAT_FORMAT=.*|JARVIS_MODEL_CHAT_FORMAT=qwen|' "$LLM_ENV"
+  else
+    echo "JARVIS_MODEL_CHAT_FORMAT=qwen" >> "$LLM_ENV"
+  fi
+  log "llm-proxy pointed at .models/$(basename "$MODEL_FILE")"
+fi
+
+# whisper: permit the one-time ggml download rather than staging it by hand.
+WHISPER_ENV="$JARVIS_ROOT/jarvis-whisper-api/.env"
+if [ -f "$WHISPER_ENV" ]; then
+  if grep -q '^WHISPER_ALLOW_MODEL_AUTODOWNLOAD=' "$WHISPER_ENV"; then
+    sed -i 's|^WHISPER_ALLOW_MODEL_AUTODOWNLOAD=.*|WHISPER_ALLOW_MODEL_AUTODOWNLOAD=true|' "$WHISPER_ENV"
+  else
+    echo "WHISPER_ALLOW_MODEL_AUTODOWNLOAD=true" >> "$WHISPER_ENV"
+  fi
+  log "whisper model autodownload enabled for this lane"
+fi
 
 # ── Phase 4: ./jarvis start --all ──
 log "running ./jarvis start --all (source builds — slow)"

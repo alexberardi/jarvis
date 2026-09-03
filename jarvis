@@ -718,6 +718,19 @@ _stamp_env_files() {
             jarvis-llm-proxy-api)
                 _inject_env_var "$env_file" "MODEL_SERVICE_TOKEN" "$MODEL_SERVICE_TOKEN"
                 _inject_env_var "$env_file" "LLM_PROXY_INTERNAL_TOKEN" "$LLM_PROXY_INTERNAL_TOKEN"
+                # env.template ships REDIS_URL= (empty). Left unset, the queue
+                # worker falls back to localhost:6379, which inside the
+                # container is the container itself:
+                #   redis.exceptions.ConnectionError: Error 111 connecting to
+                #   localhost:6379. Connection refused.
+                # llm-proxy-worker then crash-loops on every fresh install, so
+                # every queued job (deep research, memory extraction) silently
+                # never runs. Infra lives on its own compose network, so the
+                # published-port hop via svc_host is correct here.
+                local redis_pw
+                redis_pw=$(_get_redis_password)
+                _inject_env_var "$env_file" "REDIS_URL" \
+                    "redis://:${redis_pw}@${svc_host}:6379/0"
                 ;;
             jarvis-whisper-api)
                 # In Docker, ~/whisper.cpp is mounted at /root/whisper.cpp
