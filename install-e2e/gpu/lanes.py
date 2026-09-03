@@ -90,6 +90,35 @@ LANES: dict[str, Lane] = {
         # now skips past.
         vm_image="docker.io/vastai/kvm:cuda-12.4.1-auto",
     ),
+    # Same hardware and markers as `cuda`, but sized for SOURCE BUILDS rather
+    # than image pulls. install-e2e-quickstart runs ./jarvis start --all, which
+    # BUILDS ~15 images: llm-proxy (llama.cpp CUDA), whisper-api (torch 2.6.0 +
+    # torchaudio cu124 + a pywhispercpp source build), tts and ocr each pulling
+    # their own torch stack, plus the buildkit cache for all of it.
+    #
+    # 100 GB is ample for install-e2e-gpu, which only PULLS prebuilt images, but
+    # the quickstart filled it: 92G of 97G used, and whisper-api died with
+    #   ERROR: Could not install packages due to an OSError:
+    #          [Errno 28] No space left on device
+    # taking settings-server, admin, notifications, recipes, ocr and web with it.
+    #
+    # Kept as its own lane so raising this cannot make install-e2e-gpu pickier
+    # about offers than it needs to be — KVM inventory is thin enough already.
+    "cuda-quickstart": Lane(
+        key="cuda-quickstart",
+        gpu_type="nvidia",
+        whisper_backend="cuda",
+        gpu_names=(
+            "RTX_4090", "RTX_3090", "RTX_3090_Ti", "RTX_5090",
+            "RTX_4080", "RTX_4080_SUPER",
+            "RTX_A5000", "RTX_A4500", "RTX_A6000",
+            "L4", "A10",
+        ),
+        max_dph=1.50,
+        disk_gb=250,
+        device_markers=("ggml_cuda_init: found", "CUDA devices"),
+        vm_image="docker.io/vastai/kvm:cuda-12.4.1-auto",
+    ),
     # Same rented hardware + CUDA markers as `cuda`, but the proxy serves the
     # model through a llama.cpp `llama-server` REST sidecar instead of loading it
     # in-process (the Qwen3.5-9B hybrid-SSM rollout — see

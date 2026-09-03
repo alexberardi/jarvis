@@ -113,8 +113,9 @@ fi
 # build with a confusing ENOSPC.
 AVAIL_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
 log "root filesystem free: ${AVAIL_GB}G"
-if [ "${AVAIL_GB:-0}" -lt 60 ]; then
-  log "FATAL: <60G free — source builds will ENOSPC. Raise the lane's disk_gb."
+if [ "${AVAIL_GB:-0}" -lt 150 ]; then
+  log "FATAL: <150G free — the full source build needs ~150G+ (observed 92G used
+        on a 97G disk before whisper-api hit ENOSPC). Raise the lane's disk_gb."
   exit 42
 fi
 

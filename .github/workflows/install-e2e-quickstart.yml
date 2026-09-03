@@ -64,7 +64,7 @@ concurrency:
 env:
   JARVIS_ROOT: /opt/jarvis
   RESULT_DIR: /opt/jarvis-e2e
-  LANE: cuda
+  LANE: cuda-quickstart
   # Distinct instance label so this lane's janitor and install-e2e-gpu's cannot
   # reap each other's live instances (provision_vast.py reads this).
   VAST_LABEL_PREFIX: jarvis-qs-e2e
