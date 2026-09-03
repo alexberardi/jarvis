@@ -86,7 +86,18 @@ def log(msg: str) -> None:
     print(f"[provision-vast] {msg}", file=sys.stderr, flush=True)
 
 
-def vastai(*args: str, raw: bool = True, confirm: bool = False) -> Any:
+class VastAPIError(RuntimeError):
+    """The CLI reported an API error on stderr while still exiting 0.
+
+    Distinct from a CLI failure so callers can decide: the janitor tolerates it
+    (best-effort reaping), the clean gate must NOT (an empty instance list that
+    is actually a 403 would read as "nothing leaked")."""
+
+
+_API_ERROR_RE = re.compile(r'"error"\s*:\s*true|status_code"\s*:\s*(4\d\d|5\d\d)')
+
+
+def vastai(*args: str, raw: bool = True, confirm: bool = False, strict: bool = False) -> Any:
     """Run the vastai CLI; parse --raw JSON output.
 
     confirm=True feeds 'y' on stdin: destructive subcommands (destroy) prompt
@@ -106,6 +117,15 @@ def vastai(*args: str, raw: bool = True, confirm: bool = False) -> Any:
     # stderr while exiting 0 — always surface stderr so failures aren't silent.
     if proc.stderr.strip():
         log(f"vastai stderr: {redact(proc.stderr.strip()[:800])}")
+        # rc==0 with an API error on stderr is the CLI's normal failure shape.
+        # Callers that make a SAFETY claim from the result must not silently
+        # treat that as an empty answer.
+        if strict and _API_ERROR_RE.search(proc.stderr):
+            redacted = " ".join(a for a in cmd if a != api_key)
+            raise VastAPIError(
+                f"`{redacted}` hit an API error (rc=0): "
+                f"{redact(proc.stderr.strip()[:300])}"
+            )
     if proc.returncode != 0:
         redacted = " ".join(a for a in cmd if a != api_key)
         raise RuntimeError(
@@ -118,7 +138,7 @@ def vastai(*args: str, raw: bool = True, confirm: bool = False) -> Any:
     return json.loads(out) if out else None
 
 
-def v1_instances(*labels: str) -> list[dict]:
+def v1_instances(*labels: str, strict: bool = False) -> list[dict]:
     """List instances via the v1 paginated endpoint.
 
     Vast retired the legacy v0 list (``GET /api/v0/instances/`` → 410) and is
@@ -131,7 +151,7 @@ def v1_instances(*labels: str) -> list[dict]:
     args = ["show", "instances-v1", "--all"]
     for lbl in labels:
         args += ["--label", lbl]
-    data = vastai(*args)
+    data = vastai(*args, strict=strict)
     if not isinstance(data, dict):
         return []
     return data.get("instances") or []
@@ -489,9 +509,9 @@ def destroy(instance_id: int) -> None:
     )
 
 
-def list_labeled_instances() -> list[dict]:
+def list_labeled_instances(strict: bool = False) -> list[dict]:
     return [
-        inst for inst in v1_instances()
+        inst for inst in v1_instances(strict=strict)
         if str(inst.get("label") or "").startswith(LABEL)
     ]
 
@@ -534,7 +554,19 @@ def clean_gate() -> None:
     lane = os.environ.get("LANE", "")
     marker = f"{LABEL}-{lane}-{run_id}" if lane else f"-{run_id}"
     leaked = []
-    for inst in list_labeled_instances():
+    try:
+        instances = list_labeled_instances(strict=True)
+    except VastAPIError as e:
+        # An empty list from a 403/5xx is indistinguishable from "nothing
+        # running" — and this gate exists precisely to assert nothing is still
+        # billing. Observed 2026-09-03: the API 403'd and the gate reported
+        # "no live instances", which would have hidden a real leak.
+        raise SystemExit(
+            f"CLEAN GATE INCONCLUSIVE — could not query Vast: {e}\n"
+            "Cannot assert this run left nothing billing. Check "
+            "https://cloud.vast.ai/instances/ manually."
+        ) from e
+    for inst in instances:
         label = str(inst.get("label") or "")
         if not (label.endswith(f"-{run_id}") and (not lane or label == marker)):
             continue
