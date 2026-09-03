@@ -167,16 +167,21 @@ if [ -s "$MODEL_FILE" ]; then
   log "llm-proxy pointed at .models/$(basename "$MODEL_FILE")"
 fi
 
-# whisper: permit the one-time ggml download rather than staging it by hand.
-WHISPER_ENV="$JARVIS_ROOT/jarvis-whisper-api/.env"
-if [ -f "$WHISPER_ENV" ]; then
-  if grep -q '^WHISPER_ALLOW_MODEL_AUTODOWNLOAD=' "$WHISPER_ENV"; then
-    sed -i 's|^WHISPER_ALLOW_MODEL_AUTODOWNLOAD=.*|WHISPER_ALLOW_MODEL_AUTODOWNLOAD=true|' "$WHISPER_ENV"
-  else
-    echo "WHISPER_ALLOW_MODEL_AUTODOWNLOAD=true" >> "$WHISPER_ENV"
-  fi
-  log "whisper model autodownload enabled for this lane"
+# whisper: stage the ggml model on the HOST, not via autodownload.
+# The compose bind-mounts `~/whisper.cpp:/root/whisper.cpp:ro` — READ ONLY — so
+# even with allow_model_autodownload=true the container cannot write the model
+# it just fetched. Staging it host-side is what that mount is actually for, and
+# matches how a dev sets whisper.cpp up locally.
+WHISPER_MODEL_URL="${WHISPER_MODEL_URL:-https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin}"
+WHISPER_MODEL_DIR="$HOME/whisper.cpp/models"
+WHISPER_MODEL_FILE="$WHISPER_MODEL_DIR/$(basename "$WHISPER_MODEL_URL")"
+mkdir -p "$WHISPER_MODEL_DIR"
+if [ ! -s "$WHISPER_MODEL_FILE" ]; then
+  log "downloading whisper ggml model -> $WHISPER_MODEL_FILE"
+  curl -fL --retry 4 --retry-delay 5 -C - -o "$WHISPER_MODEL_FILE" "$WHISPER_MODEL_URL" 2>/dev/null \
+    || log "  WARNING: whisper model download failed; whisper will stay down"
 fi
+ls -lh "$WHISPER_MODEL_FILE" 2>/dev/null | sed 's/^/  /' || true
 
 # ── Phase 4: ./jarvis start --all ──
 log "running ./jarvis start --all (source builds — slow)"
