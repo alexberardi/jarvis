@@ -66,11 +66,11 @@ How well each local model routes canned voice commands to the right built-in too
 |---|--:|--:|--:|--:|--:|
 | **Mistral-7B-Instruct-v0.3 (Q4_K_M)** | 0% | 0% | 100% | 228ms | ~1.8s |
 | **Qwen3-4B (Q4_K_M)** | 0% | 0% | 100% | 232ms | ~1.8s |
+| **Qwen3-8B (Q4_K_M)** | 0% | 0% | 100% | 233ms | ~1.8s |
+| **Hermes-3-Llama-3.1-8B (Q4_K_M)** | 0% | 0% | 100% | 234ms | ~1.8s |
 | **Llama-3.1-8B-Instruct (Q4_K_M)** | 0% | 0% | 100% | 234ms | ~1.8s |
-| **Hermes-3-Llama-3.1-8B (Q4_K_M)** | 0% | 0% | 100% | 235ms | ~1.8s |
-| **Qwen3-8B (Q4_K_M)** | 0% | 0% | 100% | 239ms | ~1.8s |
 
-<sub>GPU: **NVIDIA GeForce RTX 3080 Ti, 12288 MiB, driver 610.57.04** · “Est. spoken response” = routing p50 + ~1.6s STT+TTS overhead · generated 2026-09-02 · [how this is measured](install-e2e/gpu/BENCHMARK.md)</sub>
+<sub>GPU: **NVIDIA GeForce RTX 3080 Ti, 12288 MiB, driver 610.57.04** · “Est. spoken response” = routing p50 + ~1.6s STT+TTS overhead · generated 2026-09-03 · [how this is measured](install-e2e/gpu/BENCHMARK.md)</sub>
 
 <!-- BENCHMARK:END -->
 
