@@ -402,6 +402,36 @@ jdt deploy local .                    # Install to your node
 
 `jdt` supports all component types: commands, agents, device protocols, device managers, routines, and prompt providers. See the [Developer Toolkit docs](https://docs.jarvisautomation.dev/extending/toolkit/) for the full guide, including [Claude Code integration](https://docs.jarvisautomation.dev/extending/toolkit/claude-code/).
 
+### Running the full stack from source
+
+To hack on the stack itself rather than a single service, clone the meta repo
+and use the `./jarvis` CLI:
+
+```bash
+git clone https://github.com/alexberardi/jarvis.git ~/jarvis && cd ~/jarvis
+./scripts/clone-repos.sh     # clone the service repos alongside it
+./jarvis init                # tokens, .env files, infra, migrations
+./jarvis start --all         # build + start every service
+```
+
+**Host requirements** — checked by the `install-e2e-quickstart` CI lane, which
+runs exactly these three commands on a clean machine:
+
+| | |
+|---|---|
+| **Python 3.11+** | `./jarvis init` builds a host venv per service to run alembic, and six services declare `requires-python >=3.11`. Ubuntu 22.04 ships 3.10.12 and will fail with `requires a different Python`. |
+| **~100 GB free disk** | `start --all` builds ~15 images; `llm-proxy`, `whisper-api`, `tts` and `ocr` each pull their own multi-GB torch/CUDA stack. |
+| **Docker + Compose v2** | plus the NVIDIA Container Toolkit if you want GPU services. |
+
+Neither model-backed service starts until you give it a model — that is
+deliberate, not a fault:
+
+- **llm-proxy** — run `./jarvis llm-setup`, or point `JARVIS_MODEL_NAME` at a
+  local GGUF. The shipped default path does not exist until you do.
+- **whisper-api** — place a GGML model at `~/whisper.cpp/models/`. Outbound
+  downloads are opt-in (`whisper.allow_model_autodownload`), and the container
+  mounts that directory read-only, so it must be staged on the host.
+
 ### Working on Services
 
 Each service is its own repository with its own CI pipeline. Clone the ones you need:

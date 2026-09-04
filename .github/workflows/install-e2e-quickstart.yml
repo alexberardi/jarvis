@@ -44,11 +44,16 @@ on:
         description: "Skip instance destroy for debugging (janitor reaps in 3h)"
         type: boolean
         default: false
-  # Enable once this has run green a few times on dispatch. Deliberately offset
-  # from install-e2e (06:37) and install-e2e-gpu (07:23) so a shared breakage
-  # reads top-down in the morning.
-  # schedule:
-  #   - cron: "47 8 * * *"
+  # Offset from install-e2e (06:37) and install-e2e-gpu (07:23) so a shared
+  # breakage reads top-down in the morning. Enabled after the lane went green
+  # end-to-end (33715691281, 30 passed).
+  #
+  # NOTE these lanes cannot overlap: Vast's KVM pool has run as low as ONE
+  # qualifying offer, and two lanes provisioning at once means the second gets
+  # "0 qualifying offer(s)". 84 minutes after install-e2e-gpu is enough for it
+  # to finish and release its instance.
+  schedule:
+    - cron: "47 8 * * *"
 
 permissions:
   contents: read

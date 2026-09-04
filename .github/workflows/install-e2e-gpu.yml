@@ -270,7 +270,16 @@ jobs:
             Port ${{ steps.provision.outputs.ssh_port }}
             User ${{ steps.provision.outputs.ssh_user }}
             IdentityFile ~/.ssh/gpu_e2e
-            StrictHostKeyChecking accept-new
+            # Vast recycles IP:port across instances and provision_vast.py's
+            # SSH-ready probe has already written a known_hosts entry for this
+            # address, so the key legitimately CHANGES under us. accept-new
+            # tolerates UNKNOWN hosts but not changed ones, and fails a healthy
+            # VM with "Host key verification failed" (hit repeatedly on the
+            # quickstart lane, which shares this pattern). These are ephemeral
+            # boxes we created seconds ago and address by instance id — pinning
+            # their host key buys nothing.
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
             ServerAliveInterval 30
             ControlMaster auto
             ControlPath ~/.ssh/cm-%r@%h:%p
