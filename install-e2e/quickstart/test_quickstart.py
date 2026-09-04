@@ -130,6 +130,10 @@ def test_init_generates_every_required_token() -> None:
         "ADMIN_API_KEY",
         "MODEL_SERVICE_TOKEN",
         "JARVIS_ADAPTER_CALLBACK_TOKEN",
+        # RS256 signing key for jarvis-auth. Provisioned at init even though
+        # minting stays HS256 until auth.algorithm is flipped, so the migration
+        # is a settings change rather than a re-provision on a live stack.
+        "AUTH_PRIVATE_KEY",
     ]
     missing = [k for k in required if not re.search(rf"^{k}=.+$", tokens, re.M)]
     assert not missing, f"tokens.env missing required secrets: {missing}"
