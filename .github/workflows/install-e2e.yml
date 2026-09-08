@@ -18,8 +18,13 @@ on:
   workflow_dispatch:
     inputs:
       modules:
-        description: "Recommended/optional modules to enable (comma-separated)"
-        default: "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin"
+        # NO default here on purpose. There used to be one, and it disagreed with
+        # the fallback in the generate step below -- so a manual dispatch ran a
+        # SMALLER stack than a scheduled one, silently. The recipes lane was
+        # added to the fallback, ran green on a manual dispatch, and skipped all
+        # nine of its tests because the containers were never deployed.
+        # Blank falls through to the single canonical list in that step.
+        description: "Modules to enable (comma-separated). Blank = the standard set."
       sync_live:
         description: "Also run the heavy live SYNC-compose bring-up lane (sync-live job)"
         type: boolean
