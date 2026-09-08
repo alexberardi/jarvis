@@ -115,7 +115,7 @@ jobs:
             --storage "$STORAGE_PATH" \
             --gpu none \
             --release "$REL" \
-            --modules "${{ github.event.inputs.modules || 'jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,jarvis-phone-gateway' }}"
+            --modules "${{ github.event.inputs.modules || 'jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,jarvis-phone-gateway,jarvis-recipes-server,jarvis-ocr-service' }}"
 
       - name: Validate generated compose
         run: docker compose -f "$GEN_FILE" -f "$OVERRIDE_FILE" config -q && echo "compose valid"
@@ -169,6 +169,15 @@ jobs:
         # config-service migration-005 bug that 500'd /services fleet-wide and
         # which the old /health-only suite missed) AND that /services == 200.
         run: pytest install-e2e/test_migrations.py -v --junitxml=phase1_5-results.xml
+
+      - name: Phase 1.7 — recipes stack wiring
+        # Everything recipes got wrong in practice was invisible to /health: an
+        # object store with no bucket, a queue with no consumer, an image missing
+        # `rq` so completions went to a list nobody reads. In each case the API
+        # answered 200 and the work silently never finished. These assert the
+        # wiring BETWEEN the parts, which is the only place those show up.
+        # Self-skips on a lane that does not deploy recipes.
+        run: pytest install-e2e/test_recipes.py -v --junitxml=phase1_7-results.xml
 
       - name: Install admin SYNC generator deps
         # Only the server package is needed (it owns the SYNC compose generator +
@@ -227,6 +236,7 @@ jobs:
           path: |
             phase1-results.xml
             phase1_5-results.xml
+            phase1_7-results.xml
             phase1_6-results.xml
             phase23-results.xml
             phase4-results.xml
