@@ -59,6 +59,8 @@ HTTP_SERVICES: list[Service] = [
 # publishes; go2rtc is admin-registry-only today, covered by the SYNC lane.)
 OPTIONAL_HTTP_SERVICES: list[Service] = [
     Service("phone-gateway", "jarvis-phone-gateway", 7713, "/health"),
+    Service("recipes-server", "jarvis-recipes-server", 7030, "/health"),
+    Service("ocr-service", "jarvis-ocr-service", 7031, "/health"),
 ]
 
 
@@ -95,6 +97,26 @@ NON_HTTP_CONTAINERS: list[str] = [
 if _container_exists("llama-server-9b"):
     NON_HTTP_CONTAINERS.append("llama-server-9b")
 
+# Recipes brings an object store and two queue workers. Presence-gated for the
+# same reason as the optional HTTP services: a lane that does not deploy recipes
+# must not fail for their absence, and gets covered the moment it does.
+#
+# The workers matter on their own. jarvis-ocr-worker is the consumer of
+# jarvis.ocr.jobs, and its absence is INVISIBLE from any health endpoint: the
+# API answers 200, images upload fine, and the job sits in the queue forever
+# while the app spins. That is exactly how it shipped, and only a container-level
+# assertion catches it.
+# NOT jarvis-minio-init: it is a one-shot that creates the buckets and exits 0,
+# and test_container_running requires "running". It is asserted separately, on
+# its exit code and on the bucket actually existing (test_recipes.py).
+for _optional_container in (
+    "jarvis-minio",
+    "jarvis-recipes-worker",
+    "jarvis-ocr-worker",
+):
+    if _container_exists(_optional_container):
+        NON_HTTP_CONTAINERS.append(_optional_container)
+
 ALL_CONTAINERS: list[str] = [s.container for s in HTTP_SERVICES] + NON_HTTP_CONTAINERS
 
 # ── Migrate-set ──────────────────────────────────────────────────────────────
@@ -118,6 +140,8 @@ MIGRATE_SET: list[Service] = [
         "jarvis-config-service",
         "jarvis-auth",
         "jarvis-command-center",
+        "jarvis-recipes-server",
+        "jarvis-ocr-service",
         "jarvis-llm-proxy-api",
         "jarvis-whisper-api",
         "jarvis-notifications",
