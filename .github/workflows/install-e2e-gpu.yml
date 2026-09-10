@@ -32,10 +32,13 @@ on:
         description: "Comma-separated lanes to run (cuda,vulkan,rocm). NOTE: Vast has had zero AMD marketplace inventory (spike 2026-07-02) — vulkan/rocm fail provisioning (harmlessly, ~$0) until supply appears or a fallback provider lands."
         default: "cuda"
       release:
+        # dev is current main for every service. stable is only meaningful for a
+        # service whose release matches main -- see install-e2e.yml's generate
+        # step for why a stable run is currently red on recipes/ocr.
         description: "Release track to install"
         type: choice
-        options: [stable, dev]
-        default: stable
+        options: [dev, stable]
+        default: dev
       keep_instance:
         description: "Skip instance destroy for debugging (janitor reaps in 3h)"
         type: boolean
@@ -306,10 +309,13 @@ jobs:
         working-directory: jarvis-installer
         run: |
           npm ci
-          # gpu-live PR runs track dev (bleeding edge — where fixes land first;
-          # this lane exists to iterate on the harness + validate fixes).
-          # Schedule/dispatch default to stable: what users actually install.
-          REL="${{ github.event.inputs.release || 'stable' }}"
+          # dev by default: every service publishes :dev from main, so this
+          # lane validates the code that actually just changed. Stable would
+          # install jarvis-recipes-server v0.1.5 and jarvis-ocr-service v0.1.1,
+          # whose :latest images lack alembic.ini and worker.py that the
+          # generated compose depends on -- the stack cannot come up regardless
+          # of the GPU behaviour this lane exists to test.
+          REL="${{ github.event.inputs.release || 'dev' }}"
           if [ "${{ github.event_name }}" = "pull_request" ]; then REL=dev; fi
           # Sidecar lane flips the proxy to a REST llama-server sidecar. DORMANT
           # until gen-export-compose.mts supports --serving (rollout §4c) — until
@@ -376,7 +382,9 @@ jobs:
         working-directory: jarvis-admin/server
         run: |
           npm ci || npm install
-          REL="${{ github.event.inputs.release || 'stable' }}"
+          # Must match the export generator's track above: a SYNC bundle built
+          # from a different track than the stack it reconciles proves nothing.
+          REL="${{ github.event.inputs.release || 'dev' }}"
           if [ "${{ github.event_name }}" = "pull_request" ]; then REL=dev; fi
           # Same sidecar gating as the export generator above — the SYNC/reconcile
           # generator (admin) must also honor --serving (rollout §4c/§5).
