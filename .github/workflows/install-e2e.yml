@@ -25,6 +25,14 @@ on:
         # nine of its tests because the containers were never deployed.
         # Blank falls through to the single canonical list in that step.
         description: "Modules to enable (comma-separated). Blank = the standard set."
+      release:
+        # Defaults to dev, which is current main for every service. Pick stable
+        # only to validate an actual release — see the generate step for why a
+        # stable run is currently red on recipes/ocr.
+        description: "Image release track"
+        type: choice
+        options: [dev, stable]
+        default: dev
       sync_live:
         description: "Also run the heavy live SYNC-compose bring-up lane (sync-live job)"
         type: boolean
@@ -108,13 +116,28 @@ jobs:
         working-directory: jarvis-installer
         run: |
           npm ci
-          # A service-commit dispatch just published that service's :dev image —
-          # test the dev track so we validate the NEW code, not the old :latest.
-          REL=stable
+          # Default to the dev track. Every service publishes :dev from main, so
+          # dev IS current main for the whole stack — which is what CI should be
+          # validating. Stable is only meaningful for a service whose release
+          # matches main, and two of them are far behind: jarvis-recipes-server
+          # is on v0.1.5 (+31 commits) and jarvis-ocr-service on v0.1.1 (+35).
+          #
+          # Those two :latest images also lack files the GENERATED compose
+          # depends on — alembic.ini for the migrate entrypoint it emits, and
+          # worker.py for the sibling worker it declares — so a stable run dies
+          # with "No 'script_location' key found in configuration" and the stack
+          # never comes up, whatever the code under test does.
+          #
+          # Run stable deliberately (workflow_dispatch → release: stable) when
+          # validating a release. Do NOT fix a red stable lane by trimming the
+          # module list: the recipes tests are presence-gated, so dropping their
+          # containers turns nine real assertions into silent skips.
+          REL="${{ github.event.inputs.release || 'dev' }}"
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             REL=dev
             echo "::notice::install-e2e triggered by ${{ github.event.client_payload.service || 'unknown' }}@${{ github.event.client_payload.sha || '?' }} → dev track"
           fi
+          echo "::notice::install-e2e release track: $REL"
           npx tsx scripts/gen-export-compose.mts \
             --out "$GITHUB_WORKSPACE/$GEN_FILE" \
             --storage "$STORAGE_PATH" \
