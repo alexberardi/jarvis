@@ -24,24 +24,49 @@ for _ in $(seq 1 30); do
 done
 
 # ── 2. GPU visibility — the whole point of renting this box ──
+# A bounded WAIT, not a one-shot check. `cloud-init status --wait` can return
+# before the GPU driver has attached in the guest: on 2026-09-14 this gate fired
+# 0.3s after cloud-init returned and threw the run away as a passthrough
+# failure, twice on two different hosts. A genuinely broken host still exits 42,
+# it just takes GPU_WAIT_SECS longer to say so -- and the elapsed time in the log
+# is what tells the two cases apart next time, which a one-shot check never could.
+GPU_WAIT_SECS="${GPU_WAIT_SECS:-120}"
+
+gpu_visible() {
+  case "$GPU_TYPE" in
+    nvidia)       command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q GPU ;;
+    amd|amd-rocm) [ -e /dev/kfd ] && [ -d /dev/dri ] ;;
+    *)            return 1 ;;
+  esac
+}
+
+case "$GPU_TYPE" in
+  nvidia|amd|amd-rocm) ;;
+  *) log "FATAL: unknown gpu type '$GPU_TYPE'"; exit 2 ;;
+esac
+
+gpu_waited=0
+until gpu_visible; do
+  if [ "$gpu_waited" -ge "$GPU_WAIT_SECS" ]; then
+    log "FATAL: no $GPU_TYPE GPU visible in guest after ${gpu_waited}s"
+    log "PROVISIONING failure — driver/passthrough problem on this host."
+    case "$GPU_TYPE" in
+      amd|amd-rocm) ls -la /dev/kfd /dev/dri 2>&1 || true ;;
+    esac
+    exit 42
+  fi
+  sleep 5
+  gpu_waited=$((gpu_waited + 5))
+done
+log "GPU visible after ${gpu_waited}s"
+
 case "$GPU_TYPE" in
   nvidia)
-    if ! command -v nvidia-smi >/dev/null 2>&1 || ! nvidia-smi -L | grep -q GPU; then
-      log "FATAL: no NVIDIA GPU visible in guest (nvidia-smi missing or empty)"
-      log "PROVISIONING failure — driver/passthrough problem on this host."
-      exit 42
-    fi
     nvidia-smi -L
     ;;
   amd|amd-rocm)
     # The generated compose maps /dev/kfd + /dev/dri into the GPU containers;
-    # both must exist in the guest or the containers can't start.
-    if [ ! -e /dev/kfd ] || [ ! -d /dev/dri ]; then
-      log "FATAL: /dev/kfd or /dev/dri missing — amdgpu driver not up in guest."
-      log "PROVISIONING failure — this host's VM image lacks the AMD driver."
-      ls -la /dev/kfd /dev/dri 2>&1 || true
-      exit 42
-    fi
+    # the wait above is what proves both exist.
     if ! lspci | grep -qiE 'vga|display.*amd|amd.*(vga|display)|\[amd/ati\]'; then
       log "WARNING: lspci shows no AMD display device; continuing on /dev/kfd evidence"
     fi

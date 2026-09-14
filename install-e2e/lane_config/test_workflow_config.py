@@ -26,7 +26,20 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+def _repo_root() -> Path:
+    """Walk up to the checkout root rather than counting parents.
+
+    This file has already moved once (install-e2e/ -> install-e2e/lane_config/)
+    and a hardcoded parent count breaks silently into "file not found" rather
+    than a readable failure.
+    """
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / ".github" / "workflows").is_dir():
+            return candidate
+    raise AssertionError("no .github/workflows above this file")
+
+
+WORKFLOWS = _repo_root() / ".github" / "workflows"
 E2E = WORKFLOWS / "install-e2e.yml"
 GPU = WORKFLOWS / "install-e2e-gpu.yml"
 
