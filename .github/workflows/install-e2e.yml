@@ -76,6 +76,36 @@ env:
   SYNC_FILE: install-e2e/docker-compose.sync.yaml
 
 jobs:
+  # Guards on the lane's own scripts and config. No VM, no stack, ~10 seconds --
+  # and it runs on every trigger, because these tests previously could not run at
+  # all: install-e2e/conftest.py has a session-scoped autouse fixture that blocks
+  # on the control plane, so `pytest install-e2e/test_workflow_config.py` failed
+  # with "Is the stack running?" and nothing invoked it. They live under
+  # install-e2e/lane_config/ now, whose conftest overrides that fixture.
+  lane-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test deps
+        run: pip install -r install-e2e/requirements.txt
+
+      - name: Lane config + bootstrap gate guards
+        run: pytest install-e2e/lane_config -v --junitxml=lane-config-results.xml
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lane-config-results
+          path: lane-config-results.xml
+          if-no-files-found: ignore
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 40

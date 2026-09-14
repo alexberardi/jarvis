@@ -29,18 +29,34 @@ for _ in $(seq 1 30); do
 done
 
 # ── 2. GPU visibility — same fail-fast contract as the GPU lane (exit 42) ──
+# Fail-fast on a broken host, but not fail-EARLY on a slow one. `cloud-init
+# status --wait` can return before the nvidia driver has attached in the guest:
+# on 2026-09-14 this gate fired 0.3s after cloud-init returned and threw the run
+# away as a passthrough failure, twice on two different hosts, each time burning
+# a rented instance and reporting 22 failed / 4 passed because init never ran.
+# A genuinely broken host still exits 42, it just takes GPU_WAIT_SECS longer --
+# and the elapsed time in the log is what tells the two cases apart.
+GPU_WAIT_SECS="${GPU_WAIT_SECS:-120}"
+
 case "$GPU_TYPE" in
-  nvidia)
-    if ! command -v nvidia-smi >/dev/null 2>&1 || ! nvidia-smi -L | grep -q GPU; then
-      log "FATAL: no NVIDIA GPU visible in guest (nvidia-smi missing or empty)"
-      log "PROVISIONING failure — driver/passthrough problem on this host."
-      exit 42
-    fi
-    nvidia-smi -L
-    ;;
-  *)
-    log "FATAL: quickstart lane is nvidia-only (got '$GPU_TYPE')"; exit 2 ;;
+  nvidia) ;;
+  *) log "FATAL: quickstart lane is nvidia-only (got '$GPU_TYPE')"; exit 2 ;;
 esac
+
+gpu_visible() { command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q GPU; }
+
+gpu_waited=0
+until gpu_visible; do
+  if [ "$gpu_waited" -ge "$GPU_WAIT_SECS" ]; then
+    log "FATAL: no NVIDIA GPU visible in guest after ${gpu_waited}s (nvidia-smi missing or empty)"
+    log "PROVISIONING failure — driver/passthrough problem on this host."
+    exit 42
+  fi
+  sleep 5
+  gpu_waited=$((gpu_waited + 5))
+done
+log "GPU visible after ${gpu_waited}s"
+nvidia-smi -L
 
 # ── 3. Docker ──
 if ! command -v docker >/dev/null 2>&1; then
