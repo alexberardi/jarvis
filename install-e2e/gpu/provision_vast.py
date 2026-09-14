@@ -62,7 +62,18 @@ RUNNING_TIMEOUT_S = 10 * 60
 # inside; observed refusals past 6 min. The overall PROVISION_DEADLINE_S is
 # the real cap.
 SSH_AFTER_RUNNING_TIMEOUT_S = 12 * 60
-PROVISION_DEADLINE_S = 60 * 60
+# An hour of provisioning inside a 150-minute job budget is how a thin
+# marketplace quietly eats the test. On 2026-09-14 the quickstart lane spent 35
+# minutes here and was then killed mid `start --all` with recipes-server not yet
+# up -- reported as 17 failed tests, none of which were about the code. A
+# healthy provision is ~3-5 minutes, so cap it well short of that and let the
+# lane fail as a PROVISIONING error, which the workflows already treat as
+# "not a test failure", instead of stealing the bring-up's time.
+PROVISION_DEADLINE_S = int(os.environ.get("VAST_PROVISION_DEADLINE_S", str(20 * 60)))
+# A rented box that answers SSH but shows no GPU is a sick host, not a slow one.
+# Budget matches the bootstrap scripts' GPU_WAIT_SECS so the two agree on what
+# "the driver never came up" means.
+GPU_PROBE_WAIT_S = int(os.environ.get("VAST_GPU_PROBE_WAIT_S", "120"))
 # The cheapest offers are adversely selected (they're cheap because nobody can
 # use them). Empirically the CN-hosted 3090s never finished a single image
 # pull — try them last, not first.
@@ -296,6 +307,53 @@ def ssh_probe(host: str, port: int, user: str, key_path: str | None) -> tuple[bo
     return proc.returncode == 0, (proc.stderr or "").strip()
 
 
+def ssh_run(host: str, port: int, user: str, key_path: str | None,
+            remote_cmd: str, timeout: int = 30) -> tuple[int, str]:
+    """Run one command on the box; returns (rc, stdout+stderr)."""
+    cmd = [
+        "ssh",
+        "-p", str(port),
+        "-o", "ConnectTimeout=10",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "BatchMode=yes",
+    ]
+    if key_path:
+        cmd += ["-i", key_path]
+    cmd += [f"{user}@{host}", remote_cmd]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return 255, "ssh timed out"
+    return proc.returncode, ((proc.stdout or "") + (proc.stderr or "")).strip()
+
+
+def gpu_visible_over_ssh(conn: dict, user: str, key_path: str | None,
+                         gpu_type: str) -> bool:
+    """Is a GPU actually visible inside the guest?
+
+    The bootstrap scripts ask the same question, but they run in a LATER
+    workflow step: by the time they answer, the offer loop here has already
+    committed to the host and the run is thrown away rather than moved to
+    another machine. Asking here means a sick host costs one more offer instead
+    of the whole night.
+    """
+    if gpu_type == "nvidia":
+        probe = "nvidia-smi -L"
+    else:
+        probe = "test -e /dev/kfd && test -d /dev/dri && echo GPU"
+    host, port = conn["ssh_host"], conn["ssh_port"]
+    deadline = time.time() + GPU_PROBE_WAIT_S
+    while True:
+        rc, out = ssh_run(host, port, user, key_path, probe)
+        if rc == 0 and "GPU" in out:
+            log(f"GPU visible in guest: {out.splitlines()[0][:80]}")
+            return True
+        if time.time() >= deadline:
+            log(f"no GPU in guest after {GPU_PROBE_WAIT_S}s (last: {out[:120]!r})")
+            return False
+        time.sleep(5)
+
+
 def wait_ssh(instance_id: int, user: str, key_path: str | None) -> dict:
     """Two phases (budgeted separately — see the constants): wait for the VM
     to reach `running`, then wait for sshd to accept our key."""
@@ -392,7 +450,11 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
         offer_id = offer["id"]
         dph = offer.get("dph_total")
         gpu = offer.get("gpu_name")
-        log(f"trying offer {offer_id}: {gpu} @ ${dph}/hr")
+        # machine_id, not just offer id: VAST_EXCLUDE_MACHINES is keyed by
+        # machine, so without it in the log a host that keeps winning the
+        # cheapest-first order cannot be pinned from a failed run's output.
+        machine_id = offer.get("machine_id")
+        log(f"trying offer {offer_id} (machine {machine_id}): {gpu} @ ${dph}/hr")
         instance_id: int | None = None
         try:
             out = vastai(
@@ -439,8 +501,21 @@ def provision(lane_key: str, ssh_pubkey: str, vm_image: str | None, ssh_user: st
             last_err = e
             continue
 
+        if not gpu_visible_over_ssh(conn, ssh_user, ssh_key_path, lane.gpu_type):
+            log(f"machine {machine_id} answers SSH but exposes no {lane.gpu_type} "
+                f"GPU — destroying and trying the next offer")
+            log(f"PROVISIONING: machine {machine_id} looks sick; add it to "
+                f"VAST_EXCLUDE_MACHINES if it keeps being selected")
+            try:
+                destroy(instance_id)
+            except Exception as de:  # noqa: BLE001
+                log(f"destroy of {instance_id} FAILED ({de}) — clean-gate will flag it")
+            last_err = RuntimeError(f"machine {machine_id}: no GPU in guest")
+            continue
+
         result = {
             "instance_id": instance_id,
+            "machine_id": machine_id,
             "lane": lane_key,
             "label": run_label,
             "gpu_name": gpu,

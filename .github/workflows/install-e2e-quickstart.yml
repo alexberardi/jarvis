@@ -129,6 +129,12 @@ jobs:
 
       - name: Provision Vast.ai VM
         id: provision
+        # Backstop above provision_vast.py's own VAST_PROVISION_DEADLINE_S, so
+        # the script's readable "PROVISIONING" message wins the race and this
+        # only fires if it hangs somewhere it cannot report. Without a cap here,
+        # a thin marketplace spends the job's budget before the stack is even
+        # built -- 35 minutes of a 150-minute job on 2026-09-14.
+        timeout-minutes: 25
         run: |
           python install-e2e/gpu/provision_vast.py provision \
             --lane "$LANE" \
