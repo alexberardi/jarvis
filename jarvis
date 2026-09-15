@@ -2069,8 +2069,14 @@ _start_one() {
         return 0
     fi
 
-    # Check if already running
-    if curl -sf --max-time 2 "http://localhost:${port}$(_get_health "$entry")" >/dev/null 2>&1; then
+    # Check if already running.
+    #
+    # A running service is NOT a reason to skip an explicit build: `./jarvis
+    # rebuild` stops then starts with --build, so if the stop silently failed the
+    # old container is still answering here and this short-circuit would report UP
+    # without ever rebuilding. When a build was asked for, fall through and let
+    # compose do it (it is a no-op for an already-current image).
+    if [[ -z "$build_flag" ]] && curl -sf --max-time 2 "http://localhost:${port}$(_get_health "$entry")" >/dev/null 2>&1; then
         # For npm services with a backend server, also verify the backend is up.
         # The frontend (e.g. Vite on 7710) may be running from a tmux session while
         # the backend (e.g. Fastify on 7711) is not — we need to start the backend.
@@ -2122,10 +2128,39 @@ _start_one() {
                 }
             fi
 
-            local compose_output
-            if ! compose_output=$(cd "$dir" && docker compose $env_flag $compose_flags up -d $build_flag 2>&1); then
+            # Run compose to a LOG and tick while it works, rather than
+            # capturing its output into a variable and going silent.
+            #
+            # These dev composes use `build: .`, so `up -d` builds the image
+            # inline when it is missing -- and jarvis-llm-proxy-api's CUDA image
+            # took ~115 minutes of that. Captured output meant the operator saw
+            # nothing at all: install-e2e-quickstart's log stopped dead after
+            # "START jarvis-command-center" and was killed by the job timeout
+            # every night from 2026-09-08. It read as a hang for a week, and the
+            # fix was in a Dockerfile nobody had reason to look at, because a
+            # silent build and a wedged process are indistinguishable.
+            #
+            # The tick starts at 20s (a normal `up -d` is a second or two, so
+            # anything past that is compiling) and then slows to every 30s, to
+            # keep a long build from filling a CI log with a line per second.
+            local compose_log="${LOG_DIR}/${name}-compose.log"
+            mkdir -p "$LOG_DIR"
+            (cd "$dir" && docker compose $env_flag $compose_flags up -d $build_flag >"$compose_log" 2>&1) &
+            local compose_pid=$!
+            local waited=0 next_tick=20
+            while kill -0 "$compose_pid" 2>/dev/null; do
+                sleep 1
+                waited=$((waited + 1))
+                if [[ "$waited" -ge "$next_tick" ]]; then
+                    echo -ne "\r  ${BLUE}...${NC}   ${name} :${port} ${DIM}(building, $((waited / 60))m$(printf '%02d' $((waited % 60)))s)${NC}"
+                    next_tick=$((waited + 30))
+                fi
+            done
+            # `if ! wait` rather than assign-then-check: this script runs under
+            # `set -e`, where a failing command outside a condition exits.
+            if ! wait "$compose_pid"; then
                 echo -e "\r  ${RED}FAIL${NC}  ${name} (docker compose up failed)"
-                echo -e "  ${DIM}${compose_output}${NC}"
+                echo -e "  ${DIM}$(tail -20 "$compose_log")${NC}"
                 return 1
             fi
             ;;
@@ -2620,7 +2655,32 @@ _stop_one() {
                     compose_flags=$(_get_compose_flags "$dir") || compose_flags="-f $compose_file"
                 fi
 
-                (cd "$dir" && docker compose $env_flag $compose_flags down >/dev/null 2>&1) || true
+                # Capture rather than discard. This used to be
+                # `... down >/dev/null 2>&1) || true`, so a docker failure —
+                # most often "permission denied ... /var/run/docker.sock" when
+                # the caller's login session predates being added to the docker
+                # group — was swallowed, and the unconditional STOP line below
+                # still printed. `_start_one` then found the old container still
+                # answering /health and returned UP without reaching the build.
+                # `./jarvis rebuild` reported a clean STOP/UP for a service it had
+                # not touched, twice, with nothing in the output to say so.
+                # `if !` rather than assign-then-check-$?: this script runs under
+                # `set -e` (line 24), where a failing assignment exits immediately.
+                # Matches the idiom already used on the start path.
+                local down_output
+                if ! down_output=$(cd "$dir" && docker compose $env_flag $compose_flags down 2>&1); then
+                    echo -e "  ${RED}FAIL${NC}  ${name} (docker compose down failed)"
+                    echo -e "  ${DIM}${down_output}${NC}"
+                    if grep -qi "permission denied.*docker.sock" <<<"$down_output"; then
+                        echo -e "  ${YELLOW}HINT${NC}  your session is not in the 'docker' group."
+                        echo -e "  ${DIM}Group membership is inherited from the login session, so a new"
+                        echo -e "  terminal window is not enough — log out and back in, or prefix with:"
+                        echo -e "    newgrp docker <<'EOF'"
+                        echo -e "    ./jarvis rebuild ${name}"
+                        echo -e "    EOF${NC}"
+                    fi
+                    return 1
+                fi
             fi
             ;;
         local|npm)
