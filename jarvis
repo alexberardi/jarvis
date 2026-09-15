@@ -2122,10 +2122,39 @@ _start_one() {
                 }
             fi
 
-            local compose_output
-            if ! compose_output=$(cd "$dir" && docker compose $env_flag $compose_flags up -d $build_flag 2>&1); then
+            # Run compose to a LOG and tick while it works, rather than
+            # capturing its output into a variable and going silent.
+            #
+            # These dev composes use `build: .`, so `up -d` builds the image
+            # inline when it is missing -- and jarvis-llm-proxy-api's CUDA image
+            # took ~115 minutes of that. Captured output meant the operator saw
+            # nothing at all: install-e2e-quickstart's log stopped dead after
+            # "START jarvis-command-center" and was killed by the job timeout
+            # every night from 2026-09-08. It read as a hang for a week, and the
+            # fix was in a Dockerfile nobody had reason to look at, because a
+            # silent build and a wedged process are indistinguishable.
+            #
+            # The tick starts at 20s (a normal `up -d` is a second or two, so
+            # anything past that is compiling) and then slows to every 30s, to
+            # keep a long build from filling a CI log with a line per second.
+            local compose_log="${LOG_DIR}/${name}-compose.log"
+            mkdir -p "$LOG_DIR"
+            (cd "$dir" && docker compose $env_flag $compose_flags up -d $build_flag >"$compose_log" 2>&1) &
+            local compose_pid=$!
+            local waited=0 next_tick=20
+            while kill -0 "$compose_pid" 2>/dev/null; do
+                sleep 1
+                waited=$((waited + 1))
+                if [[ "$waited" -ge "$next_tick" ]]; then
+                    echo -ne "\r  ${BLUE}...${NC}   ${name} :${port} ${DIM}(building, $((waited / 60))m$(printf '%02d' $((waited % 60)))s)${NC}"
+                    next_tick=$((waited + 30))
+                fi
+            done
+            # `if ! wait` rather than assign-then-check: this script runs under
+            # `set -e`, where a failing command outside a condition exits.
+            if ! wait "$compose_pid"; then
                 echo -e "\r  ${RED}FAIL${NC}  ${name} (docker compose up failed)"
-                echo -e "  ${DIM}${compose_output}${NC}"
+                echo -e "  ${DIM}$(tail -20 "$compose_log")${NC}"
                 return 1
             fi
             ;;
