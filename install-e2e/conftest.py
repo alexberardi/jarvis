@@ -106,11 +106,11 @@ if _container_exists("llama-server-9b"):
 # API answers 200, images upload fine, and the job sits in the queue forever
 # while the app spins. That is exactly how it shipped, and only a container-level
 # assertion catches it.
-# NOT jarvis-minio-init: it is a one-shot that creates the buckets and exits 0,
-# and test_container_running requires "running". It is asserted separately, on
+# NOT jarvis-seaweedfs-init: it is a one-shot that creates the buckets and exits
+# 0, and test_container_running requires "running". It is asserted separately, on
 # its exit code and on the bucket actually existing (test_recipes.py).
 for _optional_container in (
-    "jarvis-minio",
+    "jarvis-seaweedfs",
     "jarvis-recipes-worker",
     "jarvis-ocr-worker",
 ):
