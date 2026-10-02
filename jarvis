@@ -548,6 +548,7 @@ _get_db_name_for_service() {
     echo "${!db_var}"
 }
 
+
 # ── Init ─────────────────────────────────────────────────────────────────────
 
 _generate_token() {
@@ -655,6 +656,7 @@ _inject_env_var() {
     fi
 }
 
+
 _stamp_env_files() {
     _load_tokens
     _load_db_names
@@ -736,6 +738,19 @@ _stamp_env_files() {
                 # persist step never runs — deep-research results and memory
                 # extraction complete in the worker but land nowhere.
                 _inject_env_var "$env_file" "JARVIS_ADAPTER_CALLBACK_TOKEN" "$JARVIS_ADAPTER_CALLBACK_TOKEN"
+                # Broker credentials must match the ones mosquitto hashed into
+                # its password file, so they are read from data-services' .env
+                # rather than generated again here. CC is the only consumer:
+                # nodes fetch broker creds from CC over authenticated HTTP.
+                # The username is the literal 'jarvis' on both sides.
+                local _mqtt_pw=""
+                if [[ -f "$DATA_SERVICES_ENV" ]]; then
+                    _mqtt_pw=$(sed -n 's/^MQTT_PASSWORD=//p' "$DATA_SERVICES_ENV" | head -1)
+                fi
+                if [[ -n "$_mqtt_pw" ]]; then
+                    _inject_env_var "$env_file" "MQTT_USERNAME" "jarvis"
+                    _inject_env_var "$env_file" "MQTT_PASSWORD" "$_mqtt_pw"
+                fi
                 ;;
             jarvis-recipes-server)
                 _inject_env_var "$env_file" "AUTH_SECRET_KEY" "$AUTH_SECRET_KEY"
@@ -761,6 +776,13 @@ _stamp_env_files() {
                 # In Docker, ~/whisper.cpp is mounted at /root/whisper.cpp
                 if [[ "$mode" == "docker" ]]; then
                     _inject_env_var "$env_file" "WHISPER_MODEL" "/root/whisper.cpp/models/ggml-base.en.bin"
+                else
+                    # Native: there is no mount, so the container path has to be
+                    # rewritten back to the host one. Without this, a .env
+                    # stamped while this service was still dockerized keeps
+                    # /root/... and whisper dies reporting a missing model at a
+                    # path that cannot exist outside a container.
+                    _inject_env_var "$env_file" "WHISPER_MODEL" "${HOME}/whisper.cpp/models/ggml-base.en.bin"
                 fi
                 ;;
             jarvis-notifications)
@@ -840,6 +862,11 @@ print(header+'.'+payload+'.'+sig)
             fi
 
             local db_url="postgresql+psycopg2://${pg_user}:${pg_pass}@${svc_host}:5432/${db_name}"
+            # localhost, NOT $svc_host. This URL is consumed by apply_migrations.sh,
+            # which ./jarvis init runs FROM THE HOST -- host.docker.internal does
+            # not resolve there. Each service's config.py documents the same split:
+            # DATABASE_URL for in-container use, MIGRATIONS_DATABASE_URL for the
+            # host-run migration path.
             local migrations_url="postgresql+psycopg2://${pg_user}:${pg_pass}@localhost:5432/${db_name}"
 
             IFS=',' read -ra var_names <<< "$env_vars"
@@ -921,6 +948,14 @@ ENVEOF
             || _inject_env_var "$DATA_SERVICES_ENV" "SEAWEEDFS_PORT" "8333"
         grep -q '^OBJECT_STORE_BUCKETS=' "$DATA_SERVICES_ENV" \
             || _inject_env_var "$DATA_SERVICES_ENV" "OBJECT_STORE_BUCKETS" "jarvis-dev"
+
+        # Broker credential. The CLI has always REGISTERED jarvis-mqtt-broker in
+        # config-service without running a broker, so every MQTT path failed by
+        # timeout; data-services now ships mosquitto, which needs this to build
+        # its password file. Generated once and reused -- rotating it would lock
+        # out command-center until its .env is re-stamped.
+        grep -q '^MQTT_PASSWORD=' "$DATA_SERVICES_ENV" \
+            || _inject_env_var "$DATA_SERVICES_ENV" "MQTT_PASSWORD" "$(openssl rand -hex 16)"
     fi
 
     local compose_output
@@ -2279,7 +2314,13 @@ _start_one() {
             # deploy-launchd.sh materializes the plist and bootstraps it, and
             # is idempotent, so this doubles as "re-deploy after a code change".
             if _is_native_capable "$dir"; then
-                if ! (cd "$dir" && bash deploy-launchd.sh >> "${LOG_DIR}/${name}.log" 2>&1); then
+                # deploy-launchd.sh defaults ENV_FILE_PATH to the INSTALLER's
+                # env file (~/.jarvis/compose/.env), a topology the CLI does not
+                # use: `./jarvis init` writes each service's own repo .env with
+                # localhost Postgres and the generated password. Left to default,
+                # the agent came up against a stale file and died on
+                # "fe_sendauth: no password supplied".
+                if ! (cd "$dir" && ENV_FILE_PATH="${dir}/.env" bash deploy-launchd.sh >> "${LOG_DIR}/${name}.log" 2>&1); then
                     echo -e "\r  ${RED}FAIL${NC}  ${name} (deploy-launchd.sh failed, see ${LOG_DIR}/${name}.log)"
                     return 1
                 fi
