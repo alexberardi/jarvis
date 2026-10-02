@@ -42,3 +42,27 @@ install-e2e/init-db.sh
 # Python
 __pycache__/
 *.pyc
+
+# Local-only experiment/ops docs — never publish (repo is public)
+prds/minimal-prompt-adapter.md
+prds/*.local.md
+prds/gpu-install-e2e.md
+prds/medication-tracking.md
+prds/phone-calls.md
+prds/pre-release-testing-checklist.md
+prds/stability-punchlist-2026-07.md
+prds/auth-rs256-migration.md
+prds/minio-eol-object-store.md
+prds/errand-runner.md
+prds/email-enhancements.md
+prds/generic-interactive-view.md
+prds/node-owner.md
+prds/push-notifications.md
+prds/resilient-package-installs.md
+prds/voice-profiles-non-users.md
+
+# Internal working docs — the repo is public
+prds/osx-api.md
+NEXT-STEPS-phone-calls.md
+TESTING-phone-p1-local.md
+RELEASE_NOTES_2026-08.md
