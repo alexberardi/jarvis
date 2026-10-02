@@ -124,13 +124,19 @@ TEST_REGISTRY=(
 # stay native. The corresponding run.sh scripts must support `--setup`
 # so _setup_local_services can install deps before first start.
 if [[ "$(uname -s)" == "Darwin" ]]; then
+    # Every service that ships deploy-launchd.sh runs natively here --
+    # Docker on Mac has no Metal passthrough, so anything wanting
+    # mps/Metal/Apple Vision must stay outside it. Derived from the repo
+    # rather than listed, because the old hardcoded list had drifted:
+    # it forced ocr-service local but omitted whisper, so macOS built a
+    # CPU-only whisper image with the Metal path sitting unused.
     for i in "${!SERVICES[@]}"; do
-        case "${SERVICES[$i]}" in
-            jarvis-llm-proxy-api*) SERVICES[$i]="jarvis-llm-proxy-api|7704|2|local|/health" ;;
-            jarvis-tts*)           SERVICES[$i]="jarvis-tts|7707|3|local|/health" ;;
-            jarvis-ocr-service*)   SERVICES[$i]="jarvis-ocr-service|7031|3|local|/health" ;;
-        esac
+        _n="${SERVICES[$i]%%|*}"
+        if [[ -f "${JARVIS_ROOT}/${_n}/deploy-launchd.sh" ]]; then
+            SERVICES[$i]="$(echo "${SERVICES[$i]}" | awk -F'|' '{print $1"|"$2"|"$3"|local|"$5}')"
+        fi
     done
+    unset _n
     # jarvis-osx-api is native-ONLY (needs TCC grants + a GUI session; no
     # Docker image exists) and macOS-only, so it joins the registry only on
     # Darwin — mode is always local, never rewritten to docker.
@@ -1999,6 +2005,50 @@ print(json.dumps({'settings': s}))
     fi
 }
 
+cmd_uninstall_native() {
+    # Removes the launchd agents `./jarvis start` installs. `stop` only boots
+    # them out (they stay installed, ready to bootstrap again); this deletes the
+    # plists, so it is the actual uninstall.
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        echo -e "  ${DIM}uninstall-native is macOS-only (detected $(uname -s))${NC}"
+        return 0
+    fi
+
+    echo -e "${BOLD}UNINSTALL NATIVE SERVICES${NC}"
+    echo -e "${DIM}Boots out each launchd agent and deletes its plist${NC}"
+    echo ""
+
+    local agents_dir="$HOME/Library/LaunchAgents"
+    local removed=0 entry name dir label plist
+
+    for entry in "${SERVICES[@]}"; do
+        name=$(_get_name "$entry")
+        dir="${JARVIS_ROOT}/${name}"
+        _is_native_capable "$dir" || continue
+
+        while IFS= read -r label; do
+            [[ -n "$label" ]] || continue
+            plist="${agents_dir}/${label}.plist"
+            _launchd_bootout "$label"
+            if [[ -f "$plist" ]]; then
+                rm -f "$plist"
+                echo -e "  ${GREEN}OK${NC}    removed ${label}"
+                removed=$((removed + 1))
+            else
+                echo -e "  ${DIM}--${NC}    ${label} (not installed)"
+            fi
+        done < <(_launchd_labels "$dir")
+    done
+
+    echo ""
+    if [[ "$removed" -eq 0 ]]; then
+        echo -e "  ${DIM}Nothing to remove.${NC}"
+    else
+        echo -e "  ${BOLD}Removed ${removed} agent(s).${NC}"
+        echo -e "  ${DIM}Logs are left in ~/Library/Logs/ -- delete them yourself if you want them gone.${NC}"
+    fi
+}
+
 cmd_quickstart() {
     echo -e "${BOLD}JARVIS QUICKSTART${NC}"
     echo -e "${DIM}Full setup: init + start + LLM wizard${NC}"
@@ -2033,6 +2083,43 @@ cmd_quickstart() {
 }
 
 # ── Start ────────────────────────────────────────────────────────────────────
+
+# ── Native macOS services (launchd) ──────────────────────────────────────────
+#
+# A service is native-capable when it ships deploy-launchd.sh, and its launchd
+# labels are the basenames of scripts/launchd/*.plist. Both are read off disk
+# rather than listed here: a hardcoded list is what drifted before -- it forced
+# ocr-service local while omitting whisper, so macOS built a CPU-only whisper
+# image with a Metal path sitting unused beside it.
+#
+# jarvis-admin gates the same services with `nativeCapable` in its registry.
+# Deriving from the repo keeps the CLI from needing a third copy of that fact.
+
+_is_native_capable() {
+    [[ "$(uname -s)" == "Darwin" && -f "${1}/deploy-launchd.sh" ]]
+}
+
+# Every launchd label a service installs. ocr-service ships TWO (the API and
+# the Redis queue worker), so this must stay a list.
+_launchd_labels() {
+    local dir="$1" f
+    for f in "$dir"/scripts/launchd/*.plist; do
+        [[ -e "$f" ]] || continue
+        basename "$f" .plist
+    done
+}
+
+_launchd_bootout() {
+    # Stops the agent AND prevents it restarting at login; the plist stays on
+    # disk so `./jarvis start` can bootstrap it again. Removing the plist is
+    # `./jarvis uninstall-native`.
+    local label="$1"
+    launchctl bootout "gui/$(id -u)/${label}" >/dev/null 2>&1 || true
+}
+
+_launchd_is_running() {
+    launchctl print "gui/$(id -u)/${1}" >/dev/null 2>&1
+}
 
 _ensure_venv() {
     # Ensure .venv exists and deps are installed for a local-mode service
@@ -2185,7 +2272,18 @@ _start_one() {
             fi
             ;;
         local)
-            if [[ -f "$dir/run.sh" ]]; then
+            # On macOS, prefer the service's own launchd agent. A backgrounded
+            # `&` child dies with the shell that started it and never comes
+            # back at login, which is wrong for anything long-lived -- the
+            # mac mini runs these as agents for exactly that reason.
+            # deploy-launchd.sh materializes the plist and bootstraps it, and
+            # is idempotent, so this doubles as "re-deploy after a code change".
+            if _is_native_capable "$dir"; then
+                if ! (cd "$dir" && bash deploy-launchd.sh >> "${LOG_DIR}/${name}.log" 2>&1); then
+                    echo -e "\r  ${RED}FAIL${NC}  ${name} (deploy-launchd.sh failed, see ${LOG_DIR}/${name}.log)"
+                    return 1
+                fi
+            elif [[ -f "$dir/run.sh" ]]; then
                 # run.sh handles its own venv creation + deps (set up during init)
                 (cd "$dir" && AUTO_SETUP=true exec bash run.sh >> "${LOG_DIR}/${name}.log" 2>&1) &
                 echo $! > "${PID_DIR}/${name}.pid"
@@ -2679,6 +2777,16 @@ _stop_one() {
             fi
             ;;
         local|npm)
+            # A launchd-managed service is not ours to kill by PID: KeepAlive
+            # would just restart it. Boot it out instead, which stops it now and
+            # keeps it from coming back at login. The plist stays installed --
+            # `./jarvis uninstall-native` removes it.
+            if _is_native_capable "$dir"; then
+                local _label
+                while IFS= read -r _label; do
+                    [[ -n "$_label" ]] && _launchd_bootout "$_label"
+                done < <(_launchd_labels "$dir")
+            fi
             # Kill process tree from PID files
             for pid_file in "${PID_DIR}/${name}-server.pid" "${PID_DIR}/${name}.pid"; do
                 if [[ -f "$pid_file" ]]; then
@@ -3520,6 +3628,9 @@ case "${1:-}" in
         cmd_stop "${2:---all}" "$STANDALONE"
         echo ""
         cmd_start "${2:---all}" "--build" "$STANDALONE"
+        ;;
+    uninstall-native)
+        cmd_uninstall_native
         ;;
     status)
         cmd_status
