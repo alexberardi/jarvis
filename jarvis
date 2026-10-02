@@ -863,7 +863,7 @@ ADMINJSON
 }
 
 _start_infra() {
-    echo -e "\n${DIM}Starting infrastructure (PostgreSQL + Redis + pgAdmin + MinIO)...${NC}"
+    echo -e "\n${DIM}Starting infrastructure (PostgreSQL + Redis + pgAdmin + SeaweedFS)...${NC}"
 
     if [[ ! -d "$DATA_SERVICES_DIR" ]]; then
         echo -e "  ${RED}FAIL${NC}  jarvis-data-services directory not found"
@@ -883,16 +883,38 @@ PGADMIN_DEFAULT_EMAIL=admin@example.com
 PGADMIN_DEFAULT_PASSWORD=admin
 PGADMIN_PORT=5050
 
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minioadmin
-MINIO_PORT=9000
-MINIO_CONSOLE_PORT=9001
+OBJECT_STORE_ACCESS_KEY=jarvislocal
+OBJECT_STORE_SECRET_KEY=jarvislocal
+SEAWEEDFS_PORT=8333
+OBJECT_STORE_BUCKETS=jarvis-dev
 
 REDIS_PASSWORD=redis
 REDIS_PORT=6379
 REDIS_COMMANDER_PORT=8081
 ENVEOF
         echo -e "  ${GREEN}OK${NC}    Created data-services .env (defaults)"
+    else
+        # Upgrade an EXISTING .env. The block above only runs when the file is
+        # absent, so a stack created before the 2026-10-01 object-store swap
+        # would otherwise keep only MINIO_* and hand compose an empty
+        # OBJECT_STORE_ACCESS_KEY -- SeaweedFS then rejects every request and it
+        # reads as a credentials bug rather than a missing variable.
+        #
+        # The MinIO root credentials are reused as the S3 credentials when they
+        # exist, so an upgraded stack keeps working against data written under
+        # them; otherwise a local-only default is fine (bound to localhost).
+        if ! grep -q '^OBJECT_STORE_ACCESS_KEY=' "$DATA_SERVICES_ENV"; then
+            local _ak _sk
+            _ak="$(sed -n 's/^MINIO_ROOT_USER=//p' "$DATA_SERVICES_ENV" | head -1)"
+            _sk="$(sed -n 's/^MINIO_ROOT_PASSWORD=//p' "$DATA_SERVICES_ENV" | head -1)"
+            _inject_env_var "$DATA_SERVICES_ENV" "OBJECT_STORE_ACCESS_KEY" "${_ak:-jarvislocal}"
+            _inject_env_var "$DATA_SERVICES_ENV" "OBJECT_STORE_SECRET_KEY" "${_sk:-jarvislocal}"
+            echo -e "  ${GREEN}OK${NC}    Added object store credentials to data-services .env"
+        fi
+        grep -q '^SEAWEEDFS_PORT=' "$DATA_SERVICES_ENV" \
+            || _inject_env_var "$DATA_SERVICES_ENV" "SEAWEEDFS_PORT" "8333"
+        grep -q '^OBJECT_STORE_BUCKETS=' "$DATA_SERVICES_ENV" \
+            || _inject_env_var "$DATA_SERVICES_ENV" "OBJECT_STORE_BUCKETS" "jarvis-dev"
     fi
 
     local compose_output
@@ -2706,7 +2728,7 @@ cmd_stop() {
             if [[ -d "$DATA_SERVICES_DIR" ]]; then
                 (cd "$DATA_SERVICES_DIR" && docker compose --env-file .env down >/dev/null 2>&1) || true
             fi
-            echo -e "  ${RED}STOP${NC}  PostgreSQL + Redis + pgAdmin + MinIO"
+            echo -e "  ${RED}STOP${NC}  PostgreSQL + Redis + pgAdmin + SeaweedFS"
         fi
     else
         local entry
@@ -2868,11 +2890,15 @@ cmd_doctor() {
         echo -e " ${DIM}\u2717${NC}  pgAdmin not reachable (:5050)"
     fi
 
-    # MinIO check (nice-to-have)
-    if curl -sf --max-time 2 "http://localhost:9000/minio/health/live" >/dev/null 2>&1; then
-        echo -e " ${GREEN}\u2713${NC}  MinIO reachable (:9000)"
+    # Object store check (nice-to-have). SeaweedFS has no /minio/health/live,
+    # and its S3 root answers 403 to an unsigned request -- which PROVES it
+    # replied. So any HTTP status counts as reachable; only a transport failure
+    # (curl exit 7 / 28) means it is down. `curl -sf` would have called a
+    # healthy store unreachable, which is how the old check read after the swap.
+    if curl -s -o /dev/null --max-time 2 "http://localhost:${SEAWEEDFS_PORT:-8333}" 2>/dev/null; then
+        echo -e " ${GREEN}\u2713${NC}  Object store reachable (:${SEAWEEDFS_PORT:-8333})"
     else
-        echo -e " ${DIM}\u2717${NC}  MinIO not reachable (:9000)"
+        echo -e " ${DIM}\u2717${NC}  Object store not reachable (:${SEAWEEDFS_PORT:-8333})"
     fi
     echo ""
 
