@@ -18,7 +18,15 @@ measures the tool-routing accuracy + latency the product actually delivers for
 that model — not a raw native-tool-calling path (which local GGUFs do poorly).
 
 Ordering note: benchmark cheapest/smallest first so a partial run still yields a
-useful slice, and so the biggest VRAM consumer (Gemma-2-9B) runs last.
+useful slice, and so the biggest VRAM consumers run last.
+
+Gemma-2-9B was dropped from the sweep (2026-08-23). llama-cpp-python on the dev
+box cannot load gemma-2 at all -- it fails in llama_load_model_from_file,
+independently of VRAM. The publish guard added in da53038 requires EVERY
+BENCH_MODELS entry to produce a result, so one permanently unloadable model
+stops the nightly from ever publishing its table. Re-add it only once the
+loader can load gemma-2; the custom "gemma2" chat format it needs still lives
+in jarvis-llm-proxy-api/backends/chat_formats.py.
 """
 
 from __future__ import annotations
@@ -32,7 +40,7 @@ class BenchModel:
 
     key: str  # short stable id used in CLI filters + result JSON
     display: str  # human-readable label for tables
-    family: str  # qwen / llama / mistral / hermes / gemma
+    family: str  # qwen / llama / mistral / hermes
     gguf_path: str  # relative to .models on the inference host
     chat_format: str  # llama-cpp-python chat_format (base template, not FC)
     stop_tokens: str  # comma-joined stop-token string for model.live.stop_tokens
@@ -97,25 +105,6 @@ BENCH_MODELS: list[BenchModel] = [
         stop_tokens="<|im_end|>",
         cc_provider="Qwen3_8B_Compressed",
         url="https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf",
-    ),
-    BenchModel(
-        key="gemma2-9b",
-        display="Gemma-2-9B-it (Q4_K_M)",
-        family="gemma",
-        gguf_path=".models/gemma2-9b-gguf/gemma-2-9b-it-Q4_K_M.gguf",
-        # "gemma2" (custom, backends/chat_formats.py): folds the system prompt
-        # into the first user turn with native markers. Required because the
-        # tools ride in the system prompt and Gemma 2 has no system role — the
-        # built-in "gemma" handler drops system (0% routing), chatml mis-tokenizes
-        # it, and "gemma4" injects a Gemma-4 thinking token Gemma 2 mis-reads.
-        chat_format="gemma2",
-        stop_tokens="<end_of_turn>",
-        cc_provider="Gemma2MediumUntrained",
-        # 8192 like the others (the CC tools+examples system prompt is ~5k tokens,
-        # so 4096 overflows -> 500). Gemma-2-9B's KV at 8192 needs whisper/tts
-        # stopped on the 12GB dev box (use --free-vram); the 24GB CI GPU is fine.
-        context_window=8192,
-        url="https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q4_K_M.gguf",
     ),
 ]
 

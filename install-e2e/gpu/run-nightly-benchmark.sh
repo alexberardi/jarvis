@@ -3,11 +3,11 @@
 # (laptop command-center → GPU box llm-proxy at 10.0.0.122, models cached), NOT
 # the ephemeral Vast install-e2e-gpu lane. The models live permanently on the
 # box, so there is no per-run 26GB download to flake on, and it uses the live
-# :dev providers (so Mistral/Hermes/Gemma are correct, unlike a stale stable
+# :dev providers (so Mistral/Hermes are correct, unlike a stale stable
 # image). Inference is free on our own hardware, so it runs every night.
 # Scheduled by launchd — see com.jarvis.nightly-benchmark.plist.
 #
-# Flow: run the 6-model sweep against .122, then publish the results table to the
+# Flow: run the 5-model sweep against .122, then publish the results table to the
 # jarvis README on origin/main — but ONLY if every model produced a result
 # (guard against a partial run overwriting the home page with bad data).
 #
