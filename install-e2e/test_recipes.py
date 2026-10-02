@@ -24,7 +24,7 @@ from conftest import docker_exec, docker_inspect
 
 RECIPES = "jarvis-recipes-server"
 OCR = "jarvis-ocr-service"
-MINIO = "jarvis-minio"
+STORE = "jarvis-seaweedfs"
 
 pytestmark = pytest.mark.skipif(
     docker_inspect(RECIPES, "{{.State.Status}}") is None,
@@ -41,34 +41,37 @@ def test_bucket_init_completed() -> None:
     A non-zero exit here means the buckets do not exist, which surfaces much
     later as a failed upload that reads like an application bug.
     """
-    status = docker_inspect("jarvis-minio-init", "{{.State.Status}}")
-    assert status == "exited", f"minio-init is '{status}', expected it to have run and exited"
+    status = docker_inspect("jarvis-seaweedfs-init", "{{.State.Status}}")
+    assert status == "exited", (
+        f"seaweedfs-init is '{status}', expected it to have run and exited"
+    )
 
-    code = docker_inspect("jarvis-minio-init", "{{.State.ExitCode}}")
-    assert code == "0", f"minio-init exited {code}; the buckets were not created"
+    code = docker_inspect("jarvis-seaweedfs-init", "{{.State.ExitCode}}")
+    assert code == "0", f"seaweedfs-init exited {code}; the buckets were not created"
 
 
 def test_the_bucket_recipes_uploads_to_exists() -> None:
-    """MinIO does not create a bucket on first write.
+    """The S3 API does not create a bucket on first write.
 
     Without this the store is healthy, empty, and every photo import fails.
+
+    Asked of the store rather than the filesystem: SeaweedFS keeps objects in
+    numbered blob volumes (`.dat`/`.idx`) with the key -> needle mapping in the
+    filer, so unlike MinIO there is NO directory per bucket to stat. `weed shell`
+    ships in the server image, so this still costs no extra container.
     """
     bucket = _recipes_env("S3_BUCKET")
     assert bucket, "recipes has no S3_BUCKET configured"
 
     result = docker_exec(
-        MINIO,
-        [
-            "sh",
-            "-c",
-            # `mc` is not in the minio server image, but the data directory is:
-            # a bucket is a directory under /data. Cheaper than another
-            # container, and it asserts the same fact.
-            f"test -d /data/{bucket} && echo present || echo missing",
-        ],
+        STORE,
+        ["sh", "-c", 'echo "s3.bucket.list" | weed shell -master=localhost:9333'],
     )
-    assert result is not None, "could not exec into minio"
-    assert "present" in result.stdout, f"bucket '{bucket}' does not exist in MinIO"
+    assert result is not None, "could not exec into the object store"
+    assert bucket in result.stdout, (
+        f"bucket '{bucket}' does not exist in the object store; "
+        f"s3.bucket.list returned: {result.stdout.strip() or '<empty>'}"
+    )
 
 
 def test_recipes_can_reach_the_object_store() -> None:
@@ -83,17 +86,25 @@ def test_recipes_can_reach_the_object_store() -> None:
         f"S3_ENDPOINT_URL is {endpoint}: localhost inside a container is the container"
     )
 
-    result = docker_exec(
-        RECIPES,
-        ["python", "-c", f"import urllib.request;urllib.request.urlopen('{endpoint}/minio/health/live',timeout=10)"],
+    # Reachability, not authorization. SeaweedFS has no /minio/health/live, and
+    # its S3 root answers 403 to an unsigned request -- which PROVES the endpoint
+    # resolved and replied. So an HTTPError counts as reached; only a transport
+    # failure (URLError: refused / no such host / timeout) is a real failure.
+    probe = (
+        "import urllib.error,urllib.request,sys\n"
+        f"try: urllib.request.urlopen('{endpoint}',timeout=10)\n"
+        "except urllib.error.HTTPError: pass\n"
+        "except Exception as e: sys.exit(str(e))\n"
     )
+    result = docker_exec(RECIPES, ["python", "-c", probe])
     assert result is not None and result.returncode == 0, (
-        f"recipes cannot reach the object store at {endpoint}: {result.stderr if result else 'no result'}"
+        f"recipes cannot reach the object store at {endpoint}: "
+        f"{result.stderr if result else 'no result'}"
     )
 
 
 def test_path_style_addressing_is_on() -> None:
-    """MinIO does not serve virtual-host style, which is boto3's default."""
+    """SeaweedFS does not serve virtual-host style, which is boto3's default."""
     assert _recipes_env("S3_FORCE_PATH_STYLE", "").lower() == "true"
 
 
