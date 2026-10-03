@@ -99,9 +99,17 @@ breakdown, `latency_ms` (p50/p95/mean/min/max), `load_time_s`, and the full
 
 - Models run **sequentially** (one resident at a time); the swap unloads the
   previous via a model-service restart.
-- Gemma-2-9B's KV cache is large; at 8192 ctx it OOMs `llama_context` once
-  whisper/tts hold ~3.8 GB. It runs at 4096 ctx (corpus prompts are < 2 K
-  tokens). The rented CI GPU (24 GB) has no such constraint.
+- **Gemma-2-9B was dropped from the sweep (2026-08-23).** `llama-cpp-python` on
+  the dev box cannot load `gemma-2` at all — it fails outright in
+  `llama_load_model_from_file`, independently of VRAM. Because the publish guard
+  (`da53038`) requires *every* `BENCH_MODELS` entry to produce a result, one
+  permanently unloadable model stopped the nightly from ever publishing. (Its KV
+  cache was also the sweep's VRAM ceiling: at 8192 ctx it OOM'd `llama_context`
+  once whisper/tts held ~3.8 GB.) Re-add it only once the loader supports
+  gemma-2 — the custom `gemma2` chat format it needs is still in
+  `jarvis-llm-proxy-api/backends/chat_formats.py`.
+- The largest remaining models are 8B, so `--free-vram` may no longer be
+  strictly necessary on the 12 GB box; it is left on as cheap insurance.
 
 ## Nightly run (persistent box)
 
