@@ -124,13 +124,23 @@ TEST_REGISTRY=(
 # stay native. The corresponding run.sh scripts must support `--setup`
 # so _setup_local_services can install deps before first start.
 if [[ "$(uname -s)" == "Darwin" ]]; then
+    # Every service that ships deploy-launchd.sh runs natively here --
+    # Docker on Mac has no Metal passthrough, so anything wanting
+    # mps/Metal/Apple Vision must stay outside it. Derived from the repo
+    # rather than listed, because the old hardcoded list had drifted:
+    # it forced ocr-service local but omitted whisper, so macOS built a
+    # CPU-only whisper image with the Metal path sitting unused.
     for i in "${!SERVICES[@]}"; do
-        case "${SERVICES[$i]}" in
-            jarvis-llm-proxy-api*) SERVICES[$i]="jarvis-llm-proxy-api|7704|2|local|/health" ;;
-            jarvis-tts*)           SERVICES[$i]="jarvis-tts|7707|3|local|/health" ;;
-            jarvis-ocr-service*)   SERVICES[$i]="jarvis-ocr-service|7031|3|local|/health" ;;
-        esac
+        _n="${SERVICES[$i]%%|*}"
+        if [[ -f "${JARVIS_ROOT}/${_n}/deploy-launchd.sh" ]]; then
+            SERVICES[$i]="$(echo "${SERVICES[$i]}" | awk -F'|' '{print $1"|"$2"|"$3"|local|"$5}')"
+        fi
     done
+    unset _n
+    # jarvis-osx-api is native-ONLY (needs TCC grants + a GUI session; no
+    # Docker image exists) and macOS-only, so it joins the registry only on
+    # Darwin — mode is always local, never rewritten to docker.
+    SERVICES+=("jarvis-osx-api|7723|3|local|/health")
 fi
 
 # ── Database mapping ─────────────────────────────────────────────────────────
@@ -538,6 +548,7 @@ _get_db_name_for_service() {
     echo "${!db_var}"
 }
 
+
 # ── Init ─────────────────────────────────────────────────────────────────────
 
 _generate_token() {
@@ -645,6 +656,7 @@ _inject_env_var() {
     fi
 }
 
+
 _stamp_env_files() {
     _load_tokens
     _load_db_names
@@ -726,6 +738,19 @@ _stamp_env_files() {
                 # persist step never runs — deep-research results and memory
                 # extraction complete in the worker but land nowhere.
                 _inject_env_var "$env_file" "JARVIS_ADAPTER_CALLBACK_TOKEN" "$JARVIS_ADAPTER_CALLBACK_TOKEN"
+                # Broker credentials must match the ones mosquitto hashed into
+                # its password file, so they are read from data-services' .env
+                # rather than generated again here. CC is the only consumer:
+                # nodes fetch broker creds from CC over authenticated HTTP.
+                # The username is the literal 'jarvis' on both sides.
+                local _mqtt_pw=""
+                if [[ -f "$DATA_SERVICES_ENV" ]]; then
+                    _mqtt_pw=$(sed -n 's/^MQTT_PASSWORD=//p' "$DATA_SERVICES_ENV" | head -1)
+                fi
+                if [[ -n "$_mqtt_pw" ]]; then
+                    _inject_env_var "$env_file" "MQTT_USERNAME" "jarvis"
+                    _inject_env_var "$env_file" "MQTT_PASSWORD" "$_mqtt_pw"
+                fi
                 ;;
             jarvis-recipes-server)
                 _inject_env_var "$env_file" "AUTH_SECRET_KEY" "$AUTH_SECRET_KEY"
@@ -751,6 +776,13 @@ _stamp_env_files() {
                 # In Docker, ~/whisper.cpp is mounted at /root/whisper.cpp
                 if [[ "$mode" == "docker" ]]; then
                     _inject_env_var "$env_file" "WHISPER_MODEL" "/root/whisper.cpp/models/ggml-base.en.bin"
+                else
+                    # Native: there is no mount, so the container path has to be
+                    # rewritten back to the host one. Without this, a .env
+                    # stamped while this service was still dockerized keeps
+                    # /root/... and whisper dies reporting a missing model at a
+                    # path that cannot exist outside a container.
+                    _inject_env_var "$env_file" "WHISPER_MODEL" "${HOME}/whisper.cpp/models/ggml-base.en.bin"
                 fi
                 ;;
             jarvis-notifications)
@@ -830,6 +862,11 @@ print(header+'.'+payload+'.'+sig)
             fi
 
             local db_url="postgresql+psycopg2://${pg_user}:${pg_pass}@${svc_host}:5432/${db_name}"
+            # localhost, NOT $svc_host. This URL is consumed by apply_migrations.sh,
+            # which ./jarvis init runs FROM THE HOST -- host.docker.internal does
+            # not resolve there. Each service's config.py documents the same split:
+            # DATABASE_URL for in-container use, MIGRATIONS_DATABASE_URL for the
+            # host-run migration path.
             local migrations_url="postgresql+psycopg2://${pg_user}:${pg_pass}@localhost:5432/${db_name}"
 
             IFS=',' read -ra var_names <<< "$env_vars"
@@ -859,7 +896,7 @@ ADMINJSON
 }
 
 _start_infra() {
-    echo -e "\n${DIM}Starting infrastructure (PostgreSQL + Redis + pgAdmin + MinIO)...${NC}"
+    echo -e "\n${DIM}Starting infrastructure (PostgreSQL + Redis + pgAdmin + SeaweedFS)...${NC}"
 
     if [[ ! -d "$DATA_SERVICES_DIR" ]]; then
         echo -e "  ${RED}FAIL${NC}  jarvis-data-services directory not found"
@@ -879,16 +916,46 @@ PGADMIN_DEFAULT_EMAIL=admin@example.com
 PGADMIN_DEFAULT_PASSWORD=admin
 PGADMIN_PORT=5050
 
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minioadmin
-MINIO_PORT=9000
-MINIO_CONSOLE_PORT=9001
+OBJECT_STORE_ACCESS_KEY=jarvislocal
+OBJECT_STORE_SECRET_KEY=jarvislocal
+SEAWEEDFS_PORT=8333
+OBJECT_STORE_BUCKETS=jarvis-dev
 
 REDIS_PASSWORD=redis
 REDIS_PORT=6379
 REDIS_COMMANDER_PORT=8081
 ENVEOF
         echo -e "  ${GREEN}OK${NC}    Created data-services .env (defaults)"
+    else
+        # Upgrade an EXISTING .env. The block above only runs when the file is
+        # absent, so a stack created before the 2026-10-01 object-store swap
+        # would otherwise keep only MINIO_* and hand compose an empty
+        # OBJECT_STORE_ACCESS_KEY -- SeaweedFS then rejects every request and it
+        # reads as a credentials bug rather than a missing variable.
+        #
+        # The MinIO root credentials are reused as the S3 credentials when they
+        # exist, so an upgraded stack keeps working against data written under
+        # them; otherwise a local-only default is fine (bound to localhost).
+        if ! grep -q '^OBJECT_STORE_ACCESS_KEY=' "$DATA_SERVICES_ENV"; then
+            local _ak _sk
+            _ak="$(sed -n 's/^MINIO_ROOT_USER=//p' "$DATA_SERVICES_ENV" | head -1)"
+            _sk="$(sed -n 's/^MINIO_ROOT_PASSWORD=//p' "$DATA_SERVICES_ENV" | head -1)"
+            _inject_env_var "$DATA_SERVICES_ENV" "OBJECT_STORE_ACCESS_KEY" "${_ak:-jarvislocal}"
+            _inject_env_var "$DATA_SERVICES_ENV" "OBJECT_STORE_SECRET_KEY" "${_sk:-jarvislocal}"
+            echo -e "  ${GREEN}OK${NC}    Added object store credentials to data-services .env"
+        fi
+        grep -q '^SEAWEEDFS_PORT=' "$DATA_SERVICES_ENV" \
+            || _inject_env_var "$DATA_SERVICES_ENV" "SEAWEEDFS_PORT" "8333"
+        grep -q '^OBJECT_STORE_BUCKETS=' "$DATA_SERVICES_ENV" \
+            || _inject_env_var "$DATA_SERVICES_ENV" "OBJECT_STORE_BUCKETS" "jarvis-dev"
+
+        # Broker credential. The CLI has always REGISTERED jarvis-mqtt-broker in
+        # config-service without running a broker, so every MQTT path failed by
+        # timeout; data-services now ships mosquitto, which needs this to build
+        # its password file. Generated once and reused -- rotating it would lock
+        # out command-center until its .env is re-stamped.
+        grep -q '^MQTT_PASSWORD=' "$DATA_SERVICES_ENV" \
+            || _inject_env_var "$DATA_SERVICES_ENV" "MQTT_PASSWORD" "$(openssl rand -hex 16)"
     fi
 
     local compose_output
@@ -1973,6 +2040,50 @@ print(json.dumps({'settings': s}))
     fi
 }
 
+cmd_uninstall_native() {
+    # Removes the launchd agents `./jarvis start` installs. `stop` only boots
+    # them out (they stay installed, ready to bootstrap again); this deletes the
+    # plists, so it is the actual uninstall.
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        echo -e "  ${DIM}uninstall-native is macOS-only (detected $(uname -s))${NC}"
+        return 0
+    fi
+
+    echo -e "${BOLD}UNINSTALL NATIVE SERVICES${NC}"
+    echo -e "${DIM}Boots out each launchd agent and deletes its plist${NC}"
+    echo ""
+
+    local agents_dir="$HOME/Library/LaunchAgents"
+    local removed=0 entry name dir label plist
+
+    for entry in "${SERVICES[@]}"; do
+        name=$(_get_name "$entry")
+        dir="${JARVIS_ROOT}/${name}"
+        _is_native_capable "$dir" || continue
+
+        while IFS= read -r label; do
+            [[ -n "$label" ]] || continue
+            plist="${agents_dir}/${label}.plist"
+            _launchd_bootout "$label"
+            if [[ -f "$plist" ]]; then
+                rm -f "$plist"
+                echo -e "  ${GREEN}OK${NC}    removed ${label}"
+                removed=$((removed + 1))
+            else
+                echo -e "  ${DIM}--${NC}    ${label} (not installed)"
+            fi
+        done < <(_launchd_labels "$dir")
+    done
+
+    echo ""
+    if [[ "$removed" -eq 0 ]]; then
+        echo -e "  ${DIM}Nothing to remove.${NC}"
+    else
+        echo -e "  ${BOLD}Removed ${removed} agent(s).${NC}"
+        echo -e "  ${DIM}Logs are left in ~/Library/Logs/ -- delete them yourself if you want them gone.${NC}"
+    fi
+}
+
 cmd_quickstart() {
     echo -e "${BOLD}JARVIS QUICKSTART${NC}"
     echo -e "${DIM}Full setup: init + start + LLM wizard${NC}"
@@ -2007,6 +2118,43 @@ cmd_quickstart() {
 }
 
 # ── Start ────────────────────────────────────────────────────────────────────
+
+# ── Native macOS services (launchd) ──────────────────────────────────────────
+#
+# A service is native-capable when it ships deploy-launchd.sh, and its launchd
+# labels are the basenames of scripts/launchd/*.plist. Both are read off disk
+# rather than listed here: a hardcoded list is what drifted before -- it forced
+# ocr-service local while omitting whisper, so macOS built a CPU-only whisper
+# image with a Metal path sitting unused beside it.
+#
+# jarvis-admin gates the same services with `nativeCapable` in its registry.
+# Deriving from the repo keeps the CLI from needing a third copy of that fact.
+
+_is_native_capable() {
+    [[ "$(uname -s)" == "Darwin" && -f "${1}/deploy-launchd.sh" ]]
+}
+
+# Every launchd label a service installs. ocr-service ships TWO (the API and
+# the Redis queue worker), so this must stay a list.
+_launchd_labels() {
+    local dir="$1" f
+    for f in "$dir"/scripts/launchd/*.plist; do
+        [[ -e "$f" ]] || continue
+        basename "$f" .plist
+    done
+}
+
+_launchd_bootout() {
+    # Stops the agent AND prevents it restarting at login; the plist stays on
+    # disk so `./jarvis start` can bootstrap it again. Removing the plist is
+    # `./jarvis uninstall-native`.
+    local label="$1"
+    launchctl bootout "gui/$(id -u)/${label}" >/dev/null 2>&1 || true
+}
+
+_launchd_is_running() {
+    launchctl print "gui/$(id -u)/${1}" >/dev/null 2>&1
+}
 
 _ensure_venv() {
     # Ensure .venv exists and deps are installed for a local-mode service
@@ -2159,7 +2307,24 @@ _start_one() {
             fi
             ;;
         local)
-            if [[ -f "$dir/run.sh" ]]; then
+            # On macOS, prefer the service's own launchd agent. A backgrounded
+            # `&` child dies with the shell that started it and never comes
+            # back at login, which is wrong for anything long-lived -- the
+            # mac mini runs these as agents for exactly that reason.
+            # deploy-launchd.sh materializes the plist and bootstraps it, and
+            # is idempotent, so this doubles as "re-deploy after a code change".
+            if _is_native_capable "$dir"; then
+                # deploy-launchd.sh defaults ENV_FILE_PATH to the INSTALLER's
+                # env file (~/.jarvis/compose/.env), a topology the CLI does not
+                # use: `./jarvis init` writes each service's own repo .env with
+                # localhost Postgres and the generated password. Left to default,
+                # the agent came up against a stale file and died on
+                # "fe_sendauth: no password supplied".
+                if ! (cd "$dir" && ENV_FILE_PATH="${dir}/.env" bash deploy-launchd.sh >> "${LOG_DIR}/${name}.log" 2>&1); then
+                    echo -e "\r  ${RED}FAIL${NC}  ${name} (deploy-launchd.sh failed, see ${LOG_DIR}/${name}.log)"
+                    return 1
+                fi
+            elif [[ -f "$dir/run.sh" ]]; then
                 # run.sh handles its own venv creation + deps (set up during init)
                 (cd "$dir" && AUTO_SETUP=true exec bash run.sh >> "${LOG_DIR}/${name}.log" 2>&1) &
                 echo $! > "${PID_DIR}/${name}.pid"
@@ -2653,6 +2818,16 @@ _stop_one() {
             fi
             ;;
         local|npm)
+            # A launchd-managed service is not ours to kill by PID: KeepAlive
+            # would just restart it. Boot it out instead, which stops it now and
+            # keeps it from coming back at login. The plist stays installed --
+            # `./jarvis uninstall-native` removes it.
+            if _is_native_capable "$dir"; then
+                local _label
+                while IFS= read -r _label; do
+                    [[ -n "$_label" ]] && _launchd_bootout "$_label"
+                done < <(_launchd_labels "$dir")
+            fi
             # Kill process tree from PID files
             for pid_file in "${PID_DIR}/${name}-server.pid" "${PID_DIR}/${name}.pid"; do
                 if [[ -f "$pid_file" ]]; then
@@ -2702,7 +2877,7 @@ cmd_stop() {
             if [[ -d "$DATA_SERVICES_DIR" ]]; then
                 (cd "$DATA_SERVICES_DIR" && docker compose --env-file .env down >/dev/null 2>&1) || true
             fi
-            echo -e "  ${RED}STOP${NC}  PostgreSQL + Redis + pgAdmin + MinIO"
+            echo -e "  ${RED}STOP${NC}  PostgreSQL + Redis + pgAdmin + SeaweedFS"
         fi
     else
         local entry
@@ -2864,11 +3039,15 @@ cmd_doctor() {
         echo -e " ${DIM}\u2717${NC}  pgAdmin not reachable (:5050)"
     fi
 
-    # MinIO check (nice-to-have)
-    if curl -sf --max-time 2 "http://localhost:9000/minio/health/live" >/dev/null 2>&1; then
-        echo -e " ${GREEN}\u2713${NC}  MinIO reachable (:9000)"
+    # Object store check (nice-to-have). SeaweedFS has no /minio/health/live,
+    # and its S3 root answers 403 to an unsigned request -- which PROVES it
+    # replied. So any HTTP status counts as reachable; only a transport failure
+    # (curl exit 7 / 28) means it is down. `curl -sf` would have called a
+    # healthy store unreachable, which is how the old check read after the swap.
+    if curl -s -o /dev/null --max-time 2 "http://localhost:${SEAWEEDFS_PORT:-8333}" 2>/dev/null; then
+        echo -e " ${GREEN}\u2713${NC}  Object store reachable (:${SEAWEEDFS_PORT:-8333})"
     else
-        echo -e " ${DIM}\u2717${NC}  MinIO not reachable (:9000)"
+        echo -e " ${DIM}\u2717${NC}  Object store not reachable (:${SEAWEEDFS_PORT:-8333})"
     fi
     echo ""
 
@@ -3490,6 +3669,9 @@ case "${1:-}" in
         cmd_stop "${2:---all}" "$STANDALONE"
         echo ""
         cmd_start "${2:---all}" "--build" "$STANDALONE"
+        ;;
+    uninstall-native)
+        cmd_uninstall_native
         ;;
     status)
         cmd_status

@@ -51,12 +51,13 @@ Personal voice assistant with Pi Zero nodes and self-hosted microservices.
 | jarvis-notifications | 7712 | Push + inbox |
 | jarvis-pantry | 7721 | Cloud package store + AI Forge |
 | jarvis-web | 7722 | Browser chat (Next.js, rewrites to backends) |
+| jarvis-osx-api | 7723 | macOS bridge — iMessage/Contacts/Shortcuts + Apple Vision OCR. **Native-only, never Docker** |
 | jarvis-recipes-server | 7030 | Recipes + meal planning |
 | jarvis-ocr-service | 7031 | OCR (Tesseract / EasyOCR / Apple Vision) |
 
 **Libraries:** `jarvis-log-client`, `jarvis-config-client`, `jarvis-web-scraper`, `jarvis-command-sdk`
 **Clients:** `jarvis-node-setup` (Pi Zero), `jarvis-node-mobile`
-**Shared infra:** PostgreSQL, Redis, MinIO, Mosquitto (MQTT)
+**Shared infra:** PostgreSQL, Redis, MinIO (⚠️ **EOL** — OSS archived 2026-04, all distribution channels pulled 2026-09; pinned `quay.io` images no longer pullable), Mosquitto (MQTT)
 
 Each service has its own CLAUDE.md with the dependency graph, recipes, invariants, and failure modes for that service. **Read it first.**
 
@@ -91,7 +92,8 @@ Per-service detail lives in each service's CLAUDE.md.
 | Variable | Used by | Notes |
 |---|---|---|
 | `DATABASE_URL` | most services | PostgreSQL connection (each service has its own DB) |
-| `AUTH_SECRET_KEY` | every service that validates JWTs | **Must match across all services.** In jarvis-auth it's `AUTH_SECRET_KEY`; older docs may say `SECRET_KEY` — that's stale. |
+| `AUTH_SECRET_KEY` | every service that validates JWTs | **Must match across all services.** In jarvis-auth it's `AUTH_SECRET_KEY`; older docs may say `SECRET_KEY` — that's stale. ⚠️ **Being retired** in favour of RS256, so signing material lives only in jarvis-auth and verifiers hold a public key instead. Verifiers already accept RS256. See `docs/threat-model.md`. |
+| `JARVIS_AUTH_BASE_URL` | every JWT verifier | Where jarvis-auth's RS256 public key is fetched from. Harmless today, **required before the RS256 flip** — without it a verifier keeps working on HS256 right up until jarvis-auth switches, then 401s everything at once. |
 | `JARVIS_CONFIG_URL` | every service | Config-service URL (typically `http://localhost:7700`) |
 | `JARVIS_APP_ID` / `JARVIS_APP_KEY` | every service | App-to-app credentials for outbound calls |
 | `JARVIS_AUTH_ADMIN_TOKEN` | trusted infrastructure only | Master admin token for jarvis-auth `/admin/*` |
