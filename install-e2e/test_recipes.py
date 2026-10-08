@@ -162,13 +162,28 @@ def test_recipes_requires_a_token() -> None:
     )
 
 
-def test_the_planner_and_grocery_routes_are_mounted() -> None:
-    """A router that failed to register 404s, which reads as a client bug."""
-    spec = requests.get("http://localhost:7030/openapi.json", timeout=15).json()
-    paths = set(spec.get("paths", {}))
+@pytest.mark.parametrize(
+    ("method", "route"),
+    [
+        ("GET", "/planner/plans"),
+        ("GET", "/shopping-list?start_date=2026-01-01&end_date=2026-01-02"),
+        ("POST", "/grocery/cart?start_date=2026-01-01&end_date=2026-01-02"),
+        ("POST", "/meal-plans/random"),
+    ],
+)
+def test_the_planner_and_grocery_routes_are_mounted(method: str, route: str) -> None:
+    """A router that failed to register 404s, which reads as a client bug.
 
-    for route in ("/planner/plans", "/shopping-list", "/grocery/cart", "/meal-plans/random"):
-        assert route in paths, f"{route} is not mounted"
+    Probed directly rather than through `/openapi.json`: jarvisd serves these
+    routes wire-compatibly on 7030 but publishes no OpenAPI document. A mounted
+    route checks the token before anything else, so no token means 401; an
+    unmounted one is a 404.
+    """
+    response = requests.request(method, f"http://localhost:7030{route}", timeout=15)
+    assert response.status_code != 404, f"{method} {route} is not mounted"
+    assert response.status_code == 401, (
+        f"{method} {route} without a token returned {response.status_code}, expected 401"
+    )
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
