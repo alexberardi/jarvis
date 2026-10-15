@@ -31,7 +31,6 @@ ALL_REPOS=(
     jarvis-recipes-server
     jarvis-settings-server
     jarvis-tts
-    jarvis-web
     jarvis-whisper-api
 )
 

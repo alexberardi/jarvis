@@ -61,7 +61,7 @@ const { values } = parseArgs({
       // Unknown ids are intersected away by the admin generator, so
       // jarvis-phone-gateway no-ops until jarvis-admin#78 lands its entry.
       default:
-        "jarvis-llm-proxy-api,jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,go2rtc,jarvis-phone-gateway",
+        "jarvis-llm-proxy-api,jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-admin,go2rtc,jarvis-phone-gateway",
     },
     // Live-model serving type (state.servingType). Unset → the generator default
     // (llama-cpp, in-process GGUF, NO sidecar). 'llama-server' → emit the

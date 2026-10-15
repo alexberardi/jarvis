@@ -34,7 +34,6 @@ REPOS=(
     "jarvis-settings-server|git@github.com:alexberardi/jarvis-settings-server.git"
     "jarvis-tts|git@github.com:alexberardi/jarvis-tts.git"
     "jarvis-web-scraper|git@github.com:alexberardi/jarvis-web-scraper.git"
-    "jarvis-web|git@github.com:alexberardi/jarvis-web.git"
     "jarvis-whisper-api|git@github.com:alexberardi/jarvis-whisper-api.git"
 )
 

@@ -161,7 +161,7 @@ The Forge is an AI-powered package builder built into the Pantry web UI. It gene
       │                                │          CLIENTS                   │
       │  ┌──────────────┐  ┌──────────▼───┐  ┌──────────┐  ┌───────────┐  │
       │  │ Pi Zero      │  │ Mobile       │  │ Web Chat │  │ Admin     │  │
-      │  │ Voice Nodes  │  │ Voice Node   │  │ (Next.js)│  │ Web UI    │  │
+      │  │ Voice Nodes  │  │ Voice Node   │  │ (jarvisd)│  │ Web UI    │  │
       │  │ (Python)     │  │ (React Native│) │          │  │ (React)   │  │
       │  └──────────────┘  └──────────────┘  └──────────┘  └───────────┘  │
       └────────────────────────────────────────────────────────────────────┘
@@ -307,8 +307,9 @@ Add a new model by dropping a provider into `jarvis-command-center/app/core/prom
 |-----|-------------|-----|
 | [jarvis-node-setup](https://github.com/alexberardi/jarvis-node-setup) | Pi Zero voice node (Python) | [![Tests](https://github.com/alexberardi/jarvis-node-setup/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-setup/actions/workflows/test.yml) |
 | [jarvis-node-mobile](https://github.com/alexberardi/jarvis-node-mobile) | Mobile voice node (React Native) | [![CI](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/ci.yml) |
-| [jarvis-web](https://github.com/alexberardi/jarvis-web) | Web chat interface (Next.js) | |
 | [jarvis-recipes-mobile](https://github.com/alexberardi/jarvis-recipes-mobile) | Recipe app (React Native) | [![Build](https://github.com/alexberardi/jarvis-recipes-mobile/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-mobile/actions/workflows/build-and-deploy.yml) |
+
+Browser chat lives in the [jarvis-server](https://github.com/alexberardi/jarvis-server) web app on port 7710 (Chat, Add-ons, Inbox, Account), which replaces the retired `jarvis-web`.
 
 ### Tools
 

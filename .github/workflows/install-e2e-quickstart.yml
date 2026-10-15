@@ -74,7 +74,7 @@ env:
   # reap each other's live instances (provision_vast.py reads this).
   VAST_LABEL_PREFIX: jarvis-qs-e2e
   # Ports the pytest suite addresses on localhost, tunnelled from the VM.
-  TUNNEL_PORTS: "7700 7701 7702 7703 7704 7706 7707 7708 7710 7712 7722 7030 7031"
+  TUNNEL_PORTS: "7700 7701 7702 7703 7704 7706 7707 7708 7710 7712 7030 7031"
 
 jobs:
   gate:

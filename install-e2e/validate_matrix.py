@@ -34,14 +34,14 @@ TRACKS = ["stable", "dev"]
 # core-only (no recommended modules) and the full set
 MODULE_SETS = {
     "core-only": "",
-    "full": "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin",
+    "full": "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-admin",
     # `full` + every wizard-OPTIONAL service the installer registry carries.
     # Unknown ids are intersected away by the generator, so this set is a
     # silent no-op until the registry entry lands (jarvis-installer#34) — and
     # from then on it pins optional-service generation + image existence
     # across every gpu × track combo. go2rtc is deliberately absent: it is
     # admin-registry-only (the SYNC lane covers it).
-    "full-optional": "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,jarvis-phone-gateway",
+    "full-optional": "jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-admin,jarvis-phone-gateway",
 }
 
 IMAGE_RE = re.compile(r"image:\s*(ghcr\.io/\S+)")
@@ -109,8 +109,8 @@ def check_invariants(label: str, text: str) -> None:
         if "JARVIS_MQTT_BROKER_URL:" not in cc:
             fail("command-center missing JARVIS_MQTT_BROKER_URL")
 
-    # admin/web (Node images) must use the node http probe, never curl
-    for node_svc in ("jarvis-admin", "jarvis-web"):
+    # admin (Node image) must use the node http probe, never curl
+    for node_svc in ("jarvis-admin",):
         blk = _service_block(text, node_svc)
         if blk and "full" in label and '"node", "-e"' not in blk:
             fail(f"{node_svc} healthcheck is not the node probe")

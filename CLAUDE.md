@@ -50,13 +50,13 @@ Personal voice assistant with Pi Zero nodes and self-hosted microservices.
 | jarvis-admin | 7710 | Web admin (Fastify backend + React SPA) |
 | jarvis-notifications | 7712 | Push + inbox |
 | jarvis-pantry | 7721 | Cloud package store + AI Forge |
-| jarvis-web | 7722 | Browser chat (Next.js, rewrites to backends) |
 | jarvis-osx-api | 7723 | macOS bridge — iMessage/Contacts/Shortcuts + Apple Vision OCR. **Native-only, never Docker** |
 | jarvis-recipes-server | 7030 | Recipes + meal planning |
 | jarvis-ocr-service | 7031 | OCR (Tesseract / EasyOCR / Apple Vision) |
 
 **Libraries:** `jarvis-log-client`, `jarvis-config-client`, `jarvis-web-scraper`, `jarvis-command-sdk`
 **Clients:** `jarvis-node-setup` (Pi Zero), `jarvis-node-mobile`
+**Retired:** `jarvis-web` (was 7722). Browser chat for household members is now the jarvisd web app in `jarvis-server` (port 7710: Chat, Add-ons, Inbox, Account).
 **Shared infra:** PostgreSQL, Redis, MinIO (⚠️ **EOL** — OSS archived 2026-04, all distribution channels pulled 2026-09; pinned `quay.io` images no longer pullable), Mosquitto (MQTT)
 
 Each service has its own CLAUDE.md with the dependency graph, recipes, invariants, and failure modes for that service. **Read it first.**
