@@ -45,7 +45,6 @@ HTTP_SERVICES: list[Service] = [
     Service("settings-server", "jarvis-settings-server", 7708, "/health"),
     Service("admin", "jarvis-admin", 7711, "/health"),
     Service("notifications", "jarvis-notifications", 7712, "/health"),
-    Service("web", "jarvis-web", 7722, "/"),
 ]
 
 # ── Optional services ────────────────────────────────────────────────────────
@@ -61,6 +60,9 @@ OPTIONAL_HTTP_SERVICES: list[Service] = [
     Service("phone-gateway", "jarvis-phone-gateway", 7713, "/health"),
     Service("recipes-server", "jarvis-recipes-server", 7030, "/health"),
     Service("ocr-service", "jarvis-ocr-service", 7031, "/health"),
+    # jarvis-web is retired (jarvisd's web app replaces it) and no longer in the
+    # default module list; still covered when a dispatch asks for it.
+    Service("web", "jarvis-web", 7722, "/"),
 ]
 
 

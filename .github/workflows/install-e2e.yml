@@ -173,7 +173,7 @@ jobs:
             --storage "$STORAGE_PATH" \
             --gpu none \
             --release "$REL" \
-            --modules "${{ github.event.inputs.modules || 'jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-web,jarvis-admin,jarvis-phone-gateway,jarvis-recipes-server,jarvis-ocr-service' }}"
+            --modules "${{ github.event.inputs.modules || 'jarvis-whisper-api,jarvis-tts,jarvis-notifications,jarvis-admin,jarvis-phone-gateway,jarvis-recipes-server,jarvis-ocr-service' }}"
 
       - name: Validate generated compose
         run: docker compose -f "$GEN_FILE" -f "$OVERRIDE_FILE" config -q && echo "compose valid"

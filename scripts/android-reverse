@@ -35,7 +35,6 @@ PORTS=(
     "admin:7710"
     "notifications:7712"
     "pantry:7721"
-    "web:7722"
     "recipes-server:7030"
     "ocr-service:7031"
     "node-setup:7771"

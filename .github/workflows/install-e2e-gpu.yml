@@ -90,7 +90,7 @@ env:
   # 3100 = loki. It binds 127.0.0.1 on the remote (it has no auth and holds
   # transcripts), so `-L 3100:localhost:3100` is the only way the deployment
   # phase can assert it still serves on loopback after the bind change.
-  TUNNEL_PORTS: "7700 7701 7702 7703 7704 7706 7707 7708 7711 7712 7722 3100"
+  TUNNEL_PORTS: "7700 7701 7702 7703 7704 7706 7707 7708 7711 7712 3100"
 
 jobs:
   plan:

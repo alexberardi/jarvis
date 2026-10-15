@@ -51,7 +51,6 @@ HTTP_SERVICES: list[Service] = [
     Service("notifications", 7712, "/health"),
     Service("recipes-server", 7030, "/health"),
     Service("ocr-service", 7031, "/health"),
-    Service("web", 7722, "/"),
 ]
 
 # Known-unhealthy in the source stack as of 2026-09; asserted separately with
