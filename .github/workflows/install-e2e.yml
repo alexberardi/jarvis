@@ -119,6 +119,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: alexberardi/jarvis-installer
+          # Pinned: jarvis-installer#75 replaced the compose wizard with the jarvisd download
+          # page and deleted scripts/gen-export-compose.mts. ac65812 is the last commit with it.
+          ref: ac65812b1e3c16688a6847451ffbf1a4f722c2d6
           path: jarvis-installer
 
       - name: Checkout jarvis-admin (SYNC / reconcile generator)
