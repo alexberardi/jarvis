@@ -37,8 +37,8 @@ on:
         description: "Also run the heavy live SYNC-compose bring-up lane (sync-live job)"
         type: boolean
         default: false
-  schedule:
-    - cron: "37 6 * * *" # nightly, after the llm-proxy behavior lane
+  # The nightly schedule is off: this lane tests the retired Docker/microservice install
+  # (jarvisd replaced it at v0.1.0-rc18). Run it by hand with workflow_dispatch.
   pull_request:
     paths:
       - "install-e2e/**"

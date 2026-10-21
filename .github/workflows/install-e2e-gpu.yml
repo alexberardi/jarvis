@@ -43,8 +43,8 @@ on:
         description: "Skip instance destroy for debugging (janitor reaps in 3h)"
         type: boolean
         default: false
-  schedule:
-    - cron: "23 7 * * *" # nightly, after install-e2e (06:37) so a common breakage reads top-down
+  # The nightly schedule is off: this lane tests the retired Docker/microservice install
+  # (jarvisd replaced it at v0.1.0-rc18). Run it by hand with workflow_dispatch.
   # PRs touching the GPU harness run ONLY the read-only marketplace spike
   # (inventory + prices per lane — no instance is ever created, no spend).
   # The paid lanes are hard-gated off pull_request in the plan job below —

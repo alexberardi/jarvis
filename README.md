@@ -1,465 +1,107 @@
 <p align="center">
-  <img src="logo.png" alt="Jarvis" width="600" />
+  <img src="logo.png" alt="Jarvis Automation" width="600" />
 </p>
 
 <p align="center">
-  <strong>A self-hosted, extensible voice assistant that runs on your hardware — not someone else's cloud.</strong><br>
-  Wake word, speech-to-text, text-to-speech, and speaker ID all run locally. <strong>20 commands built in</strong> (timers, reminders, memories, web search, smart home, routines) and <strong>24 more</strong> (weather, music, calendar, sports, movies, email) one click away in the <a href="https://pantry.jarvisautomation.io">Pantry</a>. Extend it in plain English with the <strong>AI Forge</strong>, which generates, sandbox-tests, and publishes a complete new command from a one-sentence description. Bring your own LLM: point it at a cloud API for zero setup, or run it fully local on your own GPU for zero cloud dependency.
+  <strong>A private voice assistant that runs on your own computer, not someone else's cloud.</strong><br>
+  One program, <code>jarvisd</code>, on a Mac, a Windows PC or a Linux machine runs all of Jarvis: speech recognition, the language model, text-to-speech and speaker recognition, on your network.
 </p>
 
 <p align="center">
-  <a href="#quick-start"><strong>Install Jarvis</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#requirements">Requirements</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#architecture">Architecture</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#services">Services</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://discord.gg/9SuQFVexxJ"><strong>Discord</strong></a>
+  <a href="https://installer.jarvisautomation.io"><strong>Download</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://docs.jarvisautomation.dev"><strong>Docs</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://github.com/alexberardi/jarvis-server">jarvis-server</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://discord.gg/9SuQFVexxJ"><strong>Discord</strong></a>
 </p>
 
 <p align="center">
   <a href="#license"><img src="https://img.shields.io/badge/license-AGPL--3.0%20%2B%20Apache--2.0-blue" alt="License"></a>
   <a href="https://docs.jarvisautomation.dev"><img src="https://img.shields.io/badge/docs-jarvisautomation.dev-6366f1" alt="Docs"></a>
-  <a href="https://pantry.jarvisautomation.io"><img src="https://img.shields.io/badge/Pantry-community%20package%20store-16a34a" alt="Pantry"></a>
+  <a href="https://github.com/alexberardi/jarvis-server/releases"><img src="https://img.shields.io/github/v/release/alexberardi/jarvis-server?include_prereleases&label=release" alt="Latest release"></a>
 </p>
 
-<!--
-  TODO(demo): the single highest-impact addition to this README.
-  Record 20-30 seconds of a real interaction (wake word -> question -> spoken answer,
-  ideally ending with the silent mobile-inbox notification landing on a phone)
-  and embed it here:
-
-  <p align="center"><img src="docs/demo.gif" alt="Jarvis demo" width="700"></p>
--->
+> **Pre-release.** Jarvis Automation is at release candidate `v0.1.0-rc18`; there is no `v0.1.0` yet. Expect rough edges and changes between release candidates.
+>
+> **This repository is not where Jarvis Automation lives any more.** The server and its desktop agent are [jarvis-server](https://github.com/alexberardi/jarvis-server). This repository was the home of the old Docker/microservice install, which is retired for new users (see [Legacy](#legacy-the-old-docker-install)).
 
 ---
 
-## Why Jarvis?
+## What it is
 
-Most voice assistants send your voice to the cloud, process it on someone else's hardware, and send back a response. You're renting access to your own assistant — and paying with your data.
+| Piece | What it does | Where |
+|---|---|---|
+| **Server** (`jarvisd`) | One program on a computer that stays on. Runs the whole assistant for your household and serves the setup wizard and the web app on port 7710. | [jarvis-server](https://github.com/alexberardi/jarvis-server) |
+| **Desktop agent** | Lets Jarvis listen ("Hey Jarvis") on a computer, open apps and links, control windows and work with your browser. Each person installs their own. | [jarvis-server](https://github.com/alexberardi/jarvis-server) |
+| **Voice node** | A small microphone and speaker for a room, usually a Raspberry Pi with a ReSpeaker HAT. | [jarvis-node-setup](https://github.com/alexberardi/jarvis-node-setup) |
+| **Mobile app** | Talk to Jarvis, manage devices and routines, set up voice nodes. iOS and Android. | [App Store](https://apps.apple.com/app/id6760924901) · [Google Play](https://play.google.com/store/apps/details?id=com.jarvis.nodemobile) |
 
-Jarvis takes a different approach. Every component runs locally: speech recognition via whisper.cpp, LLM inference via llama.cpp/vLLM/MLX, text-to-speech via Piper or Kokoro, and a command center that routes everything. No internet required. No subscriptions. No one listening.
+Everything runs on your hardware. Nothing that needs the internet is on by default, and the server downloads a language model only when you pick one in the setup wizard.
 
-What makes Jarvis different from other self-hosted alternatives:
+## Install
 
-- **Extend it in plain English.** Implement the `IJarvisCommand` interface and drop it in, or use the **AI Forge**: describe what you want ("crypto prices by ticker symbol"), and it generates, validates, and sandbox-tests a complete package you can publish in one click. **20 commands ship built in** (conversation, memories, timers, reminders, web search, smart home, routines); another **24 packages** (weather, music, calendar, sports, movies, email, drive time) are one click away in the [Pantry](https://pantry.jarvisautomation.io) community store. This is the part nothing else in local-voice has.
-- **Fast, for something fully local.** A full turn — you stop talking → Jarvis starts talking — runs in about **2.4 seconds** with no cloud in the loop. Local voice usually means slow; prefix-cache-aware prompts and LAN-direct nodes keep it competitive. [How it works ↓](#how-fast-is-it)
-- **Private by default, on your hardware.** Speech recognition (whisper.cpp), text-to-speech (Piper/Kokoro), and the command center all run on your own machine. No subscriptions, no one listening.
-- **Bring your own LLM — no GPU required.** Point the LLM proxy at a cloud API (Claude, GPT, Ollama, …) and run the whole stack on any Docker host, or go **fully local** with llama.cpp / vLLM / MLX on your own GPU for zero cloud dependency. Your call on the privacy-vs-convenience trade.
-- **Speaker identification.** Jarvis knows who's talking — voice profiles per household member, so each person gets their own context, preferences, and command routing.
-- **Pi Zero voice nodes.** A ~$15 Raspberry Pi Zero 2 W with a mic/speaker HAT becomes a room-scale voice endpoint, headless-provisioned from the mobile app. (Nodes are cheap; the brain runs on a separate host — see [Requirements](#requirements).)
-- **Modular, not monolithic.** ~13 independent services (each with its own database, CI, Docker image, and tests) plus a catalog of **forkable** command and device packages. Swap or extend any piece without touching the rest — and most `jarvis-cmd-*` / `jarvis-device-*` repos are reference implementations meant to be forked and improved.
-
-## How fast is it?
-
-A voice assistant lives or dies on latency. A full turn — wake word → transcription → LLM → first spoken audio — runs in **~2.4 seconds** on a Pi node co-located with the server, entirely on local models (a 14B live model here), no cloud inference. Five design decisions make that possible:
-
-- **Prefix-cache-aware prompts.** Prompts are structured around llama.cpp's prefix cache so the heavyweight static prompt — system prompt and tool definitions — is processed once and reused, not reprocessed every turn. Keeping that cache warm across a turn (no throwaway calls evicting the single slot) is the difference between a ~0.3s first inference and a ~2.4s one.
-- **Local-first routing.** A node on the server's LAN reaches it directly instead of round-tripping through the cloud relay — an audio upload lands in ~7ms instead of ~2s. Remote nodes still use the relay; it's a per-node override.
-- **Streaming end to end.**<sup>*</sup> LLM output streams into TTS as it generates — Jarvis starts talking before the model finishes thinking.
-- **Nothing heavy on the hot path.** Long-running jobs (deep research, memory extraction) are offloaded to a Redis-backed queue with idempotent enqueue and authenticated callbacks, so background work never competes with live voice inference.
-- **Tiny, cheap edge nodes.** A Pi Zero 2 W handles wake-word detection (openWakeWord) and the node runtime within a ~512 MB memory budget; the heavy lifting stays on your host.
-
-<sub>*Conversational replies stream straight into TTS; commands that execute tools complete the tool call before speaking.</sub>
-
-<!-- BENCHMARK:START -->
-
-## 🎙️ Which local model routes voice best?
-
-How well each local model routes canned voice commands to the right built-in tool — through command-center's real `/voice/command` path, 80 utterances across 7 tool categories + small-talk negatives. Higher accuracy = fewer wrong/missed actions; lower latency = snappier.
-
-| Model | Correct tool | Correct args | Never mis-fires | Routing (p50) | Est. spoken response |
-|---|--:|--:|--:|--:|--:|
-| **Mistral-7B-Instruct-v0.3 (Q4_K_M)** | 0% | 0% | 100% | 229ms | ~1.8s |
-| **Qwen3-8B (Q4_K_M)** | 0% | 0% | 100% | 231ms | ~1.8s |
-| **Llama-3.1-8B-Instruct (Q4_K_M)** | 0% | 0% | 100% | 232ms | ~1.8s |
-| **Qwen3-4B (Q4_K_M)** | 0% | 0% | 100% | 233ms | ~1.8s |
-| **Hermes-3-Llama-3.1-8B (Q4_K_M)** | 0% | 0% | 100% | 233ms | ~1.8s |
-
-<sub>GPU: **NVIDIA GeForce RTX 3080 Ti, 12288 MiB, driver 610.57.04** · “Est. spoken response” = routing p50 + ~1.6s STT+TTS overhead · generated 2026-09-05 · [how this is measured](install-e2e/gpu/BENCHMARK.md)</sub>
-
-<!-- BENCHMARK:END -->
-
-## Security model
-
-Local-first is the starting point, not the whole story:
-
-- **Per-speaker data scoping.** Household speaker recognition ties memories, preferences, and context to whoever is talking, so one person's data stays theirs.
-- **Discreet by choice.** Talk to Jarvis by text — chat from the companion app or the browser and read the answer instead of having it spoken to the room. Reminders, research results, and background routines can also deliver silently to your inbox.
-
-## Tested like a product
-
-- **Per-service CI.** Every self-hosted service builds, tests, and publishes its own Docker image independently — see the badge walls under [Services](#services).
-- **Real-GPU nightly installs.** CI rents a real GPU on the Vast.ai spot market (typically under $1/night), installs the full 17-container stack from scratch, and asserts actual GPU offload from llama.cpp logs — not just health checks.
-- **Hundreds of test files across ~64 repositories**, plus a submission pipeline that security-reviews and flags every community package before it can be published — with static analysis and network-isolated container sandbox tests on the standard submission path.
-
-## Forge
-
-The Forge is an AI-powered package builder built into the Pantry web UI. It generates complete Jarvis packages — commands, agents, device protocols, device managers, or multi-component bundles — from natural language descriptions.
-
-```
- You: "A command that fetches cryptocurrency prices by ticker symbol using CoinGecko"
-   │
-   ▼
- Forge ──► SDK introspects itself (forge.py) ──► builds system prompt
-   │         with interface contracts, manifest schema,
-   │         validation rules, constructor signatures
-   ▼
- LLM generates: command.py + jarvis_command.yaml + README.md + LICENSE
-   │
-   ▼
- AST validation ──► static analysis runs on generated code before you see it
-   │
-   ▼
- Split-pane IDE ──► chat on left, editable code with syntax highlighting on right
-   │
-   ▼
- One-click publish ──► creates GitHub repo ──► submits to Pantry pipeline
-```
-
-**How it works under the hood:** The SDK decorates every interface class with `__forge_hints__` metadata. At runtime, `forge.py` walks all SDK classes via `inspect` + `get_type_hints`, combines them with manifest schema and validation rules, and produces a structured spec (~550 lines of Markdown). This spec becomes the LLM's system prompt — so it's always in sync with the actual interfaces. When you add a method to `IJarvisCommand`, the Forge automatically knows about it.
-
-**BYOK:** Users provide their own API key. Six models available (Haiku 4.5, Sonnet 4, Opus 4, GPT-4o, ChatGPT-5, Codex) with per-generation cost estimates shown in the UI.
-
-**Safety:** every generated package runs through static analysis and an automated safety review, then a full **containerized test run** (the Pantry submission pipeline) before it can be published. As with any package store — think AUR, npm, or PyPI — Jarvis sandboxes and screens, but installing a community package is ultimately your call. You decide what you trust.
-
-## Architecture
-
-```
-                              ┌─────────────────────────────────────────┐
-                              │           DATA SERVICES                 │
-                              │  PostgreSQL  Redis  Loki  Grafana  MinIO│
-                              └────┬──────────┬──────┬──────────────────┘
-                                   │          │      │
-                  ┌────────────────┼──────────┼──────┼──────────────────────────┐
-                  │                │          │      │          CORE            │
-                  │    ┌───────────▼──┐  ┌────▼──────▼──┐  ┌────────────────┐  │
-                  │    │ Config       │  │ Auth          │  │ Logs           │  │
-                  │    │ Service      │  │ JWT + app-to- │  │ Centralized    │  │
-                  │    │ (discovery)  │  │ app auth      │  │ via Loki       │  │
-                  │    └──────────────┘  └───────────────┘  └────────────────┘  │
-                  └────────────────────────────────────────────────────────────┘
-                                              │
-         ┌────────────────────────────────────┼────────────────────────────────┐
-         │                                    │         COMMAND PIPELINE       │
-         │  ┌──────────┐    ┌─────────────────▼───────────┐    ┌───────────┐  │
-         │  │ Whisper   │◄───│ Command Center              │───►│ LLM Proxy │  │
-         │  │ STT       │    │ Voice API, node management, │    │ GGUF/vLLM │  │
-         │  │ + speaker │    │ intent parsing, tool routing │    │ MLX/REST  │  │
-         │  │   ID      │    └──────────┬──────────────────┘    │           │  │
-         │  └──────────┘    ┌──────────▼────────┐              └───────────┘  │
-         │                  │ TTS (Piper/Kokoro)│                              │
-         │                  │ streaming audio   │                              │
-         │                  └───────────────────┘                              │
-         └─────────────────────────────────────────────────────────────────────┘
-                                       │
-      ┌────────────────────────────────┼────────────────────────────────────┐
-      │                                │      ADDITIONAL SERVICES           │
-      │  ┌──────────┐  ┌──────────┐  ┌▼─────────┐  ┌──────────┐           │
-      │  │ Settings │  │ Admin UI │  │ Notif.   │  │ Notif.   │           │
-      │  │ Server   │  │ (React)  │  │ Service  │  │ Relay    │           │
-      │  │          │  │          │  │ push +   │  │ Expo →   │           │
-      │  │          │  │          │  │ inbox    │  │ APNs/FCM │           │
-      │  └──────────┘  └──────────┘  └──────────┘  └──────────┘           │
-      └────────────────────────────────────────────────────────────────────┘
-                                       │
-      ┌────────────────────────────────┼────────────────────────────────────┐
-      │                                │          CLIENTS                   │
-      │  ┌──────────────┐  ┌──────────▼───┐  ┌──────────┐  ┌───────────┐  │
-      │  │ Pi Zero      │  │ Mobile       │  │ Web Chat │  │ Admin     │  │
-      │  │ Voice Nodes  │  │ Voice Node   │  │ (jarvisd)│  │ Web UI    │  │
-      │  │ (Python)     │  │ (React Native│) │          │  │ (React)   │  │
-      │  └──────────────┘  └──────────────┘  └──────────┘  └───────────┘  │
-      └────────────────────────────────────────────────────────────────────┘
-```
-
-All services communicate over a shared Docker network. The config-service acts as the discovery hub — each service only needs a single env var (`JARVIS_CONFIG_URL`) to find every other service at runtime.
-
-### Voice Pipeline
-
-```
-Voice Node          Command Center        Whisper        LLM Proxy        TTS
-    │                     │                  │               │              │
-    │  audio stream       │                  │               │              │
-    ├────────────────────►│                  │               │              │
-    │                     │  transcribe      │               │              │
-    │                     ├─────────────────►│               │              │
-    │                     │  text + speaker  │               │              │
-    │                     │◄─────────────────┤               │              │
-    │                     │                  │               │              │
-    │                     │  parse intent + route            │              │
-    │                     ├─────────────────────────────────►│              │
-    │                     │  tool call / response            │              │
-    │                     │◄─────────────────────────────────┤              │
-    │                     │                                  │              │
-    │                     │  synthesize speech                              │
-    │                     ├───────────────────────────────────────────────►│
-    │                     │  audio                                         │
-    │                     │◄───────────────────────────────────────────────┤
-    │  audio response     │                                                │
-    │◄────────────────────┤                                                │
-```
-
-### Service Communication Patterns
-
-| Pattern | How | Used By |
-|---------|-----|---------|
-| **User auth** | `Authorization: Bearer <JWT>` | Admin UI, mobile apps |
-| **App-to-app auth** | `X-Jarvis-App-Id` + `X-Jarvis-App-Key` headers | All inter-service calls |
-| **Node auth** | `X-API-Key` (node_id:node_key) | Pi Zero and mobile voice nodes |
-| **Service discovery** | `GET /services` from config-service, cached locally | All services |
-| **Centralized logging** | All services &rarr; jarvis-logs &rarr; Loki | All services via jarvis-log-client |
-
-## Services
-
-### Core
-
-Always included in every deployment.
-
-| Service | Port | Description | Tests | Docker |
-|---------|------|-------------|-------|--------|
-| [jarvis-config-service](https://github.com/alexberardi/jarvis-config-service) | 7700 | Centralized configuration and service discovery | [![Tests](https://github.com/alexberardi/jarvis-config-service/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-config-service/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-config-service/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-config-service/actions/workflows/docker-build-push.yml) |
-| [jarvis-auth](https://github.com/alexberardi/jarvis-auth) | 7701 | JWT authentication with register, login, refresh, logout | [![Tests](https://github.com/alexberardi/jarvis-auth/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-auth/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth/actions/workflows/docker-build-push.yml) |
-| [jarvis-logs](https://github.com/alexberardi/jarvis-logs) | 7702 | Centralized logging for all services via Loki | [![Tests](https://github.com/alexberardi/jarvis-logs/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-logs/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-logs/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-logs/actions/workflows/docker-build-push.yml) |
-| [jarvis-command-center](https://github.com/alexberardi/jarvis-command-center) | 7703 | Central voice/command API, node management, tool routing | [![Tests](https://github.com/alexberardi/jarvis-command-center/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-command-center/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-command-center/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-command-center/actions/workflows/docker-build-push.yml) |
-| [jarvis-llm-proxy-api](https://github.com/alexberardi/jarvis-llm-proxy-api) | 7704 | Local LLM inference (GGUF/vLLM/MLX/Transformers/REST) | [![Tests](https://github.com/alexberardi/jarvis-llm-proxy-api/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-llm-proxy-api/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-llm-proxy-api/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-llm-proxy-api/actions/workflows/docker-build-push.yml) |
-| [jarvis-whisper-api](https://github.com/alexberardi/jarvis-whisper-api) | 7706 | Speech-to-text via whisper.cpp with speaker identification | [![Tests](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-whisper-api/actions/workflows/docker-build-push.yml) |
-| [jarvis-tts](https://github.com/alexberardi/jarvis-tts) | 7707 | Text-to-speech synthesis via Piper or Kokoro | [![Tests](https://github.com/alexberardi/jarvis-tts/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-tts/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-tts/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-tts/actions/workflows/docker-build-push.yml) |
-| [jarvis-settings-server](https://github.com/alexberardi/jarvis-settings-server) | 7708 | Runtime settings aggregator for all services | [![Tests](https://github.com/alexberardi/jarvis-settings-server/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-settings-server/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-settings-server/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-settings-server/actions/workflows/docker-build-push.yml) |
-| [jarvis-admin](https://github.com/alexberardi/jarvis-admin) | 7711 | Web admin UI + setup wizard (settings, training, administration) | [![Tests](https://github.com/alexberardi/jarvis-admin/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-admin/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-admin/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-admin/actions/workflows/docker-build-push.yml) |
-
-### Optional
-
-Add-on services for additional capabilities.
-
-| Service | Port | Description | Tests | Docker |
-|---------|------|-------------|-------|--------|
-| [jarvis-notifications](https://github.com/alexberardi/jarvis-notifications) | 7712 | Push notifications, inbox, and deep research delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications/actions/workflows/test.yml) | [![Docker](https://github.com/alexberardi/jarvis-notifications/actions/workflows/docker-build-push.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications/actions/workflows/docker-build-push.yml) |
-
-### Cloud
-
-Optional cloud-hosted services and public-facing web apps.
-
-| Service | Port | Description | CI |
-|---------|------|-------------|-----|
-| [jarvis-notifications-relay](https://github.com/alexberardi/jarvis-notifications-relay) | - | Stateless Expo Push API proxy for APNs/FCM delivery | [![Tests](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-notifications-relay/actions/workflows/test.yml) |
-| [jarvis-pantry](https://github.com/alexberardi/jarvis-pantry) | 7721 | Community package store API (browse, submit, review, Forge) | [![Tests](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry/actions/workflows/test.yml) |
-| [jarvis-pantry-web](https://github.com/alexberardi/jarvis-pantry-web) | 7720 | Pantry web frontend (Next.js) — catalog browser + AI Forge | [![CI](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry-web/actions/workflows/ci.yml) |
-| [jarvis-pantry-runner](https://github.com/alexberardi/jarvis-pantry-runner) | - | Container test runner for Pantry submissions (GitHub Actions) | [![CI](https://github.com/alexberardi/jarvis-pantry-runner/actions/workflows/container-test.yml/badge.svg)](https://github.com/alexberardi/jarvis-pantry-runner/actions/workflows/container-test.yml) |
-| [jarvis-docs](https://github.com/alexberardi/jarvis-docs) | - | [Developer documentation](https://docs.jarvisautomation.dev) (MkDocs) | |
-| [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk) | - | Core interfaces + Forge spec generator (pip package) | |
-
-### Community Packages
-
-Standalone command packages installable via the Pantry. Each was extracted from the built-in command set into its own repo.
-
-| Package | Description |
-|---------|-------------|
-| [jarvis-home-assistant-integration](https://github.com/alexberardi/jarvis-home-assistant-integration) | Smart home device control + status via Home Assistant |
-| [jarvis-cmd-news](https://github.com/alexberardi/jarvis-cmd-news) | RSS news headlines by category |
-| [jarvis-cmd-barstool](https://github.com/alexberardi/jarvis-cmd-barstool) | Barstool Sports headlines with optional sport filter |
-| [jarvis-cmd-open-weather](https://github.com/alexberardi/jarvis-cmd-open-weather) | Weather conditions and forecasts via OpenWeather API |
-| [jarvis-cmd-meteo-weather](https://github.com/alexberardi/jarvis-cmd-meteo-weather) | Weather via Open-Meteo (free, no API key) |
-| [jarvis-cmd-sports](https://github.com/alexberardi/jarvis-cmd-sports) | Sports scores, live games, and schedules via ESPN |
-| [jarvis-cmd-music-assistant](https://github.com/alexberardi/jarvis-cmd-music-assistant) | Music playback and control via Music Assistant |
-| [jarvis-cmd-audacy](https://github.com/alexberardi/jarvis-cmd-audacy) | Live Audacy radio (sports, news, talk, music) streamed on the node |
-| [jarvis-cmd-pandora](https://github.com/alexberardi/jarvis-cmd-pandora) | Pandora radio streaming with voice control |
-| [jarvis-cmd-spotify](https://github.com/alexberardi/jarvis-cmd-spotify) | Spotify playback and control on a Jarvis node |
-| [jarvis-cmd-rotten-tomatoes](https://github.com/alexberardi/jarvis-cmd-rotten-tomatoes) | Rotten Tomatoes movie/TV ratings and what's in theaters |
-| [jarvis-cmd-entertainment-knowledge](https://github.com/alexberardi/jarvis-cmd-entertainment-knowledge) | TMDB-powered movie & TV lookup with rich inbox cards |
-| [jarvis-cmd-email](https://github.com/alexberardi/jarvis-cmd-email) | Email management (Gmail + IMAP) with alert agent |
-| [jarvis-cmd-calendar](https://github.com/alexberardi/jarvis-cmd-calendar) | Calendar events (iCloud + Google) with alert agent |
-| [jarvis-cmd-medication](https://github.com/alexberardi/jarvis-cmd-medication) | Household medication tracking with dose reminders and voice mark-off |
-| [jarvis-device-hue](https://github.com/alexberardi/jarvis-device-hue) | Philips Hue smart lights via the local Bridge API |
-| [jarvis-device-govee](https://github.com/alexberardi/jarvis-device-govee) | Govee smart devices (LAN + cloud) |
-| [jarvis-device-apple](https://github.com/alexberardi/jarvis-device-apple) | Apple TV and HomePod control via AirPlay |
-| [jarvis-device-nest](https://github.com/alexberardi/jarvis-device-nest) | Google Nest thermostat and camera via SDM API |
-| [jarvis-device-schlage](https://github.com/alexberardi/jarvis-device-schlage) | Schlage Encode WiFi smart lock control via Allegion cloud |
-| [jarvis-device-simplisafe](https://github.com/alexberardi/jarvis-device-simplisafe) | SimpliSafe home security — arm, disarm, sensor status |
-| [jarvis-device-zwave](https://github.com/alexberardi/jarvis-device-zwave) | Z-Wave device control via Z-Wave JS UI |
-| [jarvis-device-homeconnect](https://github.com/alexberardi/jarvis-device-homeconnect) | Bosch/Siemens appliance control via Home Connect |
-| [jarvis-device-homekit](https://github.com/alexberardi/jarvis-device-homekit) | Local Apple HomeKit (HAP) accessories — discover, pair, and control over LAN |
-| [jarvis-device-resideo](https://github.com/alexberardi/jarvis-device-resideo) | Resideo / Honeywell Home thermostat control |
-| [jarvis-device-kasa](https://github.com/alexberardi/jarvis-device-kasa) | TP-Link Kasa smart plugs and lights over the local network |
-| [jarvis-device-lifx](https://github.com/alexberardi/jarvis-device-lifx) | LIFX smart lights over the local network |
-
-### Prompt Providers
-
-A **prompt provider** is a model-family strategy — the system-prompt shape plus the `<tool_call>` format command-center parses back out (local GGUF models don't do native tool-calling reliably, so tools ride in the prompt). Command-center ships built-in providers for the mainstream local families, each benchmarked for voice-command tool-routing accuracy + latency in the [GPU e2e lane](install-e2e/gpu/BENCHMARK.md):
-
-| Family | Built-in provider(s) |
-|--------|----------------------|
-| Qwen 2.5 / Qwen 3 | `Qwen25MediumUntrained`, `Qwen3_8B_Compressed`, … |
-| Llama 3.1 | `Llama31MediumUntrained` |
-| Gemma 2 | `Gemma2MediumUntrained` |
-| Hermes 3 | `HermesMediumUntrained` |
-| Mistral 7B | `Mistral7bMediumUntrained` |
-
-Add a new model by dropping a provider into `jarvis-command-center/app/core/prompt_providers/`, or ship one as a Pantry package — the [jarvis-pp-hermes](https://github.com/alexberardi/jarvis-pp-hermes) and [jarvis-pp-mistral](https://github.com/alexberardi/jarvis-pp-mistral) repos are the reference pattern.
-
-### Client Libraries
-
-| Library | Description | Tests |
-|---------|-------------|-------|
-| [jarvis-config-client](https://github.com/alexberardi/jarvis-config-client) | Service discovery via config-service | [![Tests](https://github.com/alexberardi/jarvis-config-client/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-config-client/actions/workflows/test.yml) |
-| [jarvis-log-client](https://github.com/alexberardi/jarvis-log-client) | Structured logging via jarvis-logs | [![Tests](https://github.com/alexberardi/jarvis-log-client/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-log-client/actions/workflows/test.yml) |
-| [jarvis-auth-client](https://github.com/alexberardi/jarvis-auth-client) | Auth helpers for service-to-service calls | [![CI](https://github.com/alexberardi/jarvis-auth-client/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-auth-client/actions/workflows/ci.yml) |
-| [jarvis-settings-client](https://github.com/alexberardi/jarvis-settings-client) | Runtime settings client | [![CI](https://github.com/alexberardi/jarvis-settings-client/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-settings-client/actions/workflows/ci.yml) |
-| [jarvis-web-scraper](https://github.com/alexberardi/jarvis-web-scraper) | Web scraping and content extraction | [![Tests](https://github.com/alexberardi/jarvis-web-scraper/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-web-scraper/actions/workflows/test.yml) |
-
-### Client Apps
-
-| App | Description | CI |
-|-----|-------------|-----|
-| [jarvis-node-setup](https://github.com/alexberardi/jarvis-node-setup) | Pi Zero voice node (Python) | [![Tests](https://github.com/alexberardi/jarvis-node-setup/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-setup/actions/workflows/test.yml) |
-| [jarvis-node-mobile](https://github.com/alexberardi/jarvis-node-mobile) | Mobile voice node (React Native) | [![CI](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/alexberardi/jarvis-node-mobile/actions/workflows/ci.yml) |
-| [jarvis-recipes-mobile](https://github.com/alexberardi/jarvis-recipes-mobile) | Recipe app (React Native) | [![Build](https://github.com/alexberardi/jarvis-recipes-mobile/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/alexberardi/jarvis-recipes-mobile/actions/workflows/build-and-deploy.yml) |
-
-Browser chat lives in the [jarvis-server](https://github.com/alexberardi/jarvis-server) web app on port 7710 (Chat, Add-ons, Inbox, Account), which replaces the retired `jarvis-web`.
-
-### Tools
-
-| Tool | Description | CI |
-|------|-------------|-----|
-| [jarvis-developer-toolkit](https://github.com/alexberardi/jarvis-developer-toolkit) | CLI (`jdt`) for scaffolding, testing, and deploying packages | |
-| [jarvis-installer](https://github.com/alexberardi/jarvis-installer) | Web-based Docker Compose generator | [![Tests](https://github.com/alexberardi/jarvis-installer/actions/workflows/test.yml/badge.svg)](https://github.com/alexberardi/jarvis-installer/actions/workflows/test.yml) [![Deploy](https://github.com/alexberardi/jarvis-installer/actions/workflows/deploy.yml/badge.svg)](https://github.com/alexberardi/jarvis-installer/actions/workflows/deploy.yml) |
-| [jarvis-data-services](https://github.com/alexberardi/jarvis-data-services) | Shared PostgreSQL, Redis, Loki, Grafana | |
-
-## LLM Inference
-
-The LLM proxy supports multiple inference backends, so you can match your hardware:
-
-| Backend | Best For | Acceleration |
-|---------|----------|--------------|
-| **GGUF** (llama.cpp) | Most setups — quantized models, low memory | CUDA, Metal, ROCm, CPU |
-| **vLLM** | High-throughput GPU servers | CUDA |
-| **MLX** | Apple Silicon Macs | Metal |
-| **Transformers** | HuggingFace models without conversion | CUDA, CPU |
-| **REST** | Remote APIs (OpenAI, Anthropic, Ollama) | N/A |
-
-## Built-in Commands
-
-**20 commands**, grouped by category below. These ship with the node and command-center — no Pantry install required, and they're the tools the LLM can call on a fresh install.
-
-| Category | Commands |
-|----------|----------|
-| **Conversation** | General chat with context memory, jokes, "what's up", clarification prompts |
-| **Memories** | Remember, recall, and forget personal facts; passive extraction from voice history |
-| **Timers & Reminders** | Set / check / cancel timers; one-shot and recurring reminders |
-| **Utilities** | Calculator, unit conversion, timezone queries, relative-date resolution |
-| **Web** | Quick web search; deep research with summarization, delivered via push + inbox |
-| **Speaker** | Identify-speaker ("who am I?") via voice profile match |
-| **Smart Home** | Device control + status (Home Assistant package surfaces real devices to the built-in tool) |
-| **Routines** | Run user-built automations — bundle commands behind a voice or condition trigger |
-| **Node Control** | Reboot, restart, and other node-side admin from voice |
-| **Mobile Push** | Send a tap-to-open link to a household member's phone via the notifications inbox |
-
-Everything else (weather, calendar, sports, news, music, movies, drive time, …) ships as a [Community Package](#community-packages) — **24 are published in the [Pantry](https://pantry.jarvisautomation.io) today**, installable in one click. Add your own by implementing the `IJarvisCommand` interface and running `jdt deploy` from the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit).
-
-## Requirements
-
-Jarvis runs as a Docker stack on a **host machine** (Linux, macOS, or a NAS), with optional **Pi Zero voice nodes** as room endpoints. The one variable that drives your hardware needs is **where the LLM runs** — and that's your choice:
-
-**Two ways to run the brain:**
-
-- **Cloud LLM — no GPU.** Point the LLM proxy at Claude, GPT, Ollama, or any OpenAI-compatible API, and the whole stack runs on a modest Docker host (~8 GB RAM, no GPU). Convenient, but your transcripts go to that provider — so it's the easy path, not the maximally-private one.
-- **Fully local — your GPU.** Run the model yourself via llama.cpp / vLLM / MLX for zero cloud dependency. This is the privacy-max path and wants real compute: an NVIDIA GPU (8+ GB VRAM) or Apple Silicon (Metal). CPU-only works but is slow.
-
-**Host machine:**
-
-| Resource | Cloud-LLM (minimum) | Fully-local (recommended) |
-|----------|---------------------|----------------------------|
-| CPU | 4 cores | 8+ cores |
-| RAM | 8 GB | 16+ GB |
-| Disk | 20 GB | 40 GB+ (models are 4–20 GB each) |
-| GPU | none | NVIDIA 8+ GB VRAM, or Apple Silicon (Metal) |
-| Software | Docker v24+ with Compose v2 | same |
-
-**Voice node (optional, one per room):** a Raspberry Pi Zero 2 W (~$15) with a mic/speaker HAT such as the ReSpeaker 2-Mics — headless, provisioned from the mobile app.
-
-## Quick Start
-
-The fastest path is the one-line installer. It downloads the `jarvis-admin` setup wizard, which pulls prebuilt images from GHCR — no source checkout required:
-
-<!-- jarvis:install-cmd:start — version pin auto-updated by the release docs bot; edit the command here, not the copies in jarvis-docs -->
-```bash
-curl -fsSL https://raw.githubusercontent.com/alexberardi/jarvis-admin/main/install.sh | sh
-```
-<!-- jarvis:install-cmd:end -->
-
-Then open **http://localhost:7711** — the wizard walks you through hardware detection, service selection, account creation, and downloading a model. See the [full installation guide](https://docs.jarvisautomation.dev/getting-started/installation/) for Docker prerequisites, GPU setup, TrueNAS, and other install options.
-
-> **Note:** Jarvis spans many repositories (a dozen-ish services plus command/device packages), so cloning this repo alone is **not** a full install — use the installer above to run it. To hack on the services from source, see [Development](#development).
-
-## Development
-
-### Building Packages
-
-The fastest way to extend Jarvis is with the [Developer Toolkit](https://github.com/alexberardi/jarvis-developer-toolkit):
-
-```bash
-pip install git+https://github.com/alexberardi/jarvis-developer-toolkit.git
-
-jdt init my_command --type command    # Scaffold a package
-cd my_command
-# ... implement your logic ...
-jdt test .                            # Validate (same pipeline as Pantry)
-jdt deploy local .                    # Install to your node
-```
-
-`jdt` supports all component types: commands, agents, device protocols, device managers, routines, and prompt providers. See the [Developer Toolkit docs](https://docs.jarvisautomation.dev/extending/toolkit/) for the full guide, including [Claude Code integration](https://docs.jarvisautomation.dev/extending/toolkit/claude-code/).
-
-### Running the full stack from source
-
-To hack on the stack itself rather than a single service, clone the meta repo
-and use the `./jarvis` CLI:
-
-```bash
-git clone https://github.com/alexberardi/jarvis.git ~/jarvis && cd ~/jarvis
-./scripts/clone-repos.sh     # clone the service repos alongside it
-./jarvis init                # tokens, .env files, infra, migrations
-./jarvis start --all         # build + start every service
-```
-
-**Host requirements** — checked by the `install-e2e-quickstart` CI lane, which
-runs exactly these three commands on a clean machine:
-
-| | |
+1. **Install the server.** Get the installer for your computer from **[installer.jarvisautomation.io](https://installer.jarvisautomation.io)**, or from the newest [release](https://github.com/alexberardi/jarvis-server/releases):
+
+   | | Server | Desktop agent |
+   |---|---|---|
+   | macOS (Apple silicon) | `Jarvis-Automation-Server-<v>.dmg` | `Jarvis-Automation-Agent-<v>.dmg` |
+   | Windows | `Jarvis-Automation-Server-Setup-<v>.exe` | `Jarvis-Automation-Agent-Setup-<v>.exe` |
+   | Debian, Ubuntu | `jarvis-automation-server_<v>_<arch>.deb` | `jarvis-automation-agent_<v>_<arch>.deb` |
+   | From a terminal | `install.sh` (Linux, macOS), `install.ps1` (Windows) | `install-agent.sh` (any Linux) |
+
+   Docker and Unraid: see [Server in Docker](https://docs.jarvisautomation.dev/install/docker/) and [Unraid](https://docs.jarvisautomation.dev/install/unraid/).
+
+2. **Finish the setup wizard.** The installer opens `http://<server>:7710/setup` in your browser. It creates your account, checks that other devices can reach the server, and helps you pick a model for your hardware.
+
+3. **Add the rest.** The [desktop agent](https://docs.jarvisautomation.dev/clients/desktop-agent/) on each computer, a [voice node](https://docs.jarvisautomation.dev/install/voice-node/) per room, and the [mobile app](https://docs.jarvisautomation.dev/install/mobile-app/) pointed at `http://<server>:7700`.
+
+The [install guide](https://docs.jarvisautomation.dev/install/) covers each step, upgrades and uninstalling.
+
+**Coming from the old Docker install?** `jarvisd import-legacy` carries over your users, households, nodes (Pi nodes reconnect without re-provisioning), rooms, devices, settings, memories, routines, contacts and inbox. See [Migrating from the old Docker install](https://docs.jarvisautomation.dev/install/migrating-from-docker/).
+
+## Choosing a model
+
+The model you run sets how quick and how accurate Jarvis feels. Pick it by your machine's memory:
+
+- **Mac with 16 GB:** Qwen 3 4B (Q4_K_M)
+- **Mac with 24 GB or more:** Qwen 3.5 9B (Q4_K_M, vision)
+- **PC or Linux machine with a GPU:** the largest model the setup wizard marks **Fits**
+- **No usable GPU:** Qwen 3 4B (Q4_K_M)
+
+On a 16 GB Mac mini M4, Qwen 3 4B picked the right action for **98.8 %** of an 80-utterance voice benchmark, in about **1.2 s** per turn once the prompt is cached (about 15 s for the first turn after a restart). [Models and hardware](https://docs.jarvisautomation.dev/models/) and [Benchmarks](https://docs.jarvisautomation.dev/reference/benchmarks/) have the rest.
+
+## Extending Jarvis
+
+Commands are Python classes that implement `IJarvisCommand` from [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk). They run on a voice node or a computer's desktop agent, not on the server. Community packages (weather, music, calendar, smart-home devices and more) install from the [Pantry](https://pantry.jarvisautomation.io). Start with [Building commands](https://docs.jarvisautomation.dev/commands/).
+
+## Repositories
+
+| Repository | What |
 |---|---|
-| **Python 3.11+** | `./jarvis init` builds a host venv per service to run alembic, and six services declare `requires-python >=3.11`. Ubuntu 22.04 ships 3.10.12 and will fail with `requires a different Python`. |
-| **~100 GB free disk** | `start --all` builds ~15 images; `llm-proxy`, `whisper-api`, `tts` and `ocr` each pull their own multi-GB torch/CUDA stack. |
-| **Docker + Compose v2** | plus the NVIDIA Container Toolkit if you want GPU services. |
+| [jarvis-server](https://github.com/alexberardi/jarvis-server) | The server (`jarvisd`) and the desktop agent (`jarvis-agent`) |
+| [jarvis-node-setup](https://github.com/alexberardi/jarvis-node-setup) | The Raspberry Pi voice node (Python) |
+| [jarvis-node-mobile](https://github.com/alexberardi/jarvis-node-mobile) | The mobile app (React Native) |
+| [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk) | The interfaces commands and packages implement |
+| [jarvis-pantry](https://github.com/alexberardi/jarvis-pantry), [jarvis-pantry-web](https://github.com/alexberardi/jarvis-pantry-web) | The Pantry package store and its web app |
+| [jarvis-notifications-relay](https://github.com/alexberardi/jarvis-notifications-relay) | Push delivery to the mobile app |
+| [jarvis-docs](https://github.com/alexberardi/jarvis-docs) | [docs.jarvisautomation.dev](https://docs.jarvisautomation.dev) |
+| [jarvis-installer](https://github.com/alexberardi/jarvis-installer) | [installer.jarvisautomation.io](https://installer.jarvisautomation.io) |
 
-Neither model-backed service starts until you give it a model — that is
-deliberate, not a fault:
+Command and device packages live in their own `jarvis-cmd-*` and `jarvis-device-*` repositories, listed in the [Pantry](https://pantry.jarvisautomation.io).
 
-- **llm-proxy** — run `./jarvis llm-setup`, or point `JARVIS_MODEL_NAME` at a
-  local GGUF. The shipped default path does not exist until you do.
-- **whisper-api** — place a GGML model at `~/whisper.cpp/models/`. Outbound
-  downloads are opt-in (`whisper.allow_model_autodownload`), and the container
-  mounts that directory read-only, so it must be staged on the host.
+## Legacy: the old Docker install
 
-### Working on Services
+Before `jarvisd`, Jarvis was a set of Python microservices run with Docker Compose: config-service, auth, logs, command-center, llm-proxy, whisper, tts, notifications, admin, recipes and OCR, on Postgres, Redis, MinIO and Mosquitto. `jarvisd` replaces all of them with one program and embedded storage.
 
-Each service is its own repository with its own CI pipeline. Clone the ones you need:
+That install is **retired for new users** as of `v0.1.0-rc18`. It no longer installs out of the box (MinIO's images are gone), and its documentation is frozen under [Legacy](https://docs.jarvisautomation.dev/legacy/) on the docs site. If you run it today, [move to jarvisd](https://docs.jarvisautomation.dev/install/migrating-from-docker/); the jarvisd installer's `--stop-legacy` stops the old containers without deleting anything.
 
-```bash
-git clone https://github.com/alexberardi/jarvis-auth.git
-cd jarvis-auth
-python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
-cp .env.example .env
-.venv/bin/python -m alembic upgrade head
-.venv/bin/uvicorn app.main:app --reload --port 7701
-```
-
-See each service's README for specific setup instructions, or browse the [developer docs](https://docs.jarvisautomation.dev).
+This repository still holds that stack's development tooling (the `./jarvis` CLI, `scripts/`, `deploy/`) and the `install-e2e/` harness, including the voice-command benchmark corpus that jarvis-server's `scripts/toolbench` reads (`install-e2e/gpu/bench_corpus.cc.yaml`). None of it is needed to run Jarvis Automation.
 
 ## Community
 
-Questions, bug reports, or you want to show off a package you built — **[join the Discord](https://discord.gg/9SuQFVexxJ)**. It's the fastest way to get an answer, and where new packages and hardware builds get shared.
-
-Bugs and feature requests are also welcome as GitHub issues on the relevant repo.
+Questions, bug reports, or a package you built: **[join the Discord](https://discord.gg/9SuQFVexxJ)**. Bugs and feature requests are also welcome as [jarvis-server issues](https://github.com/alexberardi/jarvis-server/issues).
 
 ## License
 
-Jarvis is open source under a split license:
+Jarvis Automation is open source under a split license:
 
-- **Server-side services** — command-center, auth, config-service, pantry, the LLM / STT / TTS services, logs, notifications, admin, installer, node software, and the rest of the self-hosted stack — are licensed under the **GNU AGPL-3.0**. You can self-host, modify, and redistribute freely; if you run a modified version as a network service, you must publish your changes.
-- **Apps, SDK, client libraries, and command/device packages** — the mobile apps, `jarvis-command-sdk`, the `*-client` libraries, and all `jarvis-cmd-*` / `jarvis-device-*` packages — are licensed under **Apache-2.0**, so you can build and ship your own commands and integrations without copyleft obligations.
+- **The server, the desktop agent, the node software and the rest of the self-hosted stack** are licensed under the **GNU AGPL-3.0**. You can self-host, modify and redistribute freely; if you run a modified version as a network service, you must publish your changes.
+- **The mobile app, `jarvis-command-sdk`, the client libraries and the `jarvis-cmd-*` / `jarvis-device-*` packages** are licensed under **Apache-2.0**, so you can build and ship your own commands and integrations without copyleft obligations.
 
 Each repository's `LICENSE` file is authoritative.
