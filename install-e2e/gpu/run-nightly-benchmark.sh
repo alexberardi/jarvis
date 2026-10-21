@@ -66,6 +66,10 @@ echo "benchmark complete: ${GOT}/${WANT} models"
 
 [ "$PUBLISH" -eq 0 ] && { echo "--no-publish: skipping README commit"; exit 0; }
 
+# The README no longer carries a benchmark table: this sweep measures the retired
+# Docker stack, and jarvisd's numbers live in jarvis-docs (reference/benchmarks.md).
+echo "not publishing: the jarvis README has no benchmark section any more"; exit 0
+
 # Publish to the jarvis README on origin/main via a throwaway worktree (local
 # main is diverged from origin, so never touch it).
 cd "$REPO" || exit 1

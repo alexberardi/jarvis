@@ -52,8 +52,8 @@ on:
   # qualifying offer, and two lanes provisioning at once means the second gets
   # "0 qualifying offer(s)". 84 minutes after install-e2e-gpu is enough for it
   # to finish and release its instance.
-  schedule:
-    - cron: "47 8 * * *"
+  # The nightly schedule is off: this lane tests the retired Docker/microservice install
+  # (jarvisd replaced it at v0.1.0-rc18). Run it by hand with workflow_dispatch.
 
 permissions:
   contents: read

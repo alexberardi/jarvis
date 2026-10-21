@@ -2,6 +2,11 @@
 
 Personal voice assistant with Pi Zero nodes and self-hosted microservices.
 
+> **Legacy.** The microservice stack this file describes is retired for new installs as of
+> `v0.1.0-rc18`. Jarvis Automation is now `jarvisd` (one Go program) in
+> [jarvis-server](https://github.com/alexberardi/jarvis-server): new work goes there, and its own
+> CLAUDE.md applies. What follows still holds for running or debugging the legacy stack.
+
 **See also:**
 - [RULES.md](RULES.md) — development rules (working style, coding style, TDD, performance targets)
 - **Each service has its own CLAUDE.md** — read the relevant one *first* when working in that service. This meta doc is for cross-cutting concerns only.
