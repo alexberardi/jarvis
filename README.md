@@ -2,41 +2,74 @@
   <img src="logo.png" alt="Jarvis Automation" width="600" />
 </p>
 
+<h3 align="center">Your own Jarvis. It runs in your house, not in someone else's cloud.</h3>
+
 <p align="center">
-  <strong>A private voice assistant that runs on your own computer, not someone else's cloud.</strong><br>
-  One program, <code>jarvisd</code>, on a Mac, a Windows PC or a Linux machine runs all of Jarvis: speech recognition, the language model, text-to-speech and speaker recognition, on your network.
+  A voice assistant that hears you in every room, knows who's talking, remembers what you tell it,<br>
+  runs your smart home and works your computer for you, all on hardware you own.
 </p>
 
 <p align="center">
-  <a href="https://installer.jarvisautomation.io"><strong>Download</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://docs.jarvisautomation.dev"><strong>Docs</strong></a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://github.com/alexberardi/jarvis-server">jarvis-server</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="https://discord.gg/9SuQFVexxJ"><strong>Discord</strong></a>
+  <a href="https://installer.jarvisautomation.io"><strong>Download</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://docs.jarvisautomation.dev"><strong>Docs</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://discord.gg/9SuQFVexxJ"><strong>Discord</strong></a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="https://github.com/alexberardi/jarvis-server">jarvis-server</a>
 </p>
 
 <p align="center">
   <a href="#license"><img src="https://img.shields.io/badge/license-AGPL--3.0%20%2B%20Apache--2.0-blue" alt="License"></a>
   <a href="https://docs.jarvisautomation.dev"><img src="https://img.shields.io/badge/docs-jarvisautomation.dev-6366f1" alt="Docs"></a>
   <a href="https://github.com/alexberardi/jarvis-server/releases"><img src="https://img.shields.io/github/v/release/alexberardi/jarvis-server?include_prereleases&label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/runs%20on-macOS%20·%20Windows%20·%20Linux-informational" alt="Runs on macOS, Windows and Linux">
 </p>
-
-> **Pre-release.** Jarvis Automation is at release candidate `v0.1.0-rc18`; there is no `v0.1.0` yet. Expect rough edges and changes between release candidates.
->
-> **This repository is not where Jarvis Automation lives any more.** The server and its desktop agent are [jarvis-server](https://github.com/alexberardi/jarvis-server). This repository was the home of the old Docker/microservice install, which is retired for new users (see [Legacy](#legacy-the-old-docker-install)).
 
 ---
 
-## What it is
+## Just say it
 
-| Piece | What it does | Where |
+```text
+"Hey Jarvis, turn off the basement lights."            → your smart home, through Home Assistant
+"Good morning."                                         → your routine: lights, weather, today's calendar
+"Remind me to check the oven in 20 minutes."            → a reminder, with snooze and repeats
+"Remember that I take my coffee black."                 → a memory that's yours, not your partner's
+"Open Steam."  ·  "Switch to Firefox."                  → on your computer
+"Close the YouTube tab."  ·  "Pause the video."         → in your own browser
+"What does this error say?"                             → Jarvis reads your screen
+"Tell Claude to run the tests."                         → dictation, typed into the app in front of you
+```
+
+All of it runs on one computer in your home: hearing you, understanding you and talking back.
+
+## Why it's different
+
+**🔒 It's actually private.** Speech recognition, the language model, the voice and speaker recognition all run on your own machine. Nothing that needs the internet is on by default. No account with us, no subscription, nobody listening in.
+
+**🗣️ It knows who's talking.** Jarvis recognizes each person's voice, so what you tell it to remember is *yours*, not everyone's in the house.
+
+**🖥️ It works your computer, not just your lights.** The desktop agent lets Jarvis open apps and links, switch and close windows, set the volume, read your screen, type what you dictate and drive your own browser: find a tab, fill in a form, click a button, pause a video. On macOS and Linux, with Windows support newer and less tested.
+
+**🏠 It's everywhere you are.** A small speaker in each room, the iOS and Android app, a web chat in any browser and "Hey Jarvis" on your computer, all on one server with the same commands, memories, devices and routines.
+
+**⚡ It's fast on ordinary hardware.** On a 16 GB Mac mini, the recommended model picked the right action for **98.8 %** of an 80-command voice benchmark, in about **1.2 seconds** a turn once warmed up. No data-center GPU needed.
+
+**📦 It's one program.** `jarvisd` is a single executable with real installers for macOS, Windows and Debian/Ubuntu, and a setup wizard that checks your network and picks a model that fits your machine. No Docker, no database to run, no YAML.
+
+**👨‍👩‍👧 Share it with the people you care about.** One server can host several households. Friends and family add your server's address in the app, make an account and get their own assistant, fully separate from yours.
+
+**🧩 It's yours to extend.** A new command is a Python class. Install community packages (weather, news, music, calendar, smart-home devices and more) from the [Pantry](https://pantry.jarvisautomation.io), or describe what you want and let the Pantry's Forge write it.
+
+### Compared with the big three
+
+| | **Jarvis Automation** | Alexa · Google · Siri |
 |---|---|---|
-| **Server** (`jarvisd`) | One program on a computer that stays on. Runs the whole assistant for your household and serves the setup wizard and the web app on port 7710. | [jarvis-server](https://github.com/alexberardi/jarvis-server) |
-| **Desktop agent** | Lets Jarvis listen ("Hey Jarvis") on a computer, open apps and links, control windows and work with your browser. Each person installs their own. | [jarvis-server](https://github.com/alexberardi/jarvis-server) |
-| **Voice node** | A small microphone and speaker for a room, usually a Raspberry Pi with a ReSpeaker HAT. | [jarvis-node-setup](https://github.com/alexberardi/jarvis-node-setup) |
-| **Mobile app** | Talk to Jarvis, manage devices and routines, set up voice nodes. iOS and Android. | [App Store](https://apps.apple.com/app/id6760924901) · [Google Play](https://play.google.com/store/apps/details?id=com.jarvis.nodemobile) |
+| Where your voice is processed | Your own computer | Their cloud |
+| Works when the internet is down | Yes, for everything that doesn't need the internet (timers, devices on your network, your computer) | Mostly no |
+| Knows who's speaking | Yes, on your hardware | Yes, on their servers |
+| Controls your computer and browser | Yes | No |
+| Add your own commands | A Python class, no review process | Their skill store, their rules |
+| Subscription | None | For some features |
+| Source code | Open (AGPL-3.0 and Apache-2.0) | Closed |
 
-Everything runs on your hardware. Nothing that needs the internet is on by default, and the server downloads a language model only when you pick one in the setup wizard.
+## Get started in three steps
 
-## Install
-
-1. **Install the server.** Get the installer for your computer from **[installer.jarvisautomation.io](https://installer.jarvisautomation.io)**, or from the newest [release](https://github.com/alexberardi/jarvis-server/releases):
+1. **Install the server** on a computer that stays on. Get it from **[installer.jarvisautomation.io](https://installer.jarvisautomation.io)**, or from the newest [release](https://github.com/alexberardi/jarvis-server/releases):
 
    | | Server | Desktop agent |
    |---|---|---|
@@ -45,30 +78,31 @@ Everything runs on your hardware. Nothing that needs the internet is on by defau
    | Debian, Ubuntu | `jarvis-automation-server_<v>_<arch>.deb` | `jarvis-automation-agent_<v>_<arch>.deb` |
    | From a terminal | `install.sh` (Linux, macOS), `install.ps1` (Windows) | `install-agent.sh` (any Linux) |
 
-   Docker and Unraid: see [Server in Docker](https://docs.jarvisautomation.dev/install/docker/) and [Unraid](https://docs.jarvisautomation.dev/install/unraid/).
+   Running a NAS? See [Server in Docker](https://docs.jarvisautomation.dev/install/docker/) and [Unraid](https://docs.jarvisautomation.dev/install/unraid/).
 
-2. **Finish the setup wizard.** The installer opens `http://<server>:7710/setup` in your browser. It creates your account, checks that other devices can reach the server, and helps you pick a model for your hardware.
+2. **Follow the setup wizard.** It opens in your browser, creates your account, checks that your other devices can reach the server and downloads a model that fits your hardware.
 
-3. **Add the rest.** The [desktop agent](https://docs.jarvisautomation.dev/clients/desktop-agent/) on each computer, a [voice node](https://docs.jarvisautomation.dev/install/voice-node/) per room, and the [mobile app](https://docs.jarvisautomation.dev/install/mobile-app/) pointed at `http://<server>:7700`.
+3. **Add the rest.** The [desktop agent](https://docs.jarvisautomation.dev/agent/) on each computer, a [voice node](https://docs.jarvisautomation.dev/install/voice-node/) in each room and the [mobile app](https://docs.jarvisautomation.dev/install/mobile-app/) ([App Store](https://apps.apple.com/app/id6760924901); Google Play coming soon).
 
-The [install guide](https://docs.jarvisautomation.dev/install/) covers each step, upgrades and uninstalling.
+The [install guide](https://docs.jarvisautomation.dev/install/) covers every step, upgrades and uninstalling.
 
-**Coming from the old Docker install?** `jarvisd import-legacy` carries over your users, households, nodes (Pi nodes reconnect without re-provisioning), rooms, devices, settings, memories, routines, contacts and inbox. See [Migrating from the old Docker install](https://docs.jarvisautomation.dev/install/migrating-from-docker/).
+> **Pre-release.** Jarvis Automation is at release candidate `v0.1.0-rc18`, on its way to `v0.1.0`. It's in daily use, but expect rough edges and changes between release candidates. Come say hi in the [Discord](https://discord.gg/9SuQFVexxJ).
 
-## Choosing a model
+**Coming from the old Docker install?** `jarvisd import-legacy` brings over your users, households, nodes (Pi nodes reconnect without re-provisioning), rooms, devices, settings, memories, routines, contacts and inbox. See [Migrating from the old Docker install](https://docs.jarvisautomation.dev/install/migrating-from-docker/).
 
-The model you run sets how quick and how accurate Jarvis feels. Pick it by your machine's memory:
+## What you need
 
-- **Mac with 16 GB:** Qwen 3 4B (Q4_K_M)
-- **Mac with 24 GB or more:** Qwen 3.5 9B (Q4_K_M, vision)
-- **PC or Linux machine with a GPU:** the largest model the setup wizard marks **Fits**
-- **No usable GPU:** Qwen 3 4B (Q4_K_M)
+| | |
+|---|---|
+| **Server** | A Mac with Apple silicon and 16 GB or more, or a Windows or Linux PC with a GPU. A machine without a GPU works too, with a small model, but answers more slowly. |
+| **Voice node** (optional, per room) | A Raspberry Pi with a ReSpeaker 2-mic HAT (about $50), or a USB microphone and speaker. |
+| **Model** | The setup wizard suggests one. On a 16 GB Mac, Qwen 3 4B. With 24 GB or more, Qwen 3.5 9B (it can see images too). On a GPU, the largest model the wizard marks **Fits**. |
 
-On a 16 GB Mac mini M4, Qwen 3 4B picked the right action for **98.8 %** of an 80-utterance voice benchmark, in about **1.2 s** per turn once the prompt is cached (about 15 s for the first turn after a restart). [Models and hardware](https://docs.jarvisautomation.dev/models/) and [Benchmarks](https://docs.jarvisautomation.dev/reference/benchmarks/) have the rest.
+[Models and hardware](https://docs.jarvisautomation.dev/models/) and [Benchmarks](https://docs.jarvisautomation.dev/reference/benchmarks/) have the details.
 
-## Extending Jarvis
+## Build on it
 
-Commands are Python classes that implement `IJarvisCommand` from [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk). They run on a voice node or a computer's desktop agent, not on the server. Community packages (weather, music, calendar, smart-home devices and more) install from the [Pantry](https://pantry.jarvisautomation.io). Start with [Building commands](https://docs.jarvisautomation.dev/commands/).
+Commands are Python classes that implement `IJarvisCommand` from [jarvis-command-sdk](https://github.com/alexberardi/jarvis-command-sdk). They run on a voice node or a computer's desktop agent, and the model picks them like any built-in tool. Share yours in the [Pantry](https://pantry.jarvisautomation.io). Start with [Building commands](https://docs.jarvisautomation.dev/commands/).
 
 ## Repositories
 
@@ -85,13 +119,13 @@ Commands are Python classes that implement `IJarvisCommand` from [jarvis-command
 
 Command and device packages live in their own `jarvis-cmd-*` and `jarvis-device-*` repositories, listed in the [Pantry](https://pantry.jarvisautomation.io).
 
-## Legacy: the old Docker install
+## About this repository
 
-Before `jarvisd`, Jarvis was a set of Python microservices run with Docker Compose: config-service, auth, logs, command-center, llm-proxy, whisper, tts, notifications, admin, recipes and OCR, on Postgres, Redis, MinIO and Mosquitto. `jarvisd` replaces all of them with one program and embedded storage.
+This repository was the home of the old Docker/microservice install: config-service, auth, logs, command-center, llm-proxy, whisper, tts, notifications, admin, recipes and OCR, on Postgres, Redis, MinIO and Mosquitto. `jarvisd` replaces all of them with one program and embedded storage.
 
-That install is **retired for new users** as of `v0.1.0-rc18`. It no longer installs out of the box (MinIO's images are gone), and its documentation is frozen under [Legacy](https://docs.jarvisautomation.dev/legacy/) on the docs site. If you run it today, [move to jarvisd](https://docs.jarvisautomation.dev/install/migrating-from-docker/); the jarvisd installer's `--stop-legacy` stops the old containers without deleting anything.
+That install is **retired for new users** as of `v0.1.0-rc18`. It no longer installs out of the box (MinIO's images are gone), and its documentation is frozen under [Legacy](https://docs.jarvisautomation.dev/legacy/). If you run it today, [move to jarvisd](https://docs.jarvisautomation.dev/install/migrating-from-docker/); the jarvisd installer's `--stop-legacy` stops the old containers without deleting anything.
 
-This repository still holds that stack's development tooling (the `./jarvis` CLI, `scripts/`, `deploy/`) and the `install-e2e/` harness, including the voice-command benchmark corpus that jarvis-server's `scripts/toolbench` reads (`install-e2e/gpu/bench_corpus.cc.yaml`). None of it is needed to run Jarvis Automation.
+What's left here is that stack's development tooling (the `./jarvis` CLI, `scripts/`, `deploy/`) and the `install-e2e/` harness, including the voice-command benchmark corpus that jarvis-server's `scripts/toolbench` reads (`install-e2e/gpu/bench_corpus.cc.yaml`). None of it is needed to run Jarvis Automation.
 
 ## Community
 
