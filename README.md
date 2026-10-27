@@ -86,7 +86,7 @@ All of it runs on one computer in your home: hearing you, understanding you and 
 
 The [install guide](https://docs.jarvisautomation.dev/install/) covers every step, upgrades and uninstalling.
 
-> **Pre-release.** Jarvis Automation is at release candidate `v0.1.0-rc18.8`, on its way to `v0.1.0`. It's in daily use, but expect rough edges and changes between release candidates. Come say hi in the [Discord](https://discord.gg/9SuQFVexxJ).
+> **Pre-release.** Jarvis Automation is at release candidate `v0.1.0-rc18.9`, on its way to `v0.1.0`. It's in daily use, but expect rough edges and changes between release candidates. Come say hi in the [Discord](https://discord.gg/9SuQFVexxJ).
 
 **Coming from the old Docker install?** `jarvisd import-legacy` brings over your users, households, nodes (Pi nodes reconnect without re-provisioning), rooms, devices, settings, memories, routines, contacts and inbox. See [Migrating from the old Docker install](https://docs.jarvisautomation.dev/install/migrating-from-docker/).
 
