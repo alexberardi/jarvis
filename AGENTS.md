@@ -122,6 +122,31 @@ models have setup scripts documented in `jarvis-server/CLAUDE.md`.
 There is no workspace-wide build or test command. Use the relevant repo's
 required checks and harness; do not start the legacy stack to test jarvisd.
 
+## Temporary files and cleanup
+
+Cleanup is part of finishing a task, including failed or interrupted runs.
+
+- Reuse the normal disk-backed compiler and package caches. Do not create a
+  separate multi-gigabyte cache in `/tmp` for each task or worktree. For Go,
+  inspect `go env GOCACHE GOTMPDIR GOMODCACHE`; the server guide has the setup.
+- Put disposable files in a uniquely named directory created with `mktemp -d`.
+  Track the exact paths and processes you create. Use an exit trap or the
+  harness's cleanup command, and check for leftovers after an interruption.
+  Large builds should use a short, disk-backed `TMPDIR`; moving scratch to
+  `~/.cache` does not exempt it from cleanup.
+- Before handing back, stop your task's processes and remove its temporary
+  build directories, binaries, downloads and redundant logs/reports. Keep only
+  evidence needed for review or debugging; report its path and why it remains.
+- Remove your finished worktrees with `git worktree remove` from another
+  checkout once commits are pushed and no work or review depends on them.
+  Inspect untracked **and ignored** files first; never force-remove a worktree
+  containing work or credentials that need preserving.
+- On a space/quota error, inspect usage (`df -h`, `df -i`, and `du` on the
+  relevant directories) before retrying. Free only artifacts you can establish
+  belong to your finished task. Never sweep `/tmp`, prune shared caches, or
+  remove another task's files merely because they look old. If ownership is
+  uncertain, report the candidates instead.
+
 ## Legacy maintenance
 
 The Python microservice server stack is retired for new installs. Root
